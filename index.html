@@ -152,51 +152,88 @@ const TOUCH = matchMedia('(pointer: coarse)').matches;
 document.body.classList.toggle('touch', TOUCH);
 
 // ===== Mapa aberto =====
-const N = 36, HALF = N / 2;
+const N = 48, HALF = N / 2, C0 = HALF - .5;
 const wc = i => i - HALF + .5;
 const cellOf = x => Math.floor(x + HALF);
 const K = (i, j) => i * N + j;
-const GRASS = 0, WATER = 1, BRIDGE = 2, CASTLE = 3, TREE = 4, ROCK = 5, PAD = 6;
+const GRASS = 0, WATER = 1, BRIDGE = 2, CASTLE = 3, TREE = 4, ROCK = 5, PAD = 6, MOUNT = 7, HOUSE = 8, PORTAL = 9;
+const SOLIDBOX = new Set([WATER, CASTLE, MOUNT, HOUSE, PORTAL]);
 const grid = [...Array(N)].map(() => Array(N).fill(GRASS));
 const inMap = (i, j) => i >= 0 && j >= 0 && i < N && j < N;
 const at = (i, j) => inMap(i, j) ? grid[i][j] : -1;
 const near = (i, j, r, f) => { for (let a = -r; a <= r; a++) for (let b = -r; b <= r; b++) if ((a || b) && f(at(i + a, j + b))) return true; return false; };
+const noise = (i, j) => Math.sin(i * .45 + 1) + Math.cos(j * .38) + Math.sin((i - j) * .23);
 
-for (let i = 16; i <= 19; i++) for (let j = 16; j <= 19; j++) grid[i][j] = CASTLE;
-const riverJ = i => 7 + Math.round(Math.sin(i * .33) * 1.6);
+for (let i = 22; i <= 25; i++) for (let j = 22; j <= 25; j++) grid[i][j] = CASTLE;
+const riverJ = i => 10 + Math.round(Math.sin(i * .27) * 1.8);
 for (let i = 0; i < N; i++) { const j = riverJ(i); grid[i][j] = grid[i][j + 1] = WATER; }
-const BRIDGES = [5, 17, 30];
+const BRIDGES = [7, 24, 41];
 for (const i of BRIDGES) { const j = riverJ(i); grid[i][j] = grid[i][j + 1] = BRIDGE; }
-for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) if (Math.hypot(i - 28, j - 27) < 2.4) grid[i][j] = WATER;
+for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) if (Math.hypot(i - 38, j - 37) < 2.6) grid[i][j] = WATER;
 
+// Portais de onde os monstros saem: norte, sul, oeste, leste [i, j, direção para dentro]
+const PORTALS = [[15, 0, 0, 1], [32, N - 1, 0, -1], [0, 30, 1, 0], [N - 1, 17, -1, 0]];
+const SPAWNS = PORTALS.map(([i, j, di, dj]) => [i + di, j + dj]);
 const reserved = new Set();
-for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) if (Math.max(Math.abs(i - 17.5), Math.abs(j - 17.5)) < 6) reserved.add(K(i, j));
+for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+  if (Math.max(Math.abs(i - C0), Math.abs(j - C0)) < 6) reserved.add(K(i, j));
+  for (const [pi, pj] of PORTALS) if (Math.hypot(i - pi, j - pj) < 4.5) reserved.add(K(i, j));
+}
 for (const bi of BRIDGES) { const j = riverJ(bi); for (let a = -1; a <= 1; a++) for (let b = -2; b <= 3; b++) reserved.add(K(bi + a, j + b)); }
+
+// Montanhas nas bordas (sólidas)
+const mountH = new Float32Array(N * N);
+for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+  if (grid[i][j] !== GRASS || reserved.has(K(i, j))) continue;
+  const d = Math.min(i, j, N - 1 - i, N - 1 - j);
+  let lim = 2.2 + (noise(i * 1.3, j * 1.3) + 3) / 6 * 2.6;
+  for (const [ci, cj] of [[5, 43], [43, 4], [3, 4], [44, 44]]) lim = Math.max(lim, d + 4.2 - Math.hypot(i - ci, j - cj));
+  if (d < lim) { grid[i][j] = MOUNT; mountH[K(i, j)] = 1 + (lim - d) * 1.05 + rnd() * .4; }
+}
+for (const [i, j] of PORTALS) grid[i][j] = PORTAL;
 
 // Placas de pedra: os lugares onde dá para pôr armas
 const pads = [], padAt = new Array(N * N).fill(null);
-for (const [r, n, off] of [[5.5, 8, .39], [9.5, 12, 0], [13.5, 16, .2]]) for (let k = 0; k < n; k++) {
-  const a = off + k / n * Math.PI * 2, i = Math.round(r * Math.cos(a) + HALF - .5), j = Math.round(r * Math.sin(a) + HALF - .5);
-  if (at(i, j) !== GRASS || near(i, j, 1, t => t === WATER || t === BRIDGE || t === PAD || t === CASTLE)) continue;
+for (const [r, n, off] of [[5.5, 8, .39], [9.5, 12, 0], [13.5, 16, .2], [17.5, 20, .1]]) for (let k = 0; k < n; k++) {
+  const a = off + k / n * Math.PI * 2, i = Math.round(r * Math.cos(a) + C0), j = Math.round(r * Math.sin(a) + C0);
+  if (at(i, j) !== GRASS || near(i, j, 1, t => t !== GRASS && t !== TREE && t !== ROCK)) continue;
   grid[i][j] = PAD; const p = { i, j, x: wc(i), z: wc(j), t: null }; pads.push(p); padAt[K(i, j)] = p;
+}
+
+// Vilas com casinhas
+const houses = [];
+for (const [ci, cj] of [[11, 36], [37, 27], [34, 15], [12, 17], [24, 40]]) for (let k = 0; k < 12 && houses.filter(h => h.v === ci).length < 4; k++) {
+  const i = ci + Math.round((rnd() - .5) * 7), j = cj + Math.round((rnd() - .5) * 7);
+  if (at(i, j) !== GRASS || reserved.has(K(i, j)) || near(i, j, 1, t => t !== GRASS)) continue;
+  grid[i][j] = HOUSE; houses.push({ i, j, v: ci, rot: Math.floor(rnd() * 4) });
 }
 
 // Árvores e pedras (sólidas)
 for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
-  if (grid[i][j] !== GRASS || reserved.has(K(i, j)) || near(i, j, 1, t => t === PAD)) continue;
-  const f = Math.sin(i * .45 + 1) + Math.cos(j * .38) + Math.sin((i - j) * .23);
-  const d = f > 1.1 ? .38 : .07, r = rnd();
+  if (grid[i][j] !== GRASS || reserved.has(K(i, j)) || near(i, j, 1, t => t === PAD || t === HOUSE)) continue;
+  const d = noise(i, j) > 1.1 ? .38 : .07, r = rnd();
   if (r < d) grid[i][j] = TREE; else if (r < d + .03) grid[i][j] = ROCK;
 }
-const trees = [], rocks = [];
-for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) { if (grid[i][j] === TREE) trees.push([i, j]); if (grid[i][j] === ROCK) rocks.push([i, j]); }
+// Abre caminho do portal até o castelo, para nenhum portal ficar preso
+for (const [si, sj] of SPAWNS) {
+  const L = Math.hypot(C0 - si, C0 - sj);
+  for (let t = 0; t <= L; t += .5) {
+    const i = Math.round(si + (C0 - si) * t / L), j = Math.round(sj + (C0 - sj) * t / L);
+    for (const [a, b] of [[0, 0], [1, 0], [0, 1]]) { const g = at(i + a, j + b); if (g === TREE || g === ROCK || g === MOUNT) grid[i + a][j + b] = GRASS; }
+  }
+}
+const trees = [], rocks = [], mounts = [];
+for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+  const t = grid[i][j];
+  if (t === TREE) trees.push([i, j]); if (t === ROCK) rocks.push([i, j]); if (t === MOUNT) mounts.push([i, j]);
+}
 
 const blocked = new Uint8Array(N * N);
-for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) { const t = grid[i][j]; blocked[K(i, j)] = t === WATER || t === CASTLE || t === TREE || t === ROCK ? 1 : 0; }
+for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) { const t = grid[i][j]; blocked[K(i, j)] = SOLIDBOX.has(t) || t === TREE || t === ROCK ? 1 : 0; }
 const free = (i, j) => inMap(i, j) && !blocked[K(i, j)];
 
 // Mapa de distâncias até o castelo: os monstros descem por ele e contornam o que for sólido.
-const flow = new Float32Array(N * N);
+const flow = new Float64Array(N * N);
 const D8 = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]];
 function computeFlow() {
   flow.fill(Infinity); const h = [];
@@ -215,8 +252,6 @@ function computeFlow() {
   }
 }
 computeFlow();
-const sides = [[], [], [], []];
-for (let k = 0; k < N; k++) for (const [s, i, j] of [[0, k, 0], [1, k, N - 1], [2, 0, k], [3, N - 1, k]]) if (flow[K(i, j)] < Infinity) sides[s].push([i, j]);
 const SIDE_NAME = ['norte', 'sul', 'oeste', 'leste'];
 
 function flowDir(p, out) {
@@ -238,7 +273,7 @@ function collide(p, r) {
   const ci = cellOf(p.x), cj = cellOf(p.z);
   for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
     const i = ci + a, j = cj + b, t = at(i, j);
-    if (t < 0 || t === WATER || t === CASTLE) {
+    if (t < 0 || SOLIDBOX.has(t)) {
       const x0 = i - HALF, z0 = j - HALF, qx = clamp(p.x, x0, x0 + 1), qz = clamp(p.z, z0, z0 + 1), dx = p.x - qx, dz = p.z - qz, d2 = dx * dx + dz * dz;
       if (d2 >= r * r) continue;
       if (d2 > 1e-8) { const d = Math.sqrt(d2), k = (r - d) / d; p.x += dx * k; p.z += dz * k; }
@@ -257,7 +292,7 @@ function collide(p, r) {
 }
 function hitsSolid(x, z) {
   const i = cellOf(x), j = cellOf(z), t = at(i, j);
-  if (t === CASTLE) return true;
+  if (t === CASTLE || t === MOUNT || t === HOUSE || t === PORTAL) return true;
   const R = SOLID_R[t] || (t === PAD && padAt[K(i, j)].t ? .42 : 0);
   return R && Math.hypot(x - wc(i), z - wc(j)) < R;
 }
@@ -270,6 +305,7 @@ renderer.setPixelRatio(dpr);
 renderer.shadowMap.enabled = true;
 const scene = new THREE.Scene();
 const cam = new THREE.PerspectiveCamera(45, 1, .5, 220);
+scene.fog = new THREE.Fog(0xcfe6f5, 60, 130);
 scene.add(new THREE.HemisphereLight(0xe2f2ff, 0x5a6b3a, 1.7));
 const sun = new THREE.DirectionalLight(0xfff1d6, 2.3);
 sun.castShadow = true; sun.shadow.mapSize.set(TOUCH ? 1024 : 2048, TOUCH ? 1024 : 2048);
@@ -298,47 +334,143 @@ function setInst(mesh, n, x, y, z, sx, sy, sz, ry = 0) {
   mesh.setMatrixAt(n, dummy.matrix);
 }
 
-// Chão, água, ponte
-const groundCells = [], water = [];
-for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) (grid[i][j] === WATER || grid[i][j] === BRIDGE ? water : groundCells).push([i, j]);
-const ground = new THREE.InstancedMesh(BOX, mat.tint, groundCells.length);
-groundCells.forEach(([i, j], n) => {
-  setInst(ground, n, wc(i), -.5, wc(j), 1, 1, 1);
-  ground.setColorAt(n, grid[i][j] === CASTLE ? col.setHSL(.09, .15, .55) : col.setHSL(.26 + rnd() * .03, .5, .42 + rnd() * .06));
+// Chão em blocos pequenos (4 por casa) para dar mais detalhe
+const tiles = [], waterT = [];
+const nearT = (i, j, r, t) => near(i, j, r, x => x === t);
+for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) {
+  const x = i - HALF + .25 + a * .5, z = j - HALF + .25 + b * .5, t = grid[i][j];
+  (t === WATER || t === BRIDGE ? waterT : tiles).push([x, z, i, j, a, b]);
+}
+const ground = new THREE.InstancedMesh(BOX, mat.tint, tiles.length);
+tiles.forEach(([x, z, i, j, a, b], n) => {
+  const t = grid[i][j], cd = Math.max(Math.abs(i - C0), Math.abs(j - C0));
+  let h = 0;
+  if (t === CASTLE || (cd < 3.6 && t !== PAD)) col.setHSL(.08, .08 + rnd() * .05, .52 + rnd() * .1);
+  else if (t === PORTAL || PORTALS.some(([pi, pj]) => Math.hypot(i - pi, j - pj) < 1.6)) col.setHSL(.72, .12, .3 + rnd() * .08);
+  else if (nearT(i, j, 1, WATER)) col.setHSL(.12, .42, .66 + rnd() * .06);
+  else { const f = noise(i * .7, j * .7); col.setHSL(.25 + f * .008 + rnd() * .02, .5, .4 + rnd() * .06 + ((a + b) % 2) * .015); h = rnd() < .3 ? .02 : 0; }
+  setInst(ground, n, x, -.5 + h, z, .5, 1, .5);
+  ground.setColorAt(n, col);
 });
 ground.receiveShadow = true; scene.add(ground);
-const waterMesh = new THREE.InstancedMesh(BOX, M(0xffffff), water.length);
-water.forEach(([i, j], n) => { setInst(waterMesh, n, wc(i), -.8, wc(j), 1, 1, 1); waterMesh.setColorAt(n, col.setHSL(.56, .65, .5 + rnd() * .06)); });
+const waterMesh = new THREE.InstancedMesh(BOX, M(0xffffff), waterT.length);
+waterT.forEach(([x, z], n) => { setInst(waterMesh, n, x, -.8, z, .5, 1, .5); waterMesh.setColorAt(n, col.setHSL(.56, .65, .48 + rnd() * .08)); });
 waterMesh.receiveShadow = true; scene.add(waterMesh);
 box(mat.soil, N, 1.2, N, 0, -1.6, 0, scene);
 box(mat.soilD, N - .4, .8, N - .4, 0, -2.6, 0, scene);
-for (const [i, j] of water) if (grid[i][j] === BRIDGE) {
+for (const [, , i, j, a, b] of waterT) if (grid[i][j] === BRIDGE && !a && !b) {
   for (let k = 0; k < 5; k++) box(mat.wood, 1.15, .08, .16, wc(i), 0, wc(j) - .4 + k * .2, scene);
   for (const s of [-1, 1]) box(mat.woodD, .08, .25, 1.05, wc(i) + s * .56, .14, wc(j), scene);
 }
-const padMesh = new THREE.InstancedMesh(BOX, mat.pad, pads.length);
-pads.forEach((p, n) => setInst(padMesh, n, p.x, .04, p.z, .9, .08, .9));
+const padMesh = new THREE.InstancedMesh(BOX, mat.pad, pads.length * 4);
+pads.forEach((p, n) => { for (let k = 0; k < 4; k++) { setInst(padMesh, n * 4 + k, p.x - .22 + (k % 2) * .44, .04, p.z - .22 + (k >> 1) * .44, .42, .08, .42); padMesh.setColorAt(n * 4 + k, col.setHSL(.11, .2, .7 + rnd() * .08)); } });
 padMesh.receiveShadow = true; scene.add(padMesh);
 
-const trunk = new THREE.InstancedMesh(BOX, M(0x7a5230), trees.length);
-const leafA = new THREE.InstancedMesh(BOX, M(0xffffff), trees.length), leafB = new THREE.InstancedMesh(BOX, M(0xffffff), trees.length);
-trees.forEach(([i, j], n) => {
-  const x = wc(i), z = wc(j), s = .85 + rnd() * .4, r = rnd() * 1.5;
-  setInst(trunk, n, x, .25 * s, z, .22 * s, .5 * s, .22 * s, r);
-  setInst(leafA, n, x, .72 * s, z, .75 * s, .55 * s, .75 * s, r);
-  setInst(leafB, n, x, 1.12 * s, z, .47 * s, .35 * s, .47 * s, r);
-  leafA.setColorAt(n, col.setHSL(.3 + rnd() * .05, .55, .3 + rnd() * .06));
-  leafB.setColorAt(n, col.setHSL(.3 + rnd() * .05, .55, .38 + rnd() * .06));
-});
-const rockMesh = new THREE.InstancedMesh(BOX, M(0xffffff), rocks.length * 2);
-rocks.forEach(([i, j], n) => {
-  for (let k = 0; k < 2; k++) {
-    const s = k ? .55 : 1;
-    setInst(rockMesh, n * 2 + k, wc(i) + (k ? .2 : 0), .2 * s, wc(j) + (k ? -.15 : 0), .75 * s, .4 * s, .7 * s, rnd() * 3);
-    rockMesh.setColorAt(n * 2 + k, col.setHSL(.1, .04, .5 + rnd() * .12));
+// Helper: junta muitos cubinhos num InstancedMesh só (rápido no celular)
+function voxMesh(list, shadow = true) {
+  const m = new THREE.InstancedMesh(BOX, M(0xffffff), list.length);
+  list.forEach(([x, y, z, sx, sy, sz, c, r], n) => { setInst(m, n, x, y, z, sx, sy, sz, r || 0); m.setColorAt(n, col.set(c)); });
+  m.castShadow = shadow; m.receiveShadow = true; scene.add(m); return m;
+}
+const hsl = (h, s, l) => new THREE.Color().setHSL(h, s, l).getHex();
+
+// Grama alta e flores
+const deco = [], FLOWERS = [0xfacc15, 0xffffff, 0xf472b6, 0xa78bfa, 0xef4444];
+for (const [x, z, i, j] of tiles) {
+  const t = grid[i][j]; if (t !== GRASS && t !== TREE && t !== ROCK) continue;
+  if (Math.max(Math.abs(i - C0), Math.abs(j - C0)) < 3.6) continue;
+  if (rnd() < .35) deco.push([x + (rnd() - .5) * .3, .07, z + (rnd() - .5) * .3, .07, .14, .07, hsl(.27 + rnd() * .04, .55, .3 + rnd() * .12)]);
+  if (rnd() < .04) { const fx = x + (rnd() - .5) * .3, fz = z + (rnd() - .5) * .3; deco.push([fx, .06, fz, .03, .12, .03, 0x3f7a2a]); deco.push([fx, .14, fz, .09, .07, .09, FLOWERS[Math.floor(rnd() * 5)]]); }
+}
+voxMesh(deco, false);
+
+// Árvores feitas de cubinhos: redondas e pinheiros
+const trunkV = [], leafV = [];
+for (const [i, j] of trees) {
+  const x = wc(i) + (rnd() - .5) * .15, z = wc(j) + (rnd() - .5) * .15, s = .85 + rnd() * .35;
+  trunkV.push([x, .28 * s, z, .16 * s, .56 * s, .16 * s, hsl(.07, .4, .28 + rnd() * .06)]);
+  if (rnd() < .4) {
+    [[.5, .74], [.72, .56], [.92, .38], [1.1, .2]].forEach(([y, w], k) => leafV.push([x, y * s, z, w * s, .2 * s, w * s, hsl(.38, .45, .22 + k * .03 + rnd() * .03), rnd()]));
+    leafV.push([x, 1.24 * s, z, .1 * s, .1 * s, .1 * s, hsl(.38, .45, .32)]);
+  } else {
+    const c = .26 * s;
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) if (!(a && b) || rnd() < .55) leafV.push([x + a * c, .66 * s + rnd() * .05, z + b * c, c * 1.02, c, c * 1.02, hsl(.29 + rnd() * .04, .55, .3 + rnd() * .08)]);
+    for (const [a, b] of [[-.5, -.5], [.5, -.5], [-.5, .5], [.5, .5]]) leafV.push([x + a * c, .9 * s, z + b * c, c, c, c, hsl(.29 + rnd() * .04, .55, .36 + rnd() * .08)]);
+    leafV.push([x, 1.12 * s, z, c, c * .9, c, hsl(.29, .55, .42 + rnd() * .06)]);
+    if (rnd() < .3) leafV.push([x + c * .9, .8 * s, z + c * .3, .07, .07, .07, 0xdc2626]);
   }
-});
-for (const m of [trunk, leafA, leafB, rockMesh]) { m.castShadow = m.receiveShadow = true; scene.add(m); }
+}
+voxMesh(trunkV); voxMesh(leafV);
+
+// Pedras em vários cubinhos
+const rockV = [];
+for (const [i, j] of rocks) {
+  const x = wc(i), z = wc(j), n = 4 + Math.floor(rnd() * 3);
+  for (let k = 0; k < n; k++) { const sz = .18 + rnd() * .24; rockV.push([x + (rnd() - .5) * .45, sz / 2 + (k > 2 ? sz * .6 : 0), z + (rnd() - .5) * .45, sz, sz * (.8 + rnd() * .3), sz, hsl(.08, .05, .42 + rnd() * .16), rnd() * 2]); }
+  if (rnd() < .5) rockV.push([x + .1, .32, z - .05, .2, .06, .2, 0x5f8f3a]);
+}
+voxMesh(rockV);
+
+// Montanhas em degraus, com neve no topo
+const mountV = [];
+for (const [i, j] of mounts) for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) {
+  const x = i - HALF + .25 + a * .5, z = j - HALF + .25 + b * .5, h = Math.max(.5, Math.round(mountH[K(i, j)] * (.85 + rnd() * .3) * 4) / 4);
+  mountV.push([x, h / 2, z, .5, h, .5, h < 1.8 ? hsl(.26, .4, .3 + rnd() * .05) : hsl(.07, .2, .26 + rnd() * .08)]);
+  mountV.push([x, h + .08, z, .5, .16, .5, h > 3.9 ? hsl(.58, .2, .93 + rnd() * .05) : h < 2.4 ? hsl(.27, .5, .36 + rnd() * .06) : hsl(.08, .14, .36 + rnd() * .07)]);
+}
+voxMesh(mountV);
+
+// Casinhas
+const chimneys = [];
+const WALLS = [0xf1e3c6, 0xe8d3b0, 0xd9c7a5, 0xf5efe0], ROOFS = [0xb3412f, 0x5a6b8c, 0x8a5a3b, 0x9b2d2d];
+for (const h of houses) {
+  const g = new THREE.Group(); g.position.set(wc(h.i), 0, wc(h.j)); g.rotation.y = h.rot * Math.PI / 2; scene.add(g);
+  const wall = M(WALLS[Math.floor(rnd() * 4)]), roof = M(ROOFS[Math.floor(rnd() * 4)]);
+  box(mat.stoneD, .82, .08, .7, 0, .04, 0, g);
+  box(wall, .76, .52, .64, 0, .34, 0, g);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(mat.woodD, .06, .54, .06, sx * .38, .34, sz * .32, g);
+  box(mat.woodD, .78, .05, .66, 0, .6, 0, g);
+  for (let k = 0; k < 4; k++) box(roof, .9, .11, .78 - k * .2, 0, .67 + k * .11, 0, g);
+  box(mat.woodD, .16, .28, .03, 0, .22, .33, g);
+  box(mat.gold, .03, .03, .02, .05, .22, .35, g);
+  for (const sx of [-1, 1]) { box(mat.ice, .13, .12, .03, sx * .23, .4, .33, g); box(mat.woodD, .17, .03, .04, sx * .23, .33, .34, g); }
+  box(mat.ice, .03, .12, .13, .39, .4, 0, g);
+  box(mat.stoneD, .12, .34, .12, .26, .9, -.18, g);
+  chimneys.push(V(wc(h.i), 1.1, wc(h.j)).add(V(.26, 0, -.18).applyAxisAngle(V(0, 1, 0), g.rotation.y)));
+}
+
+// Portais (arcos de pedra com um redemoinho roxo)
+const portalFx = [];
+const portalMat = new THREE.MeshBasicMaterial({ color: 0x8b5cf6, transparent: true, opacity: .55, side: THREE.DoubleSide });
+for (const [i, j, di, dj] of PORTALS) {
+  const g = new THREE.Group(); g.position.set(wc(i), 0, wc(j)); g.rotation.y = Math.atan2(di, dj); scene.add(g);
+  for (const sx of [-1, 1]) for (let k = 0; k < 5; k++) box(k % 2 ? mat.stone : mat.stoneD, .32, .42, .34, sx * .62, .21 + k * .42, 0, g);
+  box(mat.stoneD, 1.6, .3, .38, 0, 2.2, 0, g); box(mat.stone, 1.2, .14, .3, 0, 2.42, 0, g);
+  box(mat.purple, .2, .2, .2, 0, 2.6, 0, g);
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(.92, 1.9), portalMat); plane.position.y = 1.05; g.add(plane);
+  const ring = new THREE.Group(); ring.position.y = 1.05; g.add(ring);
+  for (let k = 0; k < 10; k++) { const a = k / 10 * Math.PI * 2; box(mat.purple, .1, .1, .1, Math.cos(a) * .36, Math.sin(a) * .8, .02, ring); }
+  portalFx.push({ ring, x: wc(i + di), z: wc(j + dj) });
+}
+
+// Nuvens de cubos passando devagar
+const cloudParts = [], clouds3 = [];
+for (let k = 0; k < 16; k++) {
+  const c = { x: (rnd() - .5) * 90, z: (rnd() - .5) * 70, y: 6.5 + rnd() * 1.5, sp: .25 + rnd() * .35, parts: [] };
+  const n = 5 + Math.floor(rnd() * 6);
+  for (let q = 0; q < n; q++) { const sz = .4 + rnd() * .45; c.parts.push([(rnd() - .5) * 1.8, rnd() * .35, (rnd() - .5) * 1.1, sz * 1.4, sz * .6, sz]); }
+  clouds3.push(c); cloudParts.push(...c.parts);
+}
+const cloudMesh = new THREE.InstancedMesh(BOX, new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x9aa7b5, transparent: true, opacity: .6, depthWrite: false }), cloudParts.length);
+cloudMesh.frustumCulled = false; scene.add(cloudMesh);
+function updateClouds3(rdt) {
+  let n = 0;
+  for (const c of clouds3) {
+    c.x += c.sp * rdt; if (c.x > 50) c.x = -50;
+    for (const [dx, dy, dz, sx, sy, sz] of c.parts) setInst(cloudMesh, n++, c.x + dx, c.y + dy, c.z + dz, sx, sy, sz);
+  }
+  cloudMesh.instanceMatrix.needsUpdate = true;
+}
 
 // Castelo no centro
 const castle = new THREE.Group(); castle.scale.setScalar(1.45); scene.add(castle);
@@ -352,6 +484,9 @@ box(mat.stone, 1.1, 2.2, 1.1, 0, 1.1, .2, castle); cone(mat.red, .85, .8, 0, 2.6
 for (const s of [-1, 1]) { box(mat.dark, .6, .7, .1, 0, .35, s * 1.27, castle); box(mat.dark, .1, .7, .6, s * 1.32, .35, 0, castle); }
 box(mat.woodD, .05, .9, .05, 0, 3.3, .2, castle);
 const flag = new THREE.Group(); flag.position.set(0, 3.6, .2); castle.add(flag); box(mat.red, .45, .26, .04, .23, 0, 0, flag);
+for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(mat.dark, .14, .22, .04, sx * 1.25, 1.35, sz * 1.57, castle);
+for (const s of [-1, 1]) for (const f of [-1, 1]) { box(mat.red, .3, .5, .03, s * .62, .72, f * 1.27, castle); box(mat.gold, .3, .05, .035, s * .62, .5, f * 1.275, castle); box(mat.gold, .1, .1, .04, s * .62, .78, f * 1.28, castle); }
+for (const sx of [-1, 1]) for (const sz of [-1, 1]) { box(mat.woodD, .03, .45, .03, sx * 1.25, 2.6, sz * 1.2, castle); box(mat.gold, .2, .12, .02, sx * 1.25 + .1, 2.75, sz * 1.2, castle); }
 let castleShake = 0;
 const CASTLE_T = { kind: 'castle', pos: V(), r: 0, dead: false };
 
@@ -369,11 +504,11 @@ aimMark.visible = false; scene.add(aimMark);
 // Partículas
 const PMAX = 700;
 const pm = new THREE.InstancedMesh(BOX, M(0xffffff), PMAX); pm.frustumCulled = false; scene.add(pm);
-const P = [...Array(PMAX)].map(() => ({ p: V(), v: V(), life: 0, s: 0, r: 0 }));
+const P = [...Array(PMAX)].map(() => ({ p: V(), v: V(), life: 0, s: 0, r: 0, g: 9.8 }));
 P.forEach((_, n) => { setInst(pm, n, 0, -9, 0, 0, 0, 0); pm.setColorAt(n, col.set(0xffffff)); });
 let pi = 0;
-function emit(pos, color, size, vx, vy, vz, life) {
-  const q = P[pi]; q.p.copy(pos); q.v.set(vx, vy, vz); q.life = life; q.s = size; q.r = Math.random() * 6;
+function emit(pos, color, size, vx, vy, vz, life, g = 9.8) {
+  const q = P[pi]; q.p.copy(pos); q.v.set(vx, vy, vz); q.life = life; q.s = size; q.r = Math.random() * 6; q.g = g;
   pm.setColorAt(pi, col.set(color).offsetHSL(0, 0, (Math.random() - .5) * .15)); pi = (pi + 1) % PMAX;
 }
 function burst(pos, color, n, spd, size) {
@@ -387,7 +522,7 @@ function burstDir(pos, d, color, n, spd, size) {
 function updateParticles(dt) {
   for (let n = 0; n < PMAX; n++) {
     const q = P[n]; if (q.life <= 0) continue;
-    q.life -= dt; q.v.y -= 9.8 * dt; q.p.addScaledVector(q.v, dt);
+    q.life -= dt; q.v.y -= q.g * dt; q.p.addScaledVector(q.v, dt);
     if (q.p.y < .05) { q.p.y = .05; q.v.y *= -.35; q.v.x *= .7; q.v.z *= .7; }
     const s = q.life > 0 ? q.s * Math.min(1, q.life / .3) : 0;
     dummy.position.copy(q.p); dummy.rotation.set(q.r, q.r * 1.3, 0); dummy.scale.setScalar(s); dummy.updateMatrix();
@@ -1071,10 +1206,10 @@ function waveList(n) {
   return L;
 }
 function spawnFrom(item) {
-  const cells = sides[item.side].length ? sides[item.side] : sides.find(s => s.length);
-  const [i, j] = cells[Math.floor(Math.random() * cells.length)];
+  const [i, j] = SPAWNS[item.side];
+  burst(tmp.set(wc(i), 1, wc(j)), 0x8b5cf6, 6, 1.5, .1);
   const n = item.type === 'aranha' ? 3 : 1;
-  for (let k = 0; k < n; k++) spawnEnemy(item.type, wc(i) + (Math.random() - .5) * .5, wc(j) + (Math.random() - .5) * .5);
+  for (let k = 0; k < n; k++) spawnEnemy(item.type, wc(i) + (Math.random() - .5) * .7, wc(j) + (Math.random() - .5) * .7);
   if (item.boss) toast(`👑 Chefão ${ET[item.type].name} vem do ${SIDE_NAME[item.side]}!`, 3000);
 }
 function startWave() {
@@ -1371,7 +1506,11 @@ function loop(now) {
     if (c.t > .5) c.m.scale.setScalar(Math.max(0, 1 - (c.t - .5) / .35));
     if (c.t > .85) { scene.remove(c.m); coins.splice(k, 1); }
   }
-  water.forEach(([i, j], n) => setInst(waterMesh, n, wc(i), -.8 + Math.sin(time * 2 + i * .7 + j) * .03, wc(j), 1, 1, 1));
+  waterT.forEach(([x, z], n) => setInst(waterMesh, n, x, -.8 + Math.sin(time * 2 + x * 1.4 + z) * .03, z, .5, 1, .5));
+  for (const pf of portalFx) { pf.ring.rotation.z += rdt * 2; }
+  portalMat.opacity = .45 + Math.sin(time * 3) * .15;
+  updateClouds3(rdt);
+  if (Math.random() < rdt * 2.5 && chimneys.length) { const c = chimneys[Math.floor(Math.random() * chimneys.length)]; emit(c, 0xd4d4d8, .14, (Math.random() - .5) * .2, .5, (Math.random() - .5) * .2, 1.6, -.3); pm.instanceColor.needsUpdate = true; }
   waterMesh.instanceMatrix.needsUpdate = true;
   flag.rotation.y = Math.sin(time * 3) * .35;
   castleShake = Math.max(0, castleShake - rdt);
@@ -1386,7 +1525,7 @@ function loop(now) {
 }
 resize(); updateUI();
 requestAnimationFrame(loop);
-if (location.search.includes('teste')) window.__vd = { S, pads, placeTower, startWave, enemies, towers, hero, keys, TT, HW, addPower, openShop, closeShop };
+if (location.search.includes('teste')) window.__vd = { S, pads, placeTower, startWave, enemies, towers, hero, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked };
 </script>
 </body>
 </html>

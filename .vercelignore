@@ -1,0 +1,10 @@
+.claude
+CLAUDE.md
+project.yaml
+design
+docs
+production
+src
+make-icons.mjs
+.gitattributes
+.worktreeinclude
