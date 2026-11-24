@@ -124,6 +124,7 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
   <div class="pill" title="Recorde de onda">🏆 <b id="best">0</b></div>
   <button id="speed" class="pill" aria-label="Velocidade do jogo">1x</button>
   <button id="netPill" class="pill" hidden aria-label="Estado da conexão"></button>
+  <button id="musPill" class="pill" aria-label="Desligar música">🎵</button>
   <button id="helpBtn" class="pill" aria-label="Como jogar">?</button>
 </div>
 <div id="inds"></div>
@@ -150,6 +151,7 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
     <ul id="helpList"></ul>
     <button id="play" class="pri">Jogar</button>
     <button id="online" class="sec wide">🌐 Jogar online com um amigo</button>
+    <div class="row"><button id="musBtn" class="sec"></button><button id="sfxBtn" class="sec"></button></div>
     <button id="gfx" class="sec wide"></button>
   </div>
 </div>
@@ -218,6 +220,100 @@ const lerpAng = (a, b, t) => { const d = ((b - a + Math.PI) % (2 * Math.PI) + 2 
 const TOUCH = matchMedia('(pointer: coarse)').matches;
 document.body.classList.toggle('touch', TOUCH);
 
+// ===== Som: música de fliperama e efeitos, tudo sintetizado (sem arquivos) =====
+const SND = { ac: null, music: null, sfx: null, noise: null, step: 0, nextT: 0, last: {} };
+const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v === '1'; } catch (e) { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v ? '1' : '0'); } catch (e) {} };
+SND.musicOn = lsGet('vd-musica', true); SND.sfxOn = lsGet('vd-sons', true);
+function audioInit() {
+  if (SND.ac) { if (SND.ac.state === 'suspended') SND.ac.resume(); return; }
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  const ac = SND.ac = new AC(), out = ac.createGain(); out.gain.value = .9; out.connect(ac.destination);
+  SND.music = ac.createGain(); SND.music.gain.value = SND.musicOn ? .2 : 0; SND.music.connect(out);
+  SND.sfx = ac.createGain(); SND.sfx.gain.value = SND.sfxOn ? .55 : 0; SND.sfx.connect(out);
+  const nb = ac.createBuffer(1, ac.sampleRate, ac.sampleRate), d = nb.getChannelData(0); for (let k = 0; k < d.length; k++) d[k] = Math.random() * 2 - 1; SND.noise = nb;
+  SND.nextT = ac.currentTime + .1;
+  setInterval(musicTick, 40);
+}
+const mtof = m => 440 * 2 ** ((m - 69) / 12);
+// um tom: forma de onda, frequência inicial/final, duração, volume, destino
+function tone(type, f0, f1, dur, vol, t = 0, dest = SND.sfx) {
+  const ac = SND.ac; if (!ac) return;
+  const t0 = (t || ac.currentTime) + .005, o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.setValueAtTime(f0, t0); if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + dur);
+  g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(.0008, t0 + dur);
+  o.connect(g); g.connect(dest); o.start(t0); o.stop(t0 + dur + .02);
+}
+function hiss(dur, vol, freq, q = 1, t = 0, dest = SND.sfx, type = 'bandpass', f1) {
+  const ac = SND.ac; if (!ac) return;
+  const t0 = (t || ac.currentTime) + .005, s = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain();
+  s.buffer = SND.noise; s.playbackRate.value = .8 + Math.random() * .4;
+  fl.type = type; fl.frequency.setValueAtTime(freq, t0); if (f1) fl.frequency.exponentialRampToValueAtTime(f1, t0 + dur); fl.Q.value = q;
+  g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(.0008, t0 + dur);
+  s.connect(fl); fl.connect(g); g.connect(dest); s.start(t0, Math.random() * .5); s.stop(t0 + dur + .02);
+}
+// Volume pela distância até o centro da tela (coisas longe soam baixinho)
+function sndNear(x, z) { try { return clamp(1.15 - Math.hypot(x - C.tx, z - C.tz) / 20, .12, 1); } catch (e) { return 1; } }
+function sfx(name, x, z) {
+  if (!SND.ac || !SND.sfxOn) return;
+  const now = SND.ac.currentTime, gap = { shot: .07, tshot: .09, die: .05, hit: .25, coin: .06, spawn: .12, zap: .08, boom: .08, hurt: .35 }[name] || 0;
+  if (gap && now - (SND.last[name] || 0) < gap) return; SND.last[name] = now;
+  const v = x === undefined ? 1 : sndNear(x, z), r = .92 + Math.random() * .16;
+  switch (name) {
+    case 'shot': tone('square', 900 * r, 420, .07, .12 * v); break;
+    case 'tshot': tone('square', 620 * r, 300, .06, .06 * v); break;
+    case 'fire': hiss(.12, .1 * v, 900, .7, 0, SND.sfx, 'lowpass', 300); break;
+    case 'zap': tone('sawtooth', 1400 * r, 500, .09, .07 * v); hiss(.06, .05 * v, 4000, 2); break;
+    case 'boom': hiss(.45, .35 * v, 700, .5, 0, SND.sfx, 'lowpass', 80); tone('sine', 110, 40, .35, .3 * v); break;
+    case 'die': tone('square', 560 * r, 110, .16, .1 * v); hiss(.08, .06 * v, 1800, 1); break;
+    case 'bossdie': tone('square', 300, 50, .6, .2); hiss(.6, .25, 500, .5, 0, SND.sfx, 'lowpass', 60); break;
+    case 'hit': tone('sine', 140, 45, .22, .4 * Math.max(v, .6)); hiss(.15, .15, 300, .8, 0, SND.sfx, 'lowpass'); break;
+    case 'hurt': tone('square', 220, 160, .12, .1); break;
+    case 'herodie': [523, 440, 349, 262].forEach((fq, k) => tone('triangle', fq, fq * .97, .2, .2, now + k * .13)); break;
+    case 'spawn': hiss(.45, .12 * v, 300, 4, 0, SND.sfx, 'bandpass', 1800); tone('sine', 180 * r, 420, .35, .05 * v); break;
+    case 'step': hiss(.05, .05 * v, 1500 * r, 1.2, 0, SND.sfx, 'bandpass'); break;
+    case 'coin': tone('square', 988, 988, .05, .06 * v); tone('square', 1319, 1319, .12, .06 * v, now + .05); break;
+    case 'build': tone('square', 196, 120, .1, .15); hiss(.1, .12, 600, .8, 0, SND.sfx, 'lowpass'); break;
+    case 'up': [523, 659, 784, 1047].forEach((fq, k) => tone('square', fq, fq, .08, .08, now + k * .06)); break;
+    case 'buy': [784, 1047, 1319].forEach((fq, k) => tone('square', fq, fq, .07, .08, now + k * .05)); break;
+    case 'wave': [392, 523, 659, 784].forEach((fq, k) => tone('square', fq, fq, k === 3 ? .3 : .1, .1, now + k * .1)); break;
+    case 'heart': [659, 784, 988].forEach((fq, k) => tone('triangle', fq, fq, .12, .2, now + k * .08)); break;
+    case 'heal': [523, 659, 784, 1047, 1319].forEach((fq, k) => tone('triangle', fq, fq, .14, .22, now + k * .08)); break;
+    case 'over': [392, 370, 349, 330, 262].forEach((fq, k) => tone('square', fq, fq * .98, k === 4 ? .7 : .22, .1, now + k * .22)); break;
+    case 'win': [523, 659, 784, 1047, 784, 1047].forEach((fq, k) => tone('square', fq, fq, k === 5 ? .6 : .12, .1, now + k * .12)); break;
+  }
+}
+// Música: loop original estilo fliperama (Lá menor, 4 acordes), melodia em onda quadrada, baixo, bumbo e chimbal
+const MEL = [
+  69, 0, 72, 76, 74, 72, 69, 0,   72, 0, 69, 72, 77, 76, 72, 0,   76, 0, 72, 79, 76, 74, 72, 74,   74, 0, 71, 67, 71, 74, 79, 0,
+  81, 0, 79, 76, 79, 0, 76, 72,   77, 0, 76, 72, 74, 72, 69, 0,   72, 74, 76, 79, 76, 72, 79, 84,  83, 0, 79, 74, 71, 74, 76, 0,
+];
+const BASS = [45, 41, 48, 43];
+function musicTick() {
+  const ac = SND.ac; if (!ac || !SND.musicOn) { if (ac) SND.nextT = ac.currentTime + .1; return; }
+  const e8 = 60 / 138 / 2;
+  if (SND.nextT < ac.currentTime) SND.nextT = ac.currentTime + .05;
+  while (SND.nextT < ac.currentTime + .2) {
+    const s = SND.step % 64, t = SND.nextT, bar = (s >> 3) % 4, m = MEL[s];
+    if (m) tone('square', mtof(m), mtof(m), e8 * .9, .16, t, SND.music);
+    if (m && s % 2 === 0) tone('square', mtof(m + 12), mtof(m + 12), e8 * .4, .04, t + e8 * .5, SND.music);   // ecozinho
+    const b = BASS[bar] + (s % 2 ? 12 : 0); tone('triangle', mtof(b), mtof(b), e8 * .95, .3, t, SND.music);
+    if (s % 4 === 0) tone('sine', 150, 45, .14, .45, t, SND.music);
+    if (s % 2 === 1) hiss(.04, .08, 7000, 1, t, SND.music, 'highpass');
+    if (s % 8 === 4) hiss(.12, .14, 1800, .8, t, SND.music);
+    SND.step++; SND.nextT += e8;
+  }
+}
+function setMusic(on) { SND.musicOn = on; lsSet('vd-musica', on); if (SND.music) SND.music.gain.value = on ? .2 : 0; soundUI(); }
+function setSfx(on) { SND.sfxOn = on; lsSet('vd-sons', on); if (SND.sfx) SND.sfx.gain.value = on ? .55 : 0; soundUI(); }
+function soundUI() {
+  const m = document.getElementById('musBtn'), s = document.getElementById('sfxBtn'), p = document.getElementById('musPill');
+  if (m) m.textContent = SND.musicOn ? '🎵 Música: ligada' : '🔇 Música: desligada';
+  if (s) s.textContent = SND.sfxOn ? '🔊 Sons: ligados' : '🔈 Sons: desligados';
+  if (p) { p.textContent = SND.musicOn ? '🎵' : '🔇'; p.setAttribute('aria-label', SND.musicOn ? 'Desligar música' : 'Ligar música'); }
+}
+addEventListener('pointerdown', audioInit); addEventListener('keydown', audioInit);
+
 // ===== Mapa aberto =====
 const N = 48, HALF = N / 2, C0 = HALF - .5;
 // Modos: solo, online "juntos" (coop) e online "um contra o outro" (pvp). ?sala=CÓDIGO&modo=coop|pvp (&host=1 para quem criou)
@@ -253,13 +349,32 @@ const BRIDGES = [7, 24, 41];
 for (const i of BRIDGES) { const j = riverJ(i); grid[i][j] = grid[i][j + 1] = BRIDGE; }
 for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) if (Math.hypot(i - 38, j - 37) < 2.6) grid[i][j] = WATER;
 
-// Portais de onde os monstros saem: norte, sul, oeste, leste [i, j, direção para dentro]
-const PORTALS = [[15, 0, 0, 1], [32, N - 1, 0, -1], [0, 30, 1, 0], [N - 1, 17, -1, 0]];
+// Portais de onde os monstros saem: em lugares sorteados, dentro da mata [i, j, direção para dentro].
+// Online usa o código da sala como semente, para os dois aparelhos terem o mesmo mapa. ?mapa=N fixa a semente.
+const PSEED = QS0.get('mapa') ? +QS0.get('mapa') : ROOM ? [...ROOM].reduce((a, c) => Math.imul(a ^ c.charCodeAt(0), 16777619) >>> 0, 2166136261) : (Math.random() * 2 ** 31) | 0;
+const prnd = (() => { let s = PSEED | 0; return () => { s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; })();
+const PORTALS = [];
+{
+  const okCell = (i, j) => inMap(i, j) && grid[i][j] === GRASS && Math.abs(j - riverJ(i)) > 2 && Math.hypot(i - 38, j - 37) > 4.5 && !BRIDGES.some(b => Math.abs(b - i) < 3 && Math.abs(j - riverJ(b)) < 5);
+  for (let s = 0; s < 4; s++) {
+    const tc = targetCastle(s);
+    for (let tries = 0, minGap = 15; tries < 6000; tries++) {
+      if (tries % 1000 === 999) minGap -= 2;
+      const i = 6 + Math.floor(prnd() * (N - 12)), j = 6 + Math.floor(prnd() * (N - 12));
+      if (castleDist(i, j) < (PVP ? 10 : 13) || !okCell(i, j)) continue;
+      if (PVP && (SIDE_TEAM[s] === 0 ? i > HALF - 6 : i < HALF + 6)) continue;
+      if (PORTALS.some(([a, b]) => Math.hypot(a - i, b - j) < minGap)) continue;
+      const dx = tc.ci - i, dz = tc.cj - j, [di, dj] = Math.abs(dx) > Math.abs(dz) ? [Math.sign(dx), 0] : [0, Math.sign(dz)];
+      if (!okCell(i + di, j + dj)) continue;
+      PORTALS.push([i, j, di, dj]); break;
+    }
+  }
+}
 const SPAWNS = PORTALS.map(([i, j, di, dj]) => [i + di, j + dj]);
 const reserved = new Set();
 for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
   if (castleDist(i, j) < 6) reserved.add(K(i, j));
-  for (const [pi, pj] of PORTALS) if (Math.hypot(i - pi, j - pj) < 4.5) reserved.add(K(i, j));
+  for (const [pi, pj] of PORTALS) if (Math.hypot(i - pi, j - pj) < 1.8) reserved.add(K(i, j));
 }
 for (const bi of BRIDGES) { const j = riverJ(bi); for (let a = -1; a <= 1; a++) for (let b = -2; b <= 3; b++) reserved.add(K(bi + a, j + b)); }
 
@@ -300,15 +415,28 @@ for (const [ci, cj] of [[11, 36], [37, 27], [34, 15], [12, 17], [24, 40]]) for (
 // Árvores e pedras (sólidas)
 for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
   if (grid[i][j] !== GRASS || reserved.has(K(i, j)) || near(i, j, 1, t => t === PAD || t === HOUSE)) continue;
-  const d = noise(i, j) > 1.1 ? .55 : .17, r = rnd();
+  // mata fechada nas áreas de floresta e em volta de cada portal
+  const pd = Math.min(...PORTALS.map(([a, b]) => Math.hypot(i - a, j - b))), d = noise(i, j) > 1.1 || pd < 6.5 ? .58 : .17, r = rnd();
   if (r < d) grid[i][j] = TREE; else if (r < d + .03) grid[i][j] = ROCK;
 }
-// Abre caminho do portal até o castelo, para nenhum portal ficar preso
-for (const [s, [si, sj]] of SPAWNS.entries()) {
-  const tc = targetCastle(s), L = Math.hypot(tc.ci - si, tc.cj - sj);
-  for (let t = 0; t <= L; t += .5) {
-    const i = Math.round(si + (tc.ci - si) * t / L), j = Math.round(sj + (tc.cj - sj) * t / L);
-    for (const [a, b] of [[0, 0], [1, 0], [0, 1]]) { const g = at(i + a, j + b); if (g === TREE || g === ROCK || g === MOUNT) grid[i + a][j + b] = GRASS; }
+// Abre uma trilha torta e estreita do portal até o castelo, por dentro da mata, para nenhum portal ficar preso
+const trail = new Set();
+{
+  const cost = new Float32Array(N * N).map(() => 1 + prnd() * 3);
+  for (const [s, [si, sj]] of SPAWNS.entries()) {
+    const tc = targetCastle(s), dist = new Float64Array(N * N).fill(Infinity), prev = new Int32Array(N * N).fill(-1), h = [[0, K(si, sj)]];
+    dist[K(si, sj)] = 0; let end = -1;
+    while (h.length) {
+      h.sort((a, b) => b[0] - a[0]); const [d, k] = h.pop(); if (d > dist[k]) continue;
+      const i = (k / N) | 0, j = k % N;
+      if (Math.max(Math.abs(i - tc.ci), Math.abs(j - tc.cj)) < 3.5) { end = k; break; }
+      for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const t = at(i + a, j + b); if (t < 0 || t === WATER || t === HOUSE || t === PAD || t === PORTAL) continue;
+        const nk = K(i + a, j + b), nd = d + cost[nk] + (t === TREE || t === ROCK ? 1.5 : t === MOUNT ? 8 : 0);
+        if (nd < dist[nk]) { dist[nk] = nd; prev[nk] = k; h.push([nd, nk]); }
+      }
+    }
+    for (let k = end; k >= 0; k = prev[k]) { const i = (k / N) | 0, j = k % N, g = grid[i][j]; trail.add(k); if (g === TREE || g === ROCK || g === MOUNT) grid[i][j] = GRASS; }
   }
 }
 // Árvores gigantes (2 ou 3): base de 2x2 casas, sólida, longe do castelo e dos caminhos dos portais
@@ -317,7 +445,7 @@ const giants = [];
 const segDist = (px, pz, ax, az, bx, bz) => { const dx = bx - ax, dz = bz - az, t = clamp(((px - ax) * dx + (pz - az) * dz) / (dx * dx + dz * dz), 0, 1); return Math.hypot(px - ax - dx * t, pz - az - dz * t); };
 for (let k = 0; k < 3000 && giants.length < 3; k++) {
   const i = 3 + Math.floor(rnd() * (N - 7)), j = 3 + Math.floor(rnd() * (N - 7)), cells = [[i, j], [i + 1, j], [i, j + 1], [i + 1, j + 1]];
-  if (castleDist(i + .5, j + .5) < 9) continue;
+  if (castleDist(i + .5, j + .5) < 9 || cells.some(([a, b]) => trail.has(K(a, b)) || trail.has(K(a - 1, b)) || trail.has(K(a + 1, b)) || trail.has(K(a, b - 1)) || trail.has(K(a, b + 1)))) continue;
   if (cells.some(([a, b]) => reserved.has(K(a, b)) || ![GRASS, TREE, ROCK].includes(at(a, b)) || near(a, b, 1, t => t === PAD || t === HOUSE || t === WATER || t === BRIDGE || t === MOUNT || t === PORTAL))) continue;
   if (SPAWNS.some(([si, sj], s) => segDist(i + .5, j + .5, si, sj, targetCastle(s).ci, targetCastle(s).cj) < 4.5)) continue;
   if (giants.some(g => Math.hypot(g.i - i, g.j - j) < 12)) continue;
@@ -356,17 +484,23 @@ function computeFlowTo(flow, cs) {
   }
 }
 computeFlow();
-const SIDE_NAME = ['norte', 'sul', 'oeste', 'leste'];
+// Nome do lado de cada portal, visto do castelo
+const SIDE_NAME = SPAWNS.map(([i, j], s) => { const c = targetCastle(s), a = Math.atan2(j - c.cj, i - c.ci) * 180 / Math.PI; return ['leste', 'sudeste', 'sul', 'sudoeste', 'oeste', 'noroeste', 'norte', 'nordeste'][((Math.round(a / 45) % 8) + 8) % 8]; });
 
-function flowDir(p, out, flow = flows[0], cx = 0, cz = 0) {
+const hash3 = (a, b, c) => { let x = Math.imul(a, 374761393) + Math.imul(b, 668265263) + Math.imul(c, 2147483647); x = Math.imul(x ^ x >>> 13, 1274126177); return ((x ^ x >>> 16) >>> 0) / 4294967296; };
+function flowDir(p, out, flow = flows[0], cx = 0, cz = 0, seed = 0) {
   const i = cellOf(p.x), j = cellOf(p.z), f = inMap(i, j) ? flow[K(i, j)] : Infinity;
   if (!(f > 0 && f < Infinity)) return out.set(cx - p.x, 0, cz - p.z).normalize();
-  let bi = -1, bj = -1, bf = f;
+  let bi = -1, bj = -1, bf = f, tot = 0;
+  const cand = [];
   for (const [a, b] of D8) {
     const ni = i + a, nj = j + b;
     if (!free(ni, nj) || (a && b && (!free(i + a, j) || !free(i, j + b)))) continue;
     const nf = flow[K(ni, nj)]; if (nf < bf) { bf = nf; bi = ni; bj = nj; }
+    if (seed && nf < f - .2) { const w = f - nf; cand.push([ni, nj, w]); tot += w; }
   }
+  // longe do castelo, cada monstro sorteia (fixo por casa) qual caminho que desce ele vai pegar
+  if (seed && cand.length > 1 && f > 4) { let r = hash3(seed, i, j) * tot; for (const [ni, nj, w] of cand) { if ((r -= w) <= 0) { bi = ni; bj = nj; break; } } }
   if (bi < 0) return out.set(cx - p.x, 0, cz - p.z).normalize();
   return out.set(wc(bi) - p.x, 0, wc(bj) - p.z).normalize();
 }
@@ -424,7 +558,7 @@ const mat = {
   white: M(0xffffff), black: M(0x151515), gold: M(0xffc93c, 0x553300), iron: M(0x4a525c), snow: M(0xe6f6ff),
   ice: M(0x9fe6ff, 0x2a8fc0), soil: M(0x7a5233), soilD: M(0x553823), tint: M(0xffffff), green: M(0x4d7c3a),
   copper: M(0xc0753a), zap: M(0xfff3a0, 0xffd000), orange: M(0xf97316, 0x5a2000), purple: M(0x8b5cf6, 0x3b1580),
-  glow: M(0x93c5fd, 0x2563eb), toxic: M(0xa3e635, 0x3f6212), laserM: M(0xff6b6b, 0xdc2626), pad: M(0xd9cfb4), moss: M(0x5f8f3a),
+  glow: M(0x93c5fd, 0x2563eb), zshirt: M(0x4a5f8a), chip: M(0x39ff14, 0x39ff14), toxic: M(0xa3e635, 0x3f6212), laserM: M(0xff6b6b, 0xdc2626), pad: M(0xd9cfb4), moss: M(0x5f8f3a),
 };
 function box(m, sx, sy, sz, x, y, z, p) {
   const o = new THREE.Mesh(BOX, m); o.scale.set(sx, sy, sz); o.position.set(x, y, z);
@@ -943,7 +1077,54 @@ function updateParticles(dt) {
 // Moedas
 const COIN = new THREE.CylinderGeometry(.16, .16, .05, 12).rotateX(Math.PI / 2);
 const coins = [];
-function dropCoin(p) { fxRec(['c', r2(p.x), r2(p.z)]); const m = new THREE.Mesh(COIN, mat.gold); m.position.set(p.x, .5, p.z); scene.add(m); coins.push({ m, t: 0 }); }
+function dropCoin(p) { fxRec(['c', r2(p.x), r2(p.z)]); sfx('coin', p.x, p.z); const m = new THREE.Mesh(COIN, mat.gold); m.position.set(p.x, .5, p.z); scene.add(m); coins.push({ m, t: 0 }); }
+
+// Vida que o zumbi Chipado solta. O herói pega encostando nela e leva até o castelo: +35 de vida.
+const HEART_HEAL = 35, HEART_LIFE = 25, hearts = []; let hid = 0;
+const heartMat = M(0xff3b5c, 0xb0102a), heartHi = M(0xffc2cc, 0xff6680);
+function heartMesh() {
+  const g = new THREE.Group(), u = .09;
+  const rows = ['.##.##.', '#######', '#######', '.#####.', '..###..', '...#...'];
+  rows.forEach((r, y) => [...r].forEach((c, x) => { if (c === '#') box(y === 1 && x === 1 ? heartHi : heartMat, u, u, u * 1.6, (x - 3) * u, (5 - y) * u, 0, g); }));
+  const glow = new THREE.Mesh(CIRCLE, basic(0xff4d6d, .35)); glow.scale.setScalar(.55); glow.position.y = -.42; g.add(glow); g.userData.glow = glow;
+  scene.add(g); return g;
+}
+function dropHeart(x, z, id) {
+  const hh = { id: id ?? ++hid, g: heartMesh(), x, z, life: HEART_LIFE, by: null, t: Math.random() * 6 };
+  hh.g.position.set(x, .55, z); hearts.push(hh);
+  if (id === undefined) toast('❤️ O Chipado soltou uma vida! Pegue e leve até o castelo.', 3200);
+  return hh;
+}
+function removeHeart(hh) { scene.remove(hh.g); if (hh.by) hh.by.carry = null; hearts.splice(hearts.indexOf(hh), 1); }
+function updateHearts(dt, rdt) {
+  for (const hh of [...hearts]) {
+    hh.t += rdt;
+    hh.g.rotation.y = Math.sin(hh.t * 2) * .5;
+    if (hh.by) {
+      const c = hh.by;
+      if (c.dead) { hh.by = null; c.carry = null; hh.x = c.pos.x; hh.z = c.pos.z; hh.life = HEART_LIFE; continue; }
+      hh.g.position.set(c.pos.x, 2.25 + Math.sin(hh.t * 4) * .06, c.pos.z); hh.g.userData.glow.visible = false;
+      const cs = PVP ? CASTLES[c.pl] : CASTLES[0];
+      if (dt && Math.max(Math.abs(c.pos.x - cs.x), Math.abs(c.pos.z - cs.z)) < 3.9) {
+        const give = () => { const before = S.castle; S.castle = Math.min(100, S.castle + HEART_HEAL); toast(`❤️ Vida entregue! Castelo +${Math.round(S.castle - before)}`, 2600); bump('castle'); updateUI(); };
+        if (PVP) withPlayer(c.pl, give); else give();
+        burst(tmp.set(cs.x, 2.5, cs.z), 0xff4d6d, 24, 3, .14); burst(tmp, 0x4ade80, 14, 2.5, .1); sfx('heal');
+        removeHeart(hh);
+      }
+      continue;
+    }
+    hh.g.userData.glow.visible = true;
+    hh.g.position.set(hh.x, .55 + Math.sin(hh.t * 3) * .12, hh.z);
+    hh.g.visible = hh.life > 5 || Math.sin(hh.t * 14) > 0;
+    if (!dt) continue;
+    if ((hh.life -= dt) <= 0) { burst(tmp.set(hh.x, .5, hh.z), 0xff4d6d, 8, 1.5, .08); removeHeart(hh); continue; }
+    for (const p of heroes) if (!p.dead && !p.carry && Math.hypot(p.pos.x - hh.x, p.pos.z - hh.z) < .75) {
+      hh.by = p; p.carry = hh; burst(tmp.set(hh.x, .6, hh.z), 0xff4d6d, 10, 1.5, .08); if (p.pl === ME) sfx('heart');
+      withPlayer(p.pl, () => toast('❤️ Você pegou a vida! Leve até o castelo.', 2600));
+      break;
+    }
+  }
+}
 
 // Barras de vida
 const BAR = new THREE.PlaneGeometry(1, 1);
@@ -967,6 +1148,7 @@ const ET = {
   tanque: { name: 'Tanque', hp: 150, sp: .8, size: .72, color: 0x7d5ba6, reward: 12, kind: 'melee', atk: 18 },
   arqueiro: { name: 'Arqueiro', hp: 45, sp: 1.2, size: .48, color: 0x3f8f4a, reward: 8, kind: 'ranged', range: 3.8, dmg: 6, rate: 1.6 },
   bomba: { name: 'Homem-bomba', hp: 50, sp: 1.6, size: .5, color: 0x33333a, reward: 9, kind: 'bomber', dmg: 45, radius: 1.8 },
+  zumbi: { name: 'Chipado', hp: 70, sp: .75, size: .58, color: 0x7fb069, reward: 8, kind: 'melee', atk: 10, heart: true },
   cura: { name: 'Curandeiro', hp: 60, sp: 1, size: .5, color: 0xeeeeee, reward: 10, kind: 'healer' },
   golem: { name: 'Golem', hp: 1000, sp: .55, size: 1.15, color: 0x7b7f88, reward: 90, kind: 'melee', atk: 28, boss: true, slam: true },
   bruxo: { name: 'Bruxo', hp: 750, sp: .7, size: 1, color: 0x5b2a86, reward: 90, kind: 'ranged', range: 4.2, dmg: 14, rate: 1.2, boss: true, summon: true },
@@ -1001,6 +1183,13 @@ function spawnEnemy(type, x, z, team = 0) {
   if (type === 'tanque') for (const sx of [-1, 1]) box(mat.stoneD, s * .3, s * .25, s * .55, sx * s * .6, s * .72, 0, inner);
   if (type === 'arqueiro') { box(mat.woodD, .06, s * 1.2, .06, s * .62, s * .6, s * .2, inner); box(mat.green, s * 1.1, s * .3, s * 1.1, 0, s * 1.02, 0, inner); }
   if (type === 'bomba') { const b = new THREE.Mesh(SPHERE, mat.black); b.scale.setScalar(s * .42); b.position.set(0, s * .7, -s * .55); inner.add(b); box(mat.orange, .06, .18, .06, 0, s * 1.15, -s * .55, inner); }
+  if (type === 'zumbi') {
+    // zumbi "chipado": braços esticados, camisa rasgada, dentes e um chip com luz verde na testa
+    box(mat.zshirt, s * 1.03, s * .32, s * 1.03, 0, s * .28 + .1, 0, inner);
+    for (const sx of [-1, 1]) box(body, s * .22, s * .22, s * .7, sx * s * .58, s * .62 + .1, s * .4, inner);
+    for (let k = -1; k <= 1; k++) box(mat.white, s * .08, s * .08, .03, k * s * .14, s * .32 + .1, s / 2 + .02, inner);
+    box(mat.dark, s * .34, s * .14, s * .22, 0, s * .93 + .1, s * .22, inner); box(mat.chip, s * .1, s * .06, s * .1, 0, s * 1.02 + .1, s * .24, inner);
+  }
   if (type === 'cura') { box(mat.green, s * .5, s * .14, .04, 0, s * .45, s / 2 + .02, inner); box(mat.green, s * .14, s * .5, .04, 0, s * .45, s / 2 + .02, inner); box(mat.green, s * .2, .06, s * .6, 0, s + .14, 0, inner); }
   if (type === 'golem') { box(mat.moss, s * 1.06, s * .12, s * 1.06, 0, s * .98 + .1, 0, inner); for (const sx of [-1, 1]) box(mat.stoneD, s * .35, s * .45, s * .4, sx * s * .7, s * .45, s * .1, inner); }
   if (type === 'bruxo') { cone(mat.purple, s * .55, s * .9, 0, s * 1.35, 0, inner); box(mat.woodD, .07, s * 1.4, .07, s * .65, s * .7, s * .2, inner); const o = new THREE.Mesh(SPHERE, mat.purple); o.scale.setScalar(.14); o.position.set(s * .65, s * 1.45, s * .2); inner.add(o); }
@@ -1011,7 +1200,7 @@ function spawnEnemy(type, x, z, team = 0) {
   const tci = PVP ? 1 - team : 0;
   const e = { id: ++eid, team, tc: CASTLES[tci], flowF: flows[tci], kind: 'enemy', type, T, g, inner, body, f1, f2, bar, hp, maxHp: hp, pos: g.position, r: s * .45, cr: Math.min(s * .45, .48),
     vel: V(), dir: V(), walk: 0, slowT: 0, slowF: 1, flashT: 0, burnT: 0, burnDps: 0, poisonT: 0, poisonDps: 0, think: 0, target: null, atkCd: Math.random(),
-    healCd: 2, sumCd: 5, slamCd: 2, ph: Math.random() * 6.28, wf: .6 + Math.random() * .8, wob: .25 + Math.random() * .35,
+    healCd: 2, sumCd: 5, slamCd: 2, ph: Math.random() * 6.28, wf: .4 + Math.random() * .7, wob: .35 + Math.random() * .45,
     hitY: s * .5, fd: 99, dead: false, sp: T.sp * (.9 + Math.random() * .2), px: x, pz: z };
   e.pos.set(x, 0, z);
   enemies.push(e);
@@ -1068,7 +1257,7 @@ function stepEnemy(e, dt, time) {
     if (mode === 'walk') {
       if (tg && tg.kind !== 'castle') desired.set(tg.pos.x - e.pos.x, 0, tg.pos.z - e.pos.z).normalize();
       else {
-        flowDir(e.pos, desired, e.flowF, e.tc.x, e.tc.z);
+        flowDir(e.pos, desired, e.flowF, e.tc.x, e.tc.z, e.id);
         if (e.fd > 2.5) { const w = Math.sin(time * e.wf + e.ph) * e.wob, c = Math.cos(w), s = Math.sin(w); desired.set(desired.x * c - desired.z * s, 0, desired.x * s + desired.z * c); }
       }
       e.dir.lerp(desired, Math.min(1, dt * 8));
@@ -1121,10 +1310,12 @@ function hurt(e, dmg, flash = true) {
   e.hp -= dmg; if (flash) e.flashT = .1; e.bar.g.visible = true;
   if (e.hp > 0) return;
   removeEnemy(e);
+  sfx(e.T.boss ? 'bossdie' : 'die', e.pos.x, e.pos.z);
   tmp.set(e.pos.x, e.hitY, e.pos.z);
   burst(tmp, e.T.color, 10 + e.T.size * 14, 3, .14 + e.T.size * .08);
   burst(tmp, 0x222222, 4, 2.5, .1);
   dropCoin(e.pos);
+  if (e.T.heart) dropHeart(e.pos.x, e.pos.z);
   const pay = () => {
     S.gold += Math.round(e.T.reward * (1 + .05 * (S.wave - 1)) * (1 + S.power * .6));
     if (e.T.boss) toast(`Você derrotou o ${e.T.name}! 👑`);
@@ -1155,9 +1346,10 @@ function slam(e) {
 }
 function damageTarget(tg, amt) {
   if (tg.dead || S.over) return;
-  if (tg.kind === 'hero') { tg.hp -= amt; tg.hurtT = .12; }
+  if (tg.kind === 'hero') { tg.hp -= amt; tg.hurtT = .12; if (tg.pl === ME) sfx('hurt'); }
   else if (tg.kind === 'tower') { tg.hp -= amt; tg.shake = .15; tg.bar.g.visible = true; if (tg.hp <= 0) destroyTower(tg); }
   else {
+    sfx('hit', tg.cs.x, tg.cs.z);
     const f = () => { S.castle -= amt; tg.cs.shake = .3; if (S.castle <= 0) { if (PVP) pvpEnd(1 - tg.pl); else gameOver(); } };
     if (PVP) withPlayer(tg.pl, f); else f();
   }
@@ -1270,7 +1462,7 @@ function placeTower(type, pad) {
   if (S.gold < T.cost || pad.t || (T.unlock && !S.unlocked.has(T))) return;
   if (PVP && pad.owner !== (CTX ?? 0)) return toast('Essa placa é do outro jogador.');
   S.gold -= T.cost;
-  const t = makeTower(type, pad, CTX ?? 0);
+  const t = makeTower(type, pad, CTX ?? 0); if (isLocal()) sfx('build');
   burst(tmp.set(t.pos.x, .1, t.pos.z), 0xc9a46a, 10, 1.5, .1);
   if (isLocal()) closeSheet(); updateUI();
   if (S.wave === 0 && towers.length === 1) toast('Boa! Agora toque em ▶ Onda 1', 3500);
@@ -1278,7 +1470,7 @@ function placeTower(type, pad) {
 function upgradeTower(t) {
   const c = t.T.up[t.lv];
   if (t.lv >= 2 || S.gold < c) return;
-  S.gold -= c; t.inv += c; t.lv++; t.pop = 0;
+  S.gold -= c; t.inv += c; t.lv++; t.pop = 0; if (isLocal()) sfx('up');
   t.maxHp = t.T.hp[t.lv]; t.hp = t.maxHp;
   buildTowerMesh(t);
   burst(tmp.set(t.pos.x, 1, t.pos.z), 0xffc93c, 14, 2, .1);
@@ -1351,6 +1543,7 @@ function fire(t, e, st) {
   for (let k = n0; k < shots.length; k++) shots[k].pl = pl;
 }
 function fireInner(t, e, st, o, sh, pl) {
+  sfx(sh === 'flame' ? 'fire' : sh === 'chain' ? 'zap' : 'tshot', o.x, o.z);
   if (sh === 'poison') {
     const dist = Math.hypot(e.pos.x - o.x, e.pos.z - o.z), T = .6 + dist * .08;
     const m = new THREE.Mesh(BALL, mat.toxic); m.position.copy(o); scene.add(m);
@@ -1428,7 +1621,7 @@ function enemyShoot(e, tg) {
   shots.push({ k: 'e', m, tg, dmg: e.T.dmg * (1 + .04 * (S.wave - 1)) * S.dmgMul * (tg.kind === 'castle' ? .2 : 1), sp: boss ? 7 : 10, last: aimPoint(tg, e.pos, V()), boss });
 }
 function explodeAt(p, radius, dmg, big, pl = 0, heroHit = false) {
-  p.y = .2;
+  p.y = .2; sfx('boom', p.x, p.z);
   burst(p, 0xffa53a, big ? 18 : 10, big ? 4 : 3, big ? .17 : .14); burst(p, 0x777777, big ? 9 : 6, 2, .12);
   for (const e of [...enemies]) if (!e.dead && !(PVP && e.team === pl) && Math.hypot(e.pos.x - p.x, e.pos.z - p.z) <= radius + e.r) hurt(e, dmg);
   if (heroHit) hitFoeHero(pl, p.x, p.z, radius, dmg * .5);
@@ -1558,6 +1751,7 @@ function heroAttack(dir) {
   const w = S.hw, n = S.wave;
   hero.recoil = 1;
   if (w === 'blaster') return heroFire(dir);
+  if (w !== 'blaster') sfx(w === 'fogo' ? 'fire' : w === 'raio' ? 'zap' : 'shot', hero.pos.x, hero.pos.z);
   if (w === 'fogo') {
     hero.cd = .12;
     const src = V(hero.pos.x + dir.x * .5, .75, hero.pos.z + dir.z * .5);
@@ -1595,6 +1789,7 @@ function heroAttack(dir) {
 }
 function heroFire(dir) {
   const o = V(hero.pos.x + dir.x * .55, .78, hero.pos.z + dir.z * .55);
+  sfx('shot', o.x, o.z);
   const m = new THREE.Mesh(BULLET, heroShotMat); m.position.copy(o); m.lookAt(o.x + dir.x, o.y, o.z + dir.z); scene.add(m);
   shots.push({ k: 'hb', m, dir: dir.clone(), sp: 18, life: .45, dmg: heroDmg(), pl: hero.pl });
   hero.cd = .24; hero.recoil = 1;
@@ -1698,6 +1893,7 @@ function updateHero(dt, rdt, time) {
   if (!danger) hero.hp = Math.min(hero.maxHp, hero.hp + 6 * dt);
   if (hero.hp <= 0) {
     const back = PVP ? 6 : 8;
+    if (hero.pl === ME) sfx('herodie');
     hero.dead = true; hero.respawnT = back; hero.g.visible = hero.bar.g.visible = false;
     burst(tmp.set(hero.pos.x, .5, hero.pos.z), HERO_COL[hero.pl][0], 16, 2.5, .12);
     toast(`O herói caiu! Volta em ${back} segundos.`, 3000);
@@ -1716,15 +1912,15 @@ const saveBest = () => { try { localStorage.setItem('vd-best', S.best); } catch 
 const S = { gold: START_GOLD, castle: 100, wave: 0, waveActive: false, queue: [], spawnT: 0, hpMul: 1, speed: 1, over: false, sel: null, best: loadBest(), started: false, power: 0, dmgMul: 1, hw: 'blaster', owned: new Set(['blaster']), unlocked: new Set(), shop: false };
 S.bestAtStart = S.best; S.nextT = 10; S.winner = -1;
 if (ONLINE) { Object.assign(S, freshPlayer()); PS[1] = pickKeys(freshPlayer(), PF); }
-const bossWave = n => n % 3 === 0;
+const bossWave = n => n >= 10 && n % 2 === 0;   // chefões só na onda 10, 12, 14...
 
 function waveList(n, team = -1) {
-  const W = [['rapido', 5], ['aranha', n >= 2 ? 2 : 0], ['tanque', n >= 2 ? 2 + n * .1 : 0], ['arqueiro', n >= 3 ? 2.2 : 0], ['bomba', n >= 4 ? 1.5 : 0], ['cura', n >= 5 ? 1 : 0]];
+  const W = [['rapido', 5], ['aranha', n >= 2 ? 2 : 0], ['tanque', n >= 2 ? 2 + n * .1 : 0], ['arqueiro', n >= 3 ? 2.2 : 0], ['bomba', n >= 4 ? 1.5 : 0], ['cura', n >= 5 ? 1 : 0], ['zumbi', n >= 5 ? .7 : 0]];
   const tot = W.reduce((a, [, w]) => a + w, 0), L = [];
   let side = Math.floor(Math.random() * 4);
   const count = 6 + Math.floor(n * 2.2);
   for (let k = 0; k < count; k++) {
-    if (k % 5 === 0 && k) side = Math.floor(Math.random() * 4);
+    side = Math.floor(Math.random() * 4);
     let r = Math.random() * tot, type = 'rapido';
     for (const [t, w] of W) { r -= w; if (r < 0) { type = t; break; } }
     L.push({ type, side: team < 0 ? side : TEAM_SIDES[team][side % 2], team });
@@ -1738,16 +1934,16 @@ function waveList(n, team = -1) {
 const TEAM_SIDES = [[0, 2], [1, 3]];
 function spawnFrom(item) {
   const [i, j] = SPAWNS[item.side], team = PVP ? item.team : 0;
-  burst(tmp.set(wc(i), 1, wc(j)), 0x8b5cf6, 6, 1.5, .1);
+  burst(tmp.set(wc(i), 1, wc(j)), 0x8b5cf6, 6, 1.5, .1); sfx('spawn', wc(i), wc(j));
   const n = item.type === 'aranha' ? 3 : 1;
   // no contra, a força dos monstros é a do jogador que vai ser atacado
-  const go = () => { for (let k = 0; k < n; k++) spawnEnemy(item.type, wc(i) + (Math.random() - .5) * .7, wc(j) + (Math.random() - .5) * .7, team); };
+  const go = () => { for (let k = 0; k < n; k++) spawnEnemy(item.type, wc(i) + (Math.random() - .5) * 1.1, wc(j) + (Math.random() - .5) * 1.1, team); };
   if (PVP) withPlayer(1 - team, go); else go();
   if (item.boss) toast(PVP ? `👑 Chefão ${ET[item.type].name} do time ${team ? 'vermelho' : 'azul'}!` : `👑 Chefão ${ET[item.type].name} vem do ${SIDE_NAME[item.side]}!`, 3000);
 }
 function startWave() {
   if (S.waveActive || S.over) return;
-  S.wave++; S.waveActive = true; S.spawnT = .3;
+  S.wave++; S.waveActive = true; S.spawnT = .3; sfx('wave');
   if (PVP) { const a = waveList(S.wave, 0), b = waveList(S.wave, 1); S.queue = []; for (let k = 0; k < Math.max(a.length, b.length); k++) { if (a[k]) S.queue.push(a[k]); if (b[k]) S.queue.push(b[k]); } }
   else S.queue = waveList(S.wave);
   S.hpMul = 1.12 + .18 * (S.wave - 1) + .012 * (S.wave - 1) ** 2;
@@ -1784,6 +1980,7 @@ function pvpEnd(winner) {
 }
 function showOver() {
   const pv = PVP, won = S.winner === ME;
+  sfx(pv && won ? 'win' : 'over');
   $('ovTitle').textContent = pv ? (won ? 'Você venceu! 🏆' : 'Você perdeu!') : 'O castelo caiu!';
   $('ovSolo').hidden = pv; $('ovPvp').hidden = !pv;
   $('ovPvp').textContent = won ? 'Você destruiu o castelo do outro jogador.' : 'O outro jogador destruiu seu castelo.';
@@ -1796,6 +1993,7 @@ function resetGame() {
   for (const s of shots) scene.remove(s.m);
   for (const b of bolts) scene.remove(b.m);
   for (const t of [...towers]) { scene.remove(t.root, t.bar.g); if (t.beam) scene.remove(t.beam); t.pad.t = null; blocked[K(t.pad.i, t.pad.j)] = 0; }
+  for (const hh of [...hearts]) removeHeart(hh);
   for (const c of coins) scene.remove(c.m);
   enemies.length = shots.length = bolts.length = towers.length = coins.length = 0;
   computeFlow(); for (const hh of heroes) resetHero(hh);
@@ -1918,8 +2116,8 @@ $('bomb').onclick = throwBomb;
 $('speed').onclick = () => { S.speed = S.speed === 1 ? 2 : 1; $('speed').textContent = S.speed + 'x'; };
 $('again').onclick = () => act({ c: 'again' });
 $('helpList').innerHTML = TOUCH
-  ? '<li>Ande com o controle redondo à esquerda.</li><li>O herói atira sozinho no monstro mais perto.</li><li>💣 joga uma bomba. 🛒 abre a loja de armas.</li><li>Toque nas placas de pedra para pôr armas.</li><li>Os monstros vêm de todos os lados e atacam suas armas.</li>'
-  : '<li><b>WASD</b> ou setas: anda com o herói.</li><li>O herói atira sozinho quando um monstro chega perto. <b>O mouse escolhe a direção</b>. Clique para atirar também.</li><li><b>Q</b> ou <b>espaço</b>: joga bomba onde o mouse aponta.</li><li>Clique nas placas de pedra para pôr armas.</li><li><b>B</b> ou 🛒: loja com armas novas.</li><li><b>Enter</b> começa a onda. Arraste para mover a câmera, roda do mouse para zoom.</li>';
+  ? '<li>🧟 A partir da onda 5 aparecem os zumbis <b>Chipados</b>. Derrube um e ele solta uma ❤️: pegue e leve até o castelo para ganhar vida.</li><li>Ande com o controle redondo à esquerda.</li><li>O herói atira sozinho no monstro mais perto.</li><li>💣 joga uma bomba. 🛒 abre a loja de armas.</li><li>Toque nas placas de pedra para pôr armas.</li><li>Os monstros vêm de todos os lados e atacam suas armas.</li>'
+  : '<li>🧟 A partir da onda 5 aparecem os zumbis <b>Chipados</b>. Derrube um e ele solta uma ❤️: pegue e leve até o castelo para ganhar vida.</li><li><b>WASD</b> ou setas: anda com o herói.</li><li>O herói atira sozinho quando um monstro chega perto. <b>O mouse escolhe a direção</b>. Clique para atirar também.</li><li><b>Q</b> ou <b>espaço</b>: joga bomba onde o mouse aponta.</li><li>Clique nas placas de pedra para pôr armas.</li><li><b>B</b> ou 🛒: loja com armas novas.</li><li><b>Enter</b> começa a onda. Arraste para mover a câmera, roda do mouse para zoom.</li>';
 $('bombKey').hidden = TOUCH;
 function addPower(p) { S.power = Math.round((S.power + p) * 100) / 100; S.dmgMul = 1 + S.power * .5; }
 let shopSig = '';
@@ -1953,10 +2151,15 @@ function shopAct(d) {
   else if (d.hw) { if (!S.owned.has(d.hw)) return; S.hw = d.hw; toast(`${HW[d.hw].icon} Usando ${HW[d.hw].name}`); }
   else if (d.unlock) { const T = TT[d.unlock]; if (!T || !T.unlock || S.unlocked.has(T) || S.gold < T.unlock) return; S.gold -= T.unlock; S.unlocked.add(T); addPower(T.power); toast(`Arma ${T.name} liberada! Toque numa placa de pedra para colocar.`, 3500); }
   else return;
+  if (isLocal()) sfx('buy');
   bump('gold'); updateUI(); renderShop();
 }
 $('gfx').textContent = HD ? '🖥️ Gráfico detalhado (PC) · trocar para leve' : '📱 Gráfico leve (celular) · trocar para detalhado';
 $('gfx').onclick = () => { try { localStorage.setItem('vd-grafico', HD ? 'leve' : 'hd'); } catch (e) {} location.reload(); };
+soundUI();
+$('musBtn').onclick = () => { audioInit(); setMusic(!SND.musicOn); };
+$('sfxBtn').onclick = () => { audioInit(); setSfx(!SND.sfxOn); };
+$('musPill').onclick = () => { audioInit(); setMusic(!SND.musicOn); };
 $('play').onclick = () => { $('help').classList.remove('show'); S.started = true; };
 $('helpBtn').onclick = () => { $('help').classList.add('show'); S.started = false; };
 addEventListener('keydown', e => {
@@ -2084,7 +2287,7 @@ function updateIndicators() {
 }
 
 // ===== Loop =====
-let last = performance.now(), time = 0, slowTick = 0, snapT = 0;
+let last = performance.now(), time = 0, slowTick = 0, snapT = 0, stepT = 0;
 function loop(now) {
   requestAnimationFrame(loop);
   const rdt = Math.min(.05, (now - last) / 1000); last = now; time += rdt;
@@ -2095,9 +2298,15 @@ function loop(now) {
     if (PVP && dt) pvpTick(dt);
     updateWave(dt); updateEnemies(dt, time); updateTowers(dt, rdt, time);
     if (ONLINE) for (const hh of heroes) withPlayer(hh.pl, () => updateHero(dt, rdt, time)); else updateHero(dt, rdt, time);
-    updateShots(dt); updateClouds(dt); updateRads(dt, rdt);
+    updateShots(dt); updateClouds(dt); updateRads(dt, rdt); updateHearts(dt, rdt);
   }
   updateParticles(rdt);
+  if (SND.ac && SND.sfxOn && dt && (stepT -= rdt) <= 0) {
+    stepT = .26;
+    let n = 0; for (const e of enemies) if (!e.dead && Math.hypot(e.pos.x - C.tx, e.pos.z - C.tz) < 13) n++;
+    if (n) sfx('step', C.tx + 30 * (1 - Math.min(1, n / 6)), C.tz);
+    if (!hero.dead && (Math.abs(joy.x) + Math.abs(joy.y) > .2 || ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].some(k => keys.has(k)))) setTimeout(() => sfx('step', hero.pos.x, hero.pos.z), 120);
+  }
   updateEnemyBars();
   for (let k = coins.length - 1; k >= 0; k--) {
     const c = coins[k]; c.t += rdt;
@@ -2145,6 +2354,7 @@ function makeSnap(sdt) {
     }).filter(Boolean),
     cl: clouds.map(c => [r2(c.x), r2(c.z), c.r, r2(c.m.material.opacity)]),
     rd: rads.map(z => [z.id, r2(z.x), r2(z.z), r2(z.life)]),
+    hr: hearts.map(hh => [hh.id, r2(hh.x), r2(hh.z), hh.by ? hh.by.pl : -1, r2(hh.life)]),
     fx: fxLog.splice(0) };
 }
 const gE = new Map(); let gShots = [], gClouds = [], gLastSnap = 0;
@@ -2206,6 +2416,9 @@ function applySnap(m) {
   const rseen = new Set();
   for (const a of m.rd) { let z = rads.find(q => q.id === a[0]); if (!z) z = radArea(V(a[1], 0, a[2]), 0, a[0]); z.life = a[3]; rseen.add(a[0]); }
   for (const z of rads) if (!rseen.has(z.id)) z.life = 0;
+  const hseen = new Set();
+  for (const a of m.hr || []) { let hh = hearts.find(q => q.id === a[0]) || dropHeart(a[1], a[2], a[0]); hh.x = a[1]; hh.z = a[2]; hh.life = a[4]; const c = a[3] >= 0 ? heroes[a[3]] : null; if (hh.by !== c) { if (hh.by) hh.by.carry = null; hh.by = c; if (c) c.carry = hh; } hseen.add(hh); }
+  for (const hh of [...hearts]) if (!hseen.has(hh)) removeHeart(hh);
   for (const a of m.fx) {
     if (a[0] === 'b') burst(V(a[1], a[2], a[3]), a[4], a[5], a[6], a[7]);
     else if (a[0] === 'd') burstDir(V(a[1], a[2], a[3]), V(a[4], 0, a[5]), a[6], a[7], a[8], a[9]);
@@ -2241,7 +2454,7 @@ function guestFrame(rdt, dt) {
     e.body.emissive.setHex(TINT[e.tint || 0]); e.body.emissiveIntensity = e.tint === 1 ? .8 : .6;
   }
   for (const g of gShots) { g.m.position.addScaledVector(g.v, rdt); if (LONG.has(g.k) && g.v.lengthSq() > .01) g.m.lookAt(tmp.copy(g.m.position).add(g.v)); }
-  updateTowers(0, rdt, time); updateRads(0, rdt); updateBolts(rdt);
+  updateTowers(0, rdt, time); updateRads(0, rdt); updateBolts(rdt); updateHearts(0, rdt);
   if (NET.live && (inT += rdt) >= .05) {
     inT = 0; const hh = heroes[ME];
     NET.send({ t: 'i', x: r2(hh.pos.x), z: r2(hh.pos.z), life: hh.life, aim: !TOUCH && mouse.ok ? [r2(mouse.p.x), r2(mouse.p.z)] : null });
@@ -2364,7 +2577,7 @@ C.tx = hero.home.x; C.tz = hero.home.z; clampCam(); updateCam();
 if (ONLINE) startNet();
 setTimeout(() => $('load').classList.add('hide'), Math.max(0, 5000 - performance.now()));
 requestAnimationFrame(loop);
-if (location.search.includes('teste')) window.__vd = { S, pads, placeTower, startWave, enemies, towers, hero, heroes, NET, MODE, ROLE, ME, CASTLES, act, pget, PS, gE, roomLink, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, heroShootAt, rads, renderShop: () => renderShop(), giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE };
+if (location.search.includes('teste')) window.__vd = { SND, sfx, setMusic, setSfx, S, pads, hearts, dropHeart, PORTALS, PSEED, ET, spawnEnemy, waveList, bossWave, trail, placeTower, startWave, enemies, towers, hero, heroes, NET, MODE, ROLE, ME, CASTLES, act, pget, PS, gE, roomLink, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, heroShootAt, rads, renderShop: () => renderShop(), giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE };
 </script>
 </body>
 </html>
