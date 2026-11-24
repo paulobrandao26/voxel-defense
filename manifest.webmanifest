@@ -1,7 +1,7 @@
 {
   "name": "Voxel Defense",
   "short_name": "Voxel Defense",
-  "description": "Defenda o castelo com torres de flecha, canhão e gelo.",
+  "description": "Defenda o castelo em mundo aberto com 8 armas e um herói que atira.",
   "lang": "pt-BR",
   "start_url": "./",
   "scope": "./",
