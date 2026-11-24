@@ -118,8 +118,8 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
 <canvas id="c"></canvas>
 <div id="hud">
   <div class="pill" title="Ouro">🪙 <b id="gold">0</b></div>
-  <div class="pill" title="Vida do seu castelo">🏰 <b id="castle">100</b></div>
-  <div class="pill" id="foePill" title="Vida do castelo inimigo" hidden>🎯 <b id="foeCastle">100</b></div>
+  <div class="pill" title="Vida do seu castelo">🏰 <b id="castle">500</b></div>
+  <div class="pill" id="foePill" title="Vida do castelo inimigo" hidden>🎯 <b id="foeCastle">500</b></div>
   <div class="pill" title="Onda atual">Onda <b id="waveN">0</b></div>
   <div class="pill" title="Recorde de onda">🏆 <b id="best">0</b></div>
   <button id="speed" class="pill" aria-label="Velocidade do jogo">1x</button>
@@ -321,7 +321,7 @@ const QS0 = new URLSearchParams(location.search), ROOM = QS0.get("sala");
 const MODE = ROOM ? (QS0.get("modo") === "pvp" ? "pvp" : "coop") : "solo", ROLE = ROOM ? (QS0.has("host") ? "host" : "guest") : "solo";
 const PVP = MODE === "pvp", ONLINE = MODE !== "solo", ME = ROLE === "guest" ? 1 : 0, GUEST = ROLE === "guest";
 // Castelos (centro em coordenadas de casa). No contra, cada jogador tem o seu: 0 a oeste, 1 a leste.
-const CASTLE_MAX = PVP ? 500 : 100;   // vida do castelo: 500 no um contra o outro
+const CASTLE_MAX = 500;   // vida do castelo (todos os modos)
 const CASTLES = PVP ? [{ ci: 8.5, cj: 23.5 }, { ci: 38.5, cj: 23.5 }] : [{ ci: C0, cj: C0 }];
 // Portais: 0 norte, 1 sul, 2 oeste, 3 leste. No contra, os do jogador 0 são norte e oeste; os do jogador 1, sul e leste.
 const SIDE_TEAM = [0, 1, 0, 1];
@@ -1234,8 +1234,8 @@ function stepEnemy(e, dt, time) {
   {
     const T = e.T;
     e.slowT -= dt; e.flashT -= dt;
-    if (e.burnT > 0) { e.burnT -= dt; hurt(e, e.burnDps * dt, false); if (e.dead) return; if (Math.random() < dt * 8) burst(tmp.set(e.pos.x, e.hitY + .3, e.pos.z), 0xff8a1f, 1, .5, .08); }
-    if (e.poisonT > 0) { e.poisonT -= dt; hurt(e, e.poisonDps * dt, false); if (e.dead) return; if (Math.random() < dt * 6) burst(tmp.set(e.pos.x, e.hitY + .3, e.pos.z), 0x84cc16, 1, .5, .08); }
+    if (e.burnT > 0) { e.burnT -= dt; KILLER = e.burnBy; hurt(e, e.burnDps * dt, false); KILLER = null; if (e.dead) return; if (Math.random() < dt * 8) burst(tmp.set(e.pos.x, e.hitY + .3, e.pos.z), 0xff8a1f, 1, .5, .08); }
+    if (e.poisonT > 0) { e.poisonT -= dt; KILLER = e.poisonBy; hurt(e, e.poisonDps * dt, false); KILLER = null; if (e.dead) return; if (Math.random() < dt * 6) burst(tmp.set(e.pos.x, e.hitY + .3, e.pos.z), 0x84cc16, 1, .5, .08); }
     if (T.kind === 'healer') {
       e.healCd -= dt;
       if (e.healCd <= 0) {
@@ -1306,11 +1306,21 @@ function updateEnemyBars() {
   for (const e of enemies) if (!e.dead && e.bar.g.visible) setBar(e.bar, e.pos.x, e.T.size * 1.05 + (e.T.boss ? .9 : .45), e.pos.z, e.hp / e.maxHp);
 }
 function removeEnemy(e) { e.dead = true; scene.remove(e.g, e.bar.g); }
+// Arma que matou o monstro ganha vida: +25% por monstro, +80% por chefão
+let KILLER = null;
+function towerHeal(t, f) {
+  if (!t || t.dead || t.kind !== 'tower') return;
+  const before = t.hp; t.hp = Math.min(t.maxHp, t.hp + t.maxHp * f);
+  if (t.hp <= before) return;
+  t.bar.g.visible = true; t.healT = .6;
+  burst(tmp.set(t.pos.x, 1.6, t.pos.z), 0x4ade80, f > .5 ? 22 : 9, f > .5 ? 2.2 : 1.3, .09);
+}
 function hurt(e, dmg, flash = true) {
   if (e.dead) return;
   e.hp -= dmg; if (flash) e.flashT = .1; e.bar.g.visible = true;
   if (e.hp > 0) return;
   removeEnemy(e);
+  if (KILLER) towerHeal(KILLER, e.T.boss ? .8 : .25);
   sfx(e.T.boss ? 'bossdie' : 'die', e.pos.x, e.pos.z);
   tmp.set(e.pos.x, e.hitY, e.pos.z);
   burst(tmp, e.T.color, 10 + e.T.size * 14, 3, .14 + e.T.size * .08);
@@ -1541,8 +1551,8 @@ function zap(a, b, zm = zapMat) {
 }
 function fire(t, e, st) {
   const o = V(t.pos.x, t.fireY, t.pos.z), sh = t.T.shot, pl = t.owner, n0 = shots.length;
-  fireInner(t, e, st, o, sh, pl);
-  for (let k = n0; k < shots.length; k++) { shots[k].pl = pl; shots[k].heroHit = PVP; }
+  KILLER = t; fireInner(t, e, st, o, sh, pl); KILLER = null;
+  for (let k = n0; k < shots.length; k++) { shots[k].pl = pl; shots[k].tw = t; shots[k].heroHit = PVP; }
 }
 function fireInner(t, e, st, o, sh, pl) {
   sfx(sh === 'flame' ? 'fire' : sh === 'chain' ? 'zap' : 'tshot', o.x, o.z);
@@ -1565,7 +1575,7 @@ function fireInner(t, e, st, o, sh, pl) {
       if (o2.dead || (PVP && o2.team === pl)) continue;
       const dx = o2.pos.x - t.pos.x, dz = o2.pos.z - t.pos.z, dd = Math.hypot(dx, dz) || 1e-3;
       if (dd > st.range + o2.r || (dx * d.x + dz * d.z) / dd < .78) continue;
-      hurt(o2, st.dmg); o2.burnT = 3; o2.burnDps = st.burn;
+      hurt(o2, st.dmg); o2.burnT = 3; o2.burnDps = st.burn; o2.burnBy = t;
     }
     const fh = foeHero(pl);
     if (fh && !fh.dead) { const dx = fh.pos.x - t.pos.x, dz = fh.pos.z - t.pos.z, dd = Math.hypot(dx, dz) || 1e-3; if (dd <= st.range + fh.r && (dx * d.x + dz * d.z) / dd >= .78) damageTarget(fh, st.dmg); }
@@ -1585,14 +1595,14 @@ function updateLaser(t, e, st, dt) {
   t.heat = Math.min(2, t.heat + dt * .7);
   const a = V(t.pos.x, t.fireY, t.pos.z), b = V(e.pos.x, e.hitY + .1, e.pos.z), L = a.distanceTo(b);
   t.beam.visible = true; t.beam.scale.set(.05 + t.heat * .04, .05 + t.heat * .04, L); t.beam.position.lerpVectors(a, b, .5); t.beam.lookAt(b);
-  hitAny(e, st.dmg * (1 + t.heat) * dt, false);
+  KILLER = t; hitAny(e, st.dmg * (1 + t.heat) * dt, false); KILLER = null;
   if (Math.random() < dt * 12) burst(b, 0xff6b6b, 1, .8, .06);
 }
 // Veneno: nuvem verde que dá dano por alguns segundos em todos que estão nela
 const CIRCLE = new THREE.CircleGeometry(1, 32).rotateX(-Math.PI / 2), clouds = [];
 function poisonArea(p, r, dmg, dps, pl = 0) {
   const m = new THREE.Mesh(CIRCLE, basic(0x84cc16, .45)); m.scale.setScalar(r); m.position.set(p.x, .07, p.z); scene.add(m);
-  clouds.push({ m, x: p.x, z: p.z, r, dps, life: 2.5, tick: 0, pl });
+  clouds.push({ m, x: p.x, z: p.z, r, dps, life: 2.5, tick: 0, pl, tw: KILLER });
   burst(tmp.set(p.x, .3, p.z), 0x84cc16, 12, 2, .12);
   if (dmg) for (const e of [...enemies]) if (!e.dead && !(PVP && e.team === pl) && Math.hypot(e.pos.x - p.x, e.pos.z - p.z) <= r + e.r) hurt(e, dmg);
 }
@@ -1602,7 +1612,7 @@ function updateClouds(dt) {
     c.m.material.opacity = Math.max(0, Math.min(.45, c.life * .3));
     if (c.tick <= 0 && dt) {
       c.tick = .4;
-      for (const e of enemies) if (!e.dead && !(PVP && e.team === c.pl) && Math.hypot(e.pos.x - c.x, e.pos.z - c.z) <= c.r + e.r) { e.poisonDps = Math.max(e.poisonT > 0 ? e.poisonDps : 0, c.dps); e.poisonT = 3; }
+      for (const e of enemies) if (!e.dead && !(PVP && e.team === c.pl) && Math.hypot(e.pos.x - c.x, e.pos.z - c.z) <= c.r + e.r) { e.poisonDps = Math.max(e.poisonT > 0 ? e.poisonDps : 0, c.dps); e.poisonT = 3; e.poisonBy = c.tw; }
       if (c.hero) hitFoeHero(c.pl, c.x, c.z, c.r, c.dps * .4);
       burst(tmp.set(c.x + (Math.random() - .5) * c.r, .2, c.z + (Math.random() - .5) * c.r), 0xa3e635, 2, .6, .1);
     }
@@ -1636,7 +1646,7 @@ function updateShots(dt) {
       s.t += dt; const p = Math.min(1, s.t / s.T);
       s.m.position.lerpVectors(s.from, s.to, p);
       s.m.position.y = s.from.y * (1 - p) + .2 * p + Math.sin(p * Math.PI) * s.h;
-      if (p >= 1) { if (s.poison) { poisonArea(s.to, s.splash, s.dmg, s.poison, s.pl || 0); clouds[clouds.length - 1].hero = !!s.heroHit; } else explodeAt(s.to, s.splash, s.dmg, s.big, s.pl || 0, s.heroHit); s.done = true; }
+      if (p >= 1) { KILLER = s.tw || null; if (s.poison) { poisonArea(s.to, s.splash, s.dmg, s.poison, s.pl || 0); clouds[clouds.length - 1].hero = !!s.heroHit; } else explodeAt(s.to, s.splash, s.dmg, s.big, s.pl || 0, s.heroHit); KILLER = null; s.done = true; }
       continue;
     }
     if (s.k === 'hb') {
@@ -1657,7 +1667,7 @@ function updateShots(dt) {
     s.done = true;
     if (s.k === 'e') { if (!s.tg.dead) { damageTarget(s.tg, s.dmg); burst(s.last, s.boss ? 0x8b5cf6 : 0x9a948a, 4, 1.2, .08); } continue; }
     if (s.e.dead) continue;
-    hitAny(s.e, s.dmg);
+    KILLER = s.tw || null; hitAny(s.e, s.dmg); KILLER = null;
     if (s.ice && s.e.kind !== 'hero') {
       s.e.slowF = s.e.slowT > 0 ? Math.min(s.e.slowF, s.ice.slow) : s.ice.slow;
       s.e.slowT = Math.max(s.e.slowT, s.ice.slowT);
@@ -1913,7 +1923,7 @@ const freshPlayer = () => ({ gold: PVP ? PVP_GOLD : START_GOLD, castle: CASTLE_M
 const pickKeys = (o, ks) => Object.fromEntries(ks.map(k => [k, o[k]]));
 const loadBest = () => { try { return +localStorage.getItem('vd-best') || 0; } catch { return 0; } };
 const saveBest = () => { try { localStorage.setItem('vd-best', S.best); } catch {} };
-const S = { gold: START_GOLD, castle: 100, wave: 0, waveActive: false, queue: [], spawnT: 0, hpMul: 1, speed: 1, over: false, sel: null, best: loadBest(), started: false, power: 0, dmgMul: 1, hw: 'blaster', owned: new Set(['blaster']), unlocked: new Set(), shop: false };
+const S = { gold: START_GOLD, castle: CASTLE_MAX, wave: 0, waveActive: false, queue: [], spawnT: 0, hpMul: 1, speed: 1, over: false, sel: null, best: loadBest(), started: false, power: 0, dmgMul: 1, hw: 'blaster', owned: new Set(['blaster']), unlocked: new Set(), shop: false };
 S.bestAtStart = S.best; S.nextT = 10; S.winner = -1;
 if (ONLINE) { Object.assign(S, freshPlayer()); PS[1] = pickKeys(freshPlayer(), PF); }
 const bossWave = n => n >= 10 && n % 2 === 0;   // chefões só na onda 10, 12, 14...
