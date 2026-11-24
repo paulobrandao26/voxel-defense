@@ -68,6 +68,16 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
 .box .pri{width:100%;margin-top:14px}
 .ind{position:fixed;left:0;top:0;width:28px;height:28px;margin:-14px;display:none;align-items:center;justify-content:center;font-size:22px;color:#ff5a4f;text-shadow:0 1px 3px #000;pointer-events:none}
 .ind.boss{color:var(--gold);font-size:30px}
+.round{width:60px;height:60px;border-radius:50%;font-size:26px;background:var(--card);box-shadow:0 4px 12px #0006}
+.shopbox{max-width:520px;max-height:calc(100vh - 40px);overflow:auto;text-align:left;padding:16px}
+.shopbox h3{margin:14px 0 6px;font-size:15px}
+.item{display:flex;align-items:center;gap:10px;background:#2a3a4e;border-radius:12px;padding:8px 10px;margin:6px 0}
+.item .ic{font-size:26px;width:34px;text-align:center}
+.item .tx{flex:1;min-width:0}
+.item .tx small{display:block;color:var(--muted);font-weight:500;font-size:12px}
+.box .item button{flex:none;width:120px;min-width:0;margin:0;padding:0 8px;font-size:14px;line-height:1.15}
+.item button.on{background:#1f7a4a}
+.warn{color:#fca5a5}
 @media (orientation:landscape) and (max-height:520px){
   #hud{right:auto;flex-direction:column;align-items:flex-start}
   .cards{grid-template-columns:repeat(8,1fr)}
@@ -91,10 +101,20 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
 <div id="toast" role="status" aria-live="polite"></div>
 <div id="joy" aria-label="Controle do herói"><div id="knob"></div></div>
 <div id="bar">
+  <button id="shopBtn" class="round" aria-label="Abrir loja">🛒</button>
   <button id="bomb" aria-label="Jogar bomba">💣<small id="bombKey">Q</small></button>
   <button id="wave" class="pri">▶ Onda 1</button>
 </div>
 <div id="sheet" role="dialog" aria-label="Menu da arma"></div>
+<div id="shop" class="ov">
+  <div class="box shopbox" role="dialog" aria-label="Loja">
+    <div class="sh-head"><h2>🛒 Loja</h2><button class="x" id="shopClose" aria-label="Fechar loja">✕</button></div>
+    <div class="stats">Você tem 🪙 <b id="shopGold">0</b> · Força dos monstros: <b id="shopPow">normal</b></div>
+    <h3>Armas do herói</h3><div id="shopHero"></div>
+    <h3>Armas novas para o campo</h3><div id="shopTower"></div>
+    <p class="stats">Para o jogo continuar justo, cada compra deixa os monstros um pouco mais fortes e eles passam a dar mais ouro. O jogo fica pausado enquanto a loja está aberta.</p>
+  </div>
+</div>
 <div id="help" class="ov show">
   <div class="box">
     <h1>Defenda o castelo!</h1>
@@ -264,7 +284,7 @@ const mat = {
   white: M(0xffffff), black: M(0x151515), gold: M(0xffc93c, 0x553300), iron: M(0x4a525c), snow: M(0xe6f6ff),
   ice: M(0x9fe6ff, 0x2a8fc0), soil: M(0x7a5233), soilD: M(0x553823), tint: M(0xffffff), green: M(0x4d7c3a),
   copper: M(0xc0753a), zap: M(0xfff3a0, 0xffd000), orange: M(0xf97316, 0x5a2000), purple: M(0x8b5cf6, 0x3b1580),
-  glow: M(0x93c5fd, 0x2563eb), pad: M(0xd9cfb4), moss: M(0x5f8f3a),
+  glow: M(0x93c5fd, 0x2563eb), toxic: M(0xa3e635, 0x3f6212), laserM: M(0xff6b6b, 0xdc2626), pad: M(0xd9cfb4), moss: M(0x5f8f3a),
 };
 function box(m, sx, sy, sz, x, y, z, p) {
   const o = new THREE.Mesh(BOX, m); o.scale.set(sx, sy, sz); o.position.set(x, y, z);
@@ -439,9 +459,9 @@ function spawnEnemy(type, x, z) {
   if (T.boss) { box(mat.gold, s * .8, .12, s * .8, 0, s * (type === 'bruxo' ? .95 : 1.05) + .14, 0, inner); for (const a of [-1, 1]) for (const b of [-1, 1]) box(mat.gold, .12, .2, .12, a * s * .32, s * (type === 'bruxo' ? .95 : 1.05) + .28, b * s * .32, inner); }
   const bar = makeBar(Math.max(.5, s * 1.1));
   scene.add(g);
-  const hp = Math.round(T.hp * S.hpMul);
+  const hp = Math.round(T.hp * S.hpMul * (1 + S.power));
   const e = { kind: 'enemy', type, T, g, inner, body, f1, f2, bar, hp, maxHp: hp, pos: g.position, r: s * .45, cr: Math.min(s * .45, .48),
-    vel: V(), dir: V(), walk: 0, slowT: 0, slowF: 1, flashT: 0, burnT: 0, burnDps: 0, think: 0, target: null, atkCd: Math.random(),
+    vel: V(), dir: V(), walk: 0, slowT: 0, slowF: 1, flashT: 0, burnT: 0, burnDps: 0, poisonT: 0, poisonDps: 0, think: 0, target: null, atkCd: Math.random(),
     healCd: 2, sumCd: 5, slamCd: 2, ph: Math.random() * 6.28, wf: .6 + Math.random() * .8, wob: .25 + Math.random() * .35,
     hitY: s * .5, fd: 99, dead: false, sp: T.sp * (.9 + Math.random() * .2), px: x, pz: z };
   e.pos.set(x, 0, z);
@@ -472,6 +492,7 @@ function updateEnemies(dt, time) {
     const T = e.T;
     e.slowT -= dt; e.flashT -= dt;
     if (e.burnT > 0) { e.burnT -= dt; hurt(e, e.burnDps * dt, false); if (e.dead) continue; if (Math.random() < dt * 8) burst(tmp.set(e.pos.x, e.hitY + .3, e.pos.z), 0xff8a1f, 1, .5, .08); }
+    if (e.poisonT > 0) { e.poisonT -= dt; hurt(e, e.poisonDps * dt, false); if (e.dead) continue; if (Math.random() < dt * 6) burst(tmp.set(e.pos.x, e.hitY + .3, e.pos.z), 0x84cc16, 1, .5, .08); }
     if (T.kind === 'healer') {
       e.healCd -= dt;
       if (e.healCd <= 0) {
@@ -507,7 +528,7 @@ function updateEnemies(dt, time) {
       e.g.rotation.y = lerpAng(e.g.rotation.y, Math.atan2(tmp2.x - e.pos.x, tmp2.z - e.pos.z), Math.min(1, dt * 10));
       e.atkCd -= dt;
       if (mode === 'hit') {
-        damageTarget(tg, T.atk * dt * (tg.kind === 'castle' ? .15 : 1));
+        damageTarget(tg, T.atk * dt * S.dmgMul * (tg.kind === 'castle' ? .15 : 1));
         e.inner.position.z = Math.max(0, Math.sin(time * 12 + e.ph)) * .12;
         if (T.slam) { e.slamCd -= dt; if (e.slamCd <= 0) { e.slamCd = 2.5; slam(e); } }
       } else if (e.atkCd <= 0) { e.atkCd = T.rate; enemyShoot(e, tg); }
@@ -531,7 +552,7 @@ function updateEnemies(dt, time) {
     const i = cellOf(e.pos.x), j = cellOf(e.pos.z); e.fd = inMap(i, j) && flow[K(i, j)] < Infinity ? flow[K(i, j)] : 99;
     e.inner.position.y = Math.abs(Math.sin(e.walk * 6)) * .07;
     if (e.f1) { e.f1.position.z = Math.sin(e.walk * 6) * .12 * e.T.size; e.f2.position.z = -e.f1.position.z; }
-    e.body.emissive.setHex(e.flashT > 0 ? 0xffffff : e.burnT > 0 ? 0x6a2000 : e.slowT > 0 ? 0x1f6fb5 : 0x000000);
+    e.body.emissive.setHex(e.flashT > 0 ? 0xffffff : e.burnT > 0 ? 0x6a2000 : e.poisonT > 0 ? 0x2f5f00 : e.slowT > 0 ? 0x1f6fb5 : 0x000000);
     e.body.emissiveIntensity = e.flashT > 0 ? .8 : .6;
   }
   for (let k = enemies.length - 1; k >= 0; k--) if (enemies[k].dead) enemies.splice(k, 1);
@@ -549,7 +570,7 @@ function hurt(e, dmg, flash = true) {
   burst(tmp, e.T.color, 10 + e.T.size * 14, 3, .14 + e.T.size * .08);
   burst(tmp, 0x222222, 4, 2.5, .1);
   dropCoin(e.pos);
-  S.gold += Math.round(e.T.reward * (1 + .05 * (S.wave - 1)));
+  S.gold += Math.round(e.T.reward * (1 + .05 * (S.wave - 1)) * (1 + S.power * .6));
   if (e.T.boss) toast(`Você derrotou o ${e.T.name}! 👑`);
   bump('gold'); updateUI();
 }
@@ -562,7 +583,7 @@ function explodeBomber(e) {
   removeEnemy(e);
   tmp.set(e.pos.x, .4, e.pos.z);
   burst(tmp, 0xffa53a, 22, 4, .16); burst(tmp, 0x444444, 10, 3, .14);
-  areaDamage(e.pos, e.T.radius, e.T.dmg * S.hpMul ** .5, 8);
+  areaDamage(e.pos, e.T.radius, e.T.dmg * S.hpMul ** .5 * S.dmgMul, 8);
 }
 function slam(e) {
   burst(tmp.set(e.pos.x, .2, e.pos.z), 0x9a948a, 18, 4, .14);
@@ -591,6 +612,10 @@ const TT = {
     lv: [{ dmg: 70, range: 9, rate: 2.2 }, { dmg: 120, range: 10, rate: 2 }, { dmg: 190, range: 11, rate: 1.8 }] },
   raio: { name: 'Raio', desc: 'Pula de um a outro', color: '#facc15', cost: 120, up: [90, 140], hp: [150, 200, 260], shot: 'chain',
     lv: [{ dmg: 22, range: 4.6, rate: 1.1, chain: 3 }, { dmg: 36, range: 5, rate: 1, chain: 4 }, { dmg: 55, range: 5.4, rate: .9, chain: 5 }] },
+  veneno: { name: 'Veneno', desc: 'Nuvem que envenena', color: '#65a30d', cost: 150, up: [120, 180], hp: [180, 240, 320], shot: 'poison', unlock: 700, power: .1,
+    lv: [{ dmg: 10, range: 4.8, rate: 2, splash: 1.5, poison: 12 }, { dmg: 16, range: 5.2, rate: 1.8, splash: 1.7, poison: 20 }, { dmg: 25, range: 5.6, rate: 1.6, splash: 1.9, poison: 32 }] },
+  laser: { name: 'Laser', desc: 'Esquenta no alvo', color: '#ef4444', cost: 160, up: [130, 190], hp: [170, 230, 300], shot: 'laser', unlock: 800, power: .12,
+    lv: [{ dmg: 22, range: 5, rate: 0 }, { dmg: 36, range: 5.4, rate: 0 }, { dmg: 56, range: 5.8, rate: 0 }] },
   morteiro: { name: 'Morteiro', desc: 'Bomba de longe', color: '#57534e', cost: 130, up: [100, 150], hp: [160, 210, 280], shot: 'mortar',
     lv: [{ dmg: 55, range: 8, rate: 3, splash: 2 }, { dmg: 90, range: 9, rate: 2.7, splash: 2.3 }, { dmg: 140, range: 10, rate: 2.4, splash: 2.6 }] },
 };
@@ -646,6 +671,17 @@ function buildTowerMesh(t) {
       box(mat.iron, .08, .3, .08, 0, .65, 0, head);
       t.spin = new THREE.Mesh(OCTA, mat.zap); t.spin.position.y = 1; head.add(t.spin);
       t.fireY = Y(1); break;
+    case 'veneno':
+      box(mat.green, .46, .45, .46, 0, .22, 0, head); box(mat.dark, .52, .08, .52, 0, .48, 0, head);
+      t.aim = new THREE.Group(); t.aim.position.y = .6; head.add(t.aim);
+      box(mat.dark, .14, .14, .4, 0, .05, .18, t.aim);
+      t.spin = new THREE.Mesh(SPHERE, mat.toxic); t.spin.scale.setScalar(.2); t.spin.position.y = 1; head.add(t.spin);
+      t.fireY = Y(.7); break;
+    case 'laser':
+      box(mat.iron, .44, .5, .44, 0, .25, 0, head);
+      t.aim = new THREE.Group(); t.aim.position.y = .7; head.add(t.aim);
+      box(mat.white, .3, .26, .3, 0, 0, 0, t.aim); box(mat.dark, .08, .08, .36, 0, 0, .25, t.aim); box(mat.laserM, .06, .06, .04, 0, 0, .44, t.aim);
+      t.fireY = Y(.7); break;
     case 'morteiro': {
       box(mat.stone, .72, .26, .72, 0, .13, 0, head);
       t.aim = new THREE.Group(); t.aim.position.y = .3; head.add(t.aim);
@@ -655,7 +691,7 @@ function buildTowerMesh(t) {
 }
 function placeTower(type, pad) {
   const T = TT[type];
-  if (S.gold < T.cost || pad.t) return;
+  if (S.gold < T.cost || pad.t || (T.unlock && !S.unlocked.has(T))) return;
   S.gold -= T.cost;
   const t = { kind: 'tower', type, T, pad, lv: 0, inv: T.cost, cd: .3, pop: 0, root: new THREE.Group(), pos: V(pad.x, 0, pad.z), r: .42,
     hp: T.hp[0], maxHp: T.hp[0], shake: 0, bar: makeBar(.7), dead: false };
@@ -683,6 +719,7 @@ function repairTower(t) {
 }
 function removeTower(t) {
   t.dead = true; scene.remove(t.root, t.bar.g); towers.splice(towers.indexOf(t), 1);
+  if (t.beam) scene.remove(t.beam);
   t.pad.t = null; blocked[K(t.pad.i, t.pad.j)] = 0; computeFlow();
   if (S.sel && S.sel.t === t) closeSheet();
 }
@@ -713,6 +750,7 @@ function updateTowers(dt, rdt, time) {
       if (d2 > r2 || (sh === 'mortar' && d2 < 4)) continue;
       if (!best || (sh === 'bolt' ? e.hp > best.hp : e.fd < best.fd)) best = e;
     }
+    if (sh === 'laser') { updateLaser(t, best, st, dt); continue; }
     if (!best) continue;
     if (t.aim) t.aim.rotation.y = Math.atan2(best.pos.x - t.pos.x, best.pos.z - t.pos.z);
     if (t.cd <= 0) { fire(t, best, st); t.cd = st.rate; }
@@ -735,21 +773,18 @@ function zap(a, b) {
 }
 function fire(t, e, st) {
   const o = V(t.pos.x, t.fireY, t.pos.z), sh = t.T.shot;
-  if (sh === 'ball' || sh === 'mortar') {
+  if (sh === 'poison') {
+    const dist = Math.hypot(e.pos.x - o.x, e.pos.z - o.z), T = .6 + dist * .08;
+    const m = new THREE.Mesh(BALL, mat.toxic); m.position.copy(o); scene.add(m);
+    shots.push({ k: 'arc', m, from: o, to: V(e.pos.x + e.vel.x * T, .2, e.pos.z + e.vel.z * T), t: 0, T, h: 1.4 + T, dmg: st.dmg, splash: st.splash, poison: st.poison });
+  } else if (sh === 'ball' || sh === 'mortar') {
     const mort = sh === 'mortar', dist = Math.hypot(e.pos.x - o.x, e.pos.z - o.z), T = mort ? .9 + dist * .12 : .5 + dist * .09;
     const to = V(e.pos.x + e.vel.x * T, .2, e.pos.z + e.vel.z * T);
     const m = new THREE.Mesh(mort ? BIGBALL : BALL, mat.black); m.position.copy(o); m.castShadow = true; scene.add(m);
     shots.push({ k: 'arc', m, from: o, to, t: 0, T, h: mort ? 3 + dist * .25 : 1.2 + T, dmg: st.dmg, splash: st.splash, big: mort });
     burst(o, 0xbbbbbb, mort ? 7 : 4, .8, .09);
   } else if (sh === 'chain') {
-    let from = o, cur = e; const done = new Set();
-    for (let k = 0; k < st.chain && cur; k++) {
-      const to = V(cur.pos.x, cur.hitY + .1, cur.pos.z);
-      zap(from, to); done.add(cur); hurt(cur, st.dmg * (1 - k * .12)); burst(to, 0xfff3a0, 3, 1, .06);
-      from = to; let nx = null, nd = 2.8;
-      for (const o2 of enemies) { if (o2.dead || done.has(o2)) continue; const d = Math.hypot(o2.pos.x - to.x, o2.pos.z - to.z); if (d < nd) { nd = d; nx = o2; } }
-      cur = nx;
-    }
+    chainFrom(o, e, st.chain, st.dmg);
   } else if (sh === 'flame') {
     const d = V(e.pos.x - t.pos.x, 0, e.pos.z - t.pos.z).normalize(), src = V(t.pos.x + d.x * .45, t.fireY, t.pos.z + d.z * .45);
     burstDir(src, d, 0xff7a18, 3, 6, .12); burstDir(src, d, 0xffd54a, 2, 5, .09);
@@ -765,10 +800,53 @@ function fire(t, e, st) {
     shots.push({ k: 'home', m, e, dmg: st.dmg, sp: cfg[2], last: V(e.pos.x, e.hitY, e.pos.z), ice: sh === 'ice' ? st : null });
   }
 }
+// Laser: raio contínuo que esquenta quanto mais tempo fica no mesmo alvo
+const laserMat = new THREE.MeshBasicMaterial({ color: 0xff4d4d, transparent: true, opacity: .85 });
+function updateLaser(t, e, st, dt) {
+  if (!t.beam) { t.beam = new THREE.Mesh(BOX, laserMat); scene.add(t.beam); t.heat = 0; }
+  if (!e || !dt) { t.beam.visible = false; t.heat = 0; t.lt = null; return; }
+  t.aim.rotation.y = Math.atan2(e.pos.x - t.pos.x, e.pos.z - t.pos.z);
+  if (t.lt !== e) { t.lt = e; t.heat = 0; }
+  t.heat = Math.min(2, t.heat + dt * .7);
+  const a = V(t.pos.x, t.fireY, t.pos.z), b = V(e.pos.x, e.hitY + .1, e.pos.z), L = a.distanceTo(b);
+  t.beam.visible = true; t.beam.scale.set(.05 + t.heat * .04, .05 + t.heat * .04, L); t.beam.position.lerpVectors(a, b, .5); t.beam.lookAt(b);
+  hurt(e, st.dmg * (1 + t.heat) * dt, false);
+  if (Math.random() < dt * 12) burst(b, 0xff6b6b, 1, .8, .06);
+}
+// Veneno: nuvem verde que dá dano por alguns segundos em todos que estão nela
+const CIRCLE = new THREE.CircleGeometry(1, 32).rotateX(-Math.PI / 2), clouds = [];
+function poisonArea(p, r, dmg, dps) {
+  const m = new THREE.Mesh(CIRCLE, basic(0x84cc16, .45)); m.scale.setScalar(r); m.position.set(p.x, .07, p.z); scene.add(m);
+  clouds.push({ m, x: p.x, z: p.z, r, dps, life: 2.5, tick: 0 });
+  burst(tmp.set(p.x, .3, p.z), 0x84cc16, 12, 2, .12);
+  if (dmg) for (const e of [...enemies]) if (!e.dead && Math.hypot(e.pos.x - p.x, e.pos.z - p.z) <= r + e.r) hurt(e, dmg);
+}
+function updateClouds(dt) {
+  for (const c of clouds) {
+    c.life -= dt; c.tick -= dt;
+    c.m.material.opacity = Math.max(0, Math.min(.45, c.life * .3));
+    if (c.tick <= 0 && dt) {
+      c.tick = .4;
+      for (const e of enemies) if (!e.dead && Math.hypot(e.pos.x - c.x, e.pos.z - c.z) <= c.r + e.r) { e.poisonDps = Math.max(e.poisonT > 0 ? e.poisonDps : 0, c.dps); e.poisonT = 3; }
+      burst(tmp.set(c.x + (Math.random() - .5) * c.r, .2, c.z + (Math.random() - .5) * c.r), 0xa3e635, 2, .6, .1);
+    }
+  }
+  for (let k = clouds.length - 1; k >= 0; k--) if (clouds[k].life <= 0) { scene.remove(clouds[k].m); clouds[k].m.material.dispose(); clouds.splice(k, 1); }
+}
+function chainFrom(from, first, n, dmg) {
+  let cur = first; const done = new Set();
+  for (let k = 0; k < n && cur; k++) {
+    const to = V(cur.pos.x, cur.hitY + .1, cur.pos.z);
+    zap(from, to); done.add(cur); hurt(cur, dmg * (1 - k * .12)); burst(to, 0xfff3a0, 3, 1, .06);
+    from = to; let nx = null, nd = 2.8;
+    for (const o2 of enemies) { if (o2.dead || done.has(o2)) continue; const d = Math.hypot(o2.pos.x - to.x, o2.pos.z - to.z); if (d < nd) { nd = d; nx = o2; } }
+    cur = nx;
+  }
+}
 function enemyShoot(e, tg) {
   const boss = e.T.boss, o = V(e.pos.x, e.T.size * (boss ? 1.3 : .8), e.pos.z);
   const m = new THREE.Mesh(boss ? BALL : ARROW, boss ? mat.purple : mat.green); m.position.copy(o); scene.add(m);
-  shots.push({ k: 'e', m, tg, dmg: e.T.dmg * (1 + .04 * (S.wave - 1)) * (tg.kind === 'castle' ? .2 : 1), sp: boss ? 7 : 10, last: aimPoint(tg, e.pos, V()), boss });
+  shots.push({ k: 'e', m, tg, dmg: e.T.dmg * (1 + .04 * (S.wave - 1)) * S.dmgMul * (tg.kind === 'castle' ? .2 : 1), sp: boss ? 7 : 10, last: aimPoint(tg, e.pos, V()), boss });
 }
 function explodeAt(p, radius, dmg, big) {
   p.y = .2;
@@ -781,14 +859,16 @@ function updateShots(dt) {
       s.t += dt; const p = Math.min(1, s.t / s.T);
       s.m.position.lerpVectors(s.from, s.to, p);
       s.m.position.y = s.from.y * (1 - p) + .2 * p + Math.sin(p * Math.PI) * s.h;
-      if (p >= 1) { explodeAt(s.to, s.splash, s.dmg, s.big); s.done = true; }
+      if (p >= 1) { if (s.poison) poisonArea(s.to, s.splash, s.dmg, s.poison); else explodeAt(s.to, s.splash, s.dmg, s.big); s.done = true; }
       continue;
     }
     if (s.k === 'hb') {
       const step = s.sp * dt; s.m.position.addScaledVector(s.dir, step); s.life -= dt;
-      if (s.life <= 0 || hitsSolid(s.m.position.x, s.m.position.z)) { s.done = true; burst(s.m.position, 0x93c5fd, 2, .8, .05); continue; }
+      if (s.life <= 0 || hitsSolid(s.m.position.x, s.m.position.z)) { s.done = true; if (s.poison) poisonArea(s.m.position, 1.4, 0, s.poison); else burst(s.m.position, 0x93c5fd, 2, .8, .05); continue; }
       for (const e of enemies) if (!e.dead && Math.hypot(e.pos.x - s.m.position.x, e.pos.z - s.m.position.z) < e.r + .18) {
-        hurt(e, s.dmg); burst(s.m.position, 0x93c5fd, 3, 1, .06); s.done = true; break;
+        hurt(e, s.dmg); s.done = true;
+        if (s.poison) poisonArea(s.m.position, 1.4, 0, s.poison); else burst(s.m.position, 0x93c5fd, 3, 1, .06);
+        break;
       }
       continue;
     }
@@ -837,6 +917,47 @@ function resetHero() {
   hero.pos.copy(HOME); hero.cd = 0;
 }
 function heroDmg() { return 10 + S.wave * 1.6; }
+// Armas do herói (compradas na loja). O dano cresce com a onda, como a vida dos monstros.
+const HW = {
+  blaster: { name: 'Blaster', icon: '🔫', desc: 'Tiro rápido em um monstro', cost: 0, power: 0, range: 7.5 },
+  fogo: { name: 'Lança-fogo', icon: '🔥', desc: 'Queima vários de perto', cost: 300, power: .06, range: 4 },
+  raio: { name: 'Cajado de raio', icon: '⚡', desc: 'Raio pula em 3 monstros', cost: 500, power: .08, range: 7 },
+  veneno: { name: 'Arma de veneno', icon: '☠️', desc: 'A mais forte: nuvem que envenena em área', cost: 800, power: .12, range: 8 },
+};
+const poisonMat = M(0xa3e635, 0x4d7c0f);
+function heroAttack(dir) {
+  const w = S.hw, n = S.wave;
+  hero.recoil = 1;
+  if (w === 'blaster') return heroFire(dir);
+  if (w === 'fogo') {
+    hero.cd = .12;
+    const src = V(hero.pos.x + dir.x * .5, .75, hero.pos.z + dir.z * .5);
+    burstDir(src, dir, 0xff7a18, 3, 7, .12); burstDir(src, dir, 0xffd54a, 2, 6, .09);
+    for (const e of enemies) {
+      if (e.dead) continue;
+      const dx = e.pos.x - hero.pos.x, dz = e.pos.z - hero.pos.z, d = Math.hypot(dx, dz) || 1e-3;
+      if (d > 4 + e.r || (dx * dir.x + dz * dir.z) / d < .8) continue;
+      hurt(e, 3 + n * .6); e.burnDps = Math.max(e.burnT > 0 ? e.burnDps : 0, 4 + n * .8); e.burnT = 2.5;
+    }
+    return;
+  }
+  if (w === 'raio') {
+    hero.cd = .45;
+    let first = null, bs = -2;
+    for (const e of enemies) {
+      if (e.dead) continue;
+      const dx = e.pos.x - hero.pos.x, dz = e.pos.z - hero.pos.z, d = Math.hypot(dx, dz);
+      if (d > 7 + e.r) continue;
+      const sc = (dx * dir.x + dz * dir.z) / (d || 1) - d * .05; if (sc > bs) { bs = sc; first = e; }
+    }
+    if (first) chainFrom(V(hero.pos.x + dir.x * .5, .8, hero.pos.z + dir.z * .5), first, 3, 14 + n * 2.2);
+    return;
+  }
+  hero.cd = .4;
+  const o = V(hero.pos.x + dir.x * .55, .78, hero.pos.z + dir.z * .55);
+  const m = new THREE.Mesh(BALL, poisonMat); m.position.copy(o); scene.add(m);
+  shots.push({ k: 'hb', m, dir: dir.clone(), sp: 13, life: .62, dmg: 12 + n * 2, poison: 10 + n * 2 });
+}
 function heroFire(dir) {
   const o = V(hero.pos.x + dir.x * .55, .78, hero.pos.z + dir.z * .55);
   const m = new THREE.Mesh(BULLET, heroShotMat); m.position.copy(o); m.lookAt(o.x + dir.x, o.y, o.z + dir.z); scene.add(m);
@@ -846,7 +967,7 @@ function heroFire(dir) {
 function heroShootAt(p) {
   if (hero.dead || S.over || hero.cd > 0) return;
   aimV.set(p.x - hero.pos.x, 0, p.z - hero.pos.z); if (aimV.lengthSq() < .01) return;
-  aimV.normalize(); hero.g.rotation.y = Math.atan2(aimV.x, aimV.z); heroFire(aimV);
+  aimV.normalize(); hero.g.rotation.y = Math.atan2(aimV.x, aimV.z); heroAttack(aimV);
 }
 function throwBomb() {
   if (hero.dead || S.over || hero.bombCd > 0) return;
@@ -890,7 +1011,7 @@ function updateHero(dt, rdt, time) {
   hero.gun.position.z = .05 - hero.recoil * .08;
   hero.bodyMat.emissive.setHex(hero.hurtT > 0 ? 0x993333 : 0x000000);
 
-  let nearE = null, nd = 7.5, danger = false;
+  const HR = HW[S.hw].range; let nearE = null, nd = HR, danger = false;
   for (const e of enemies) {
     if (e.dead) continue;
     const d = Math.hypot(e.pos.x - hero.pos.x, e.pos.z - hero.pos.z);
@@ -905,13 +1026,13 @@ function updateHero(dt, rdt, time) {
       for (const e of enemies) {
         if (e.dead) continue;
         const dx = e.pos.x - hero.pos.x, dz = e.pos.z - hero.pos.z, d = Math.hypot(dx, dz);
-        if (d > 7.5 || d < .01) continue;
+        if (d > HR || d < .01) continue;
         const a = Math.acos(clamp((dx * aimV.x + dz * aimV.z) / d, -1, 1)); if (a < bestA) { bestA = a; tgt = e; }
       }
       if (tgt) aimV.set(tgt.pos.x - hero.pos.x, 0, tgt.pos.z - hero.pos.z).normalize();
     } else aimV.set(nearE.pos.x - hero.pos.x, 0, nearE.pos.z - hero.pos.z).normalize();
     face = Math.atan2(aimV.x, aimV.z);
-    if (hero.cd <= 0) heroFire(aimV);
+    if (hero.cd <= 0) heroAttack(aimV);
   }
   if (face !== null) hero.g.rotation.y = lerpAng(hero.g.rotation.y, face, Math.min(1, rdt * 14));
   if (!danger) hero.hp = Math.min(hero.maxHp, hero.hp + 6 * dt);
@@ -928,7 +1049,7 @@ function updateHero(dt, rdt, time) {
 const START_GOLD = 200;
 const loadBest = () => { try { return +localStorage.getItem('vd-best') || 0; } catch { return 0; } };
 const saveBest = () => { try { localStorage.setItem('vd-best', S.best); } catch {} };
-const S = { gold: START_GOLD, castle: 100, wave: 0, waveActive: false, queue: [], spawnT: 0, hpMul: 1, speed: 1, over: false, sel: null, best: loadBest(), started: false };
+const S = { gold: START_GOLD, castle: 100, wave: 0, waveActive: false, queue: [], spawnT: 0, hpMul: 1, speed: 1, over: false, sel: null, best: loadBest(), started: false, power: 0, dmgMul: 1, hw: 'blaster', owned: new Set(['blaster']), unlocked: new Set(), shop: false };
 S.bestAtStart = S.best;
 const bossWave = n => n % 3 === 0;
 
@@ -988,11 +1109,12 @@ function resetGame() {
   for (const e of enemies) scene.remove(e.g, e.bar.g);
   for (const s of shots) scene.remove(s.m);
   for (const b of bolts) scene.remove(b.m);
-  for (const t of [...towers]) { scene.remove(t.root, t.bar.g); t.pad.t = null; blocked[K(t.pad.i, t.pad.j)] = 0; }
+  for (const t of [...towers]) { scene.remove(t.root, t.bar.g); if (t.beam) scene.remove(t.beam); t.pad.t = null; blocked[K(t.pad.i, t.pad.j)] = 0; }
   for (const c of coins) scene.remove(c.m);
   enemies.length = shots.length = bolts.length = towers.length = coins.length = 0;
   computeFlow(); resetHero();
-  Object.assign(S, { gold: START_GOLD, castle: 100, wave: 0, waveActive: false, queue: [], over: false, bestAtStart: S.best });
+  for (const c of clouds) scene.remove(c.m); clouds.length = 0;
+  Object.assign(S, { gold: START_GOLD, castle: 100, wave: 0, waveActive: false, queue: [], over: false, bestAtStart: S.best, power: 0, dmgMul: 1, hw: 'blaster', owned: new Set(['blaster']), unlocked: new Set() });
   $('over').classList.remove('show'); updateUI();
 }
 
@@ -1022,10 +1144,10 @@ function renderSheet() {
   const close = '<button class="x" data-a="close" aria-label="Fechar">✕</button>';
   let sig, h;
   if (sel.k === 'b') {
-    const ok = Object.values(TT).map(T => S.gold >= T.cost);
-    sig = 'b' + ok;
+    const lock = Object.values(TT).map(T => !!T.unlock && !S.unlocked.has(T)), ok = Object.values(TT).map((T, n) => !lock[n] && S.gold >= T.cost);
+    sig = 'b' + ok + lock;
     h = `<div class="sh-head"><h2>Escolha a arma</h2>${close}</div><div class="cards">` + Object.entries(TT).map(([k, T], n) =>
-      `<button class="card" data-a="build" data-t="${k}" ${ok[n] ? '' : 'disabled'}><span class="sw" style="background:${T.color}"></span>${T.name}<small class="d">${T.desc}</small><span class="price">🪙 ${T.cost}</span></button>`).join('') + '</div>';
+      `<button class="card" data-a="build" data-t="${k}" ${ok[n] ? '' : 'disabled'}><span class="sw" style="background:${T.color}"></span>${T.name}<small class="d">${T.desc}</small>${lock[n] ? '<small>🔒 Na loja</small>' : `<span class="price">🪙 ${T.cost}</span>`}</button>`).join('') + '</div>';
   } else {
     const t = sel.t, st = t.T.lv[t.lv], max = t.lv >= 2, nx = max ? null : t.T.lv[t.lv + 1], upc = max ? 0 : t.T.up[t.lv], ok = !max && S.gold >= upc;
     sig = 't' + towers.indexOf(t) + t.lv + ok;
@@ -1079,9 +1201,37 @@ $('bomb').onclick = throwBomb;
 $('speed').onclick = () => { S.speed = S.speed === 1 ? 2 : 1; $('speed').textContent = S.speed + 'x'; };
 $('again').onclick = resetGame;
 $('helpList').innerHTML = TOUCH
-  ? '<li>Ande com o controle redondo à esquerda.</li><li>O herói atira sozinho no monstro mais perto.</li><li>💣 joga uma bomba.</li><li>Toque nas placas de pedra para pôr armas.</li><li>Os monstros vêm de todos os lados e atacam suas armas.</li>'
-  : '<li><b>WASD</b> ou setas: anda com o herói.</li><li>O herói atira sozinho quando um monstro chega perto. <b>O mouse escolhe a direção</b>. Clique para atirar também.</li><li><b>Q</b> ou <b>espaço</b>: joga bomba onde o mouse aponta.</li><li>Clique nas placas de pedra para pôr armas.</li><li><b>Enter</b> começa a onda. Arraste para mover a câmera, roda do mouse para zoom.</li>';
+  ? '<li>Ande com o controle redondo à esquerda.</li><li>O herói atira sozinho no monstro mais perto.</li><li>💣 joga uma bomba. 🛒 abre a loja de armas.</li><li>Toque nas placas de pedra para pôr armas.</li><li>Os monstros vêm de todos os lados e atacam suas armas.</li>'
+  : '<li><b>WASD</b> ou setas: anda com o herói.</li><li>O herói atira sozinho quando um monstro chega perto. <b>O mouse escolhe a direção</b>. Clique para atirar também.</li><li><b>Q</b> ou <b>espaço</b>: joga bomba onde o mouse aponta.</li><li>Clique nas placas de pedra para pôr armas.</li><li><b>B</b> ou 🛒: loja com armas novas.</li><li><b>Enter</b> começa a onda. Arraste para mover a câmera, roda do mouse para zoom.</li>';
 $('bombKey').hidden = TOUCH;
+function addPower(p) { S.power = Math.round((S.power + p) * 100) / 100; S.dmgMul = 1 + S.power * .5; }
+function renderShop() {
+  $('shopGold').textContent = S.gold;
+  $('shopPow').textContent = S.power ? `+${Math.round(S.power * 100)}% de vida` : 'normal';
+  const row = (ic, name, desc, btn) => `<div class="item"><span class="ic">${ic}</span><div class="tx">${name}<small>${desc}</small></div>${btn}</div>`;
+  const pw = p => p ? ` · <span class="warn">monstros +${Math.round(p * 100)}%</span>` : '';
+  $('shopHero').innerHTML = Object.entries(HW).map(([k, w]) => row(w.icon, w.name, w.desc + pw(S.owned.has(k) ? 0 : w.power),
+    S.hw === k ? '<button class="on" disabled>✓ Em uso</button>'
+      : S.owned.has(k) ? `<button class="sec" data-hw="${k}">Usar</button>`
+      : `<button class="pri" data-buy="${k}" ${S.gold >= w.cost ? '' : 'disabled'}>Comprar 🪙 ${w.cost}</button>`)).join('');
+  $('shopTower').innerHTML = Object.entries(TT).filter(([, T]) => T.unlock).map(([k, T]) => row(`<span class="sw" style="display:inline-block;background:${T.color}"></span>`, T.name,
+    `${T.desc}. Depois custa 🪙 ${T.cost} cada${pw(S.unlocked.has(T) ? 0 : T.power)}`,
+    S.unlocked.has(T) ? '<button class="on" disabled>✓ Liberada</button>' : `<button class="pri" data-unlock="${k}" ${S.gold >= T.unlock ? '' : 'disabled'}>Liberar 🪙 ${T.unlock}</button>`)).join('');
+}
+function openShop() { if (S.over) return; closeSheet(); S.shop = true; renderShop(); $('shop').classList.add('show'); }
+function closeShop() { S.shop = false; $('shop').classList.remove('show'); updateUI(); }
+$('shopBtn').onclick = openShop;
+$('shopClose').onclick = closeShop;
+$('shop').addEventListener('click', ev => {
+  if (ev.target.id === 'shop') return closeShop();
+  const b = ev.target.closest('button'); if (!b || b.disabled) return;
+  const d = b.dataset;
+  if (d.buy) { const w = HW[d.buy]; if (S.gold < w.cost) return; S.gold -= w.cost; S.owned.add(d.buy); S.hw = d.buy; addPower(w.power); toast(`${w.icon} ${w.name} comprada e equipada!`); }
+  else if (d.hw) { S.hw = d.hw; toast(`${HW[d.hw].icon} Usando ${HW[d.hw].name}`); }
+  else if (d.unlock) { const T = TT[d.unlock]; if (S.gold < T.unlock) return; S.gold -= T.unlock; S.unlocked.add(T); addPower(T.power); toast(`Arma ${T.name} liberada! Toque numa placa de pedra para colocar.`, 3500); }
+  else return;
+  bump('gold'); updateUI(); renderShop();
+});
 $('play').onclick = () => { $('help').classList.remove('show'); S.started = true; };
 $('helpBtn').onclick = () => { $('help').classList.add('show'); S.started = false; };
 addEventListener('keydown', e => {
@@ -1089,6 +1239,8 @@ addEventListener('keydown', e => {
   keys.add(e.code);
   if (e.code === 'Escape') closeSheet();
   if (e.code === 'Enter') startWave();
+  if (e.code === 'KeyB') { S.shop ? closeShop() : openShop(); }
+  if (e.code === 'Escape' && S.shop) closeShop();
   if (e.code === 'KeyQ' || e.code === 'Space') { e.preventDefault(); throwBomb(); }
 });
 addEventListener('keyup', e => keys.delete(e.code));
@@ -1210,8 +1362,8 @@ let last = performance.now(), time = 0, slowTick = 0;
 function loop(now) {
   requestAnimationFrame(loop);
   const rdt = Math.min(.05, (now - last) / 1000); last = now; time += rdt;
-  const dt = S.over || !S.started ? 0 : rdt * S.speed;
-  updateWave(dt); updateEnemies(dt, time); updateTowers(dt, rdt, time); updateHero(dt, rdt, time); updateShots(dt); updateParticles(rdt);
+  const dt = S.over || !S.started || S.shop ? 0 : rdt * S.speed;
+  updateWave(dt); updateEnemies(dt, time); updateTowers(dt, rdt, time); updateHero(dt, rdt, time); updateShots(dt); updateClouds(dt); updateParticles(rdt);
   updateEnemyBars();
   for (let k = coins.length - 1; k >= 0; k--) {
     const c = coins[k]; c.t += rdt;
@@ -1234,7 +1386,7 @@ function loop(now) {
 }
 resize(); updateUI();
 requestAnimationFrame(loop);
-if (location.search.includes('teste')) window.__vd = { S, pads, placeTower, startWave, enemies, towers, hero, keys, TT };
+if (location.search.includes('teste')) window.__vd = { S, pads, placeTower, startWave, enemies, towers, hero, keys, TT, HW, addPower, openShop, closeShop };
 </script>
 </body>
 </html>
