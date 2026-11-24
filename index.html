@@ -16,6 +16,7 @@
 :root{--card:rgba(20,28,40,.92);--txt:#f4f1e8;--muted:#a9b4c2;--gold:#ffc93c;--pri:#ffb627;--r:14px;
 --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);--sal:env(safe-area-inset-left,0px);--sar:env(safe-area-inset-right,0px)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
 html,body{margin:0;height:100%;overflow:hidden;color:var(--txt);background:linear-gradient(#7ec4ee,#d6eefc 70%);
 font:600 15px/1.25 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;user-select:none;-webkit-user-select:none;overscroll-behavior:none}
 #c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
@@ -84,17 +85,45 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
   .card{min-height:92px}
   .card small.d{display:none}
 }
+#load{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 40%,#2b4766,#121c28 75%);transition:opacity .45s,visibility .45s}
+#load.hide{opacity:0;visibility:hidden}
+.ld-box{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}
+.ld-logo{width:120px;height:120px;border-radius:26px;image-rendering:pixelated;box-shadow:0 10px 0 #0b121b,0 18px 40px #0008;animation:ldfloat 1.6s ease-in-out infinite}
+@keyframes ldfloat{50%{transform:translateY(-8px)}}
+.ld-title{font:900 34px/1 system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:3px;color:#f4f1e8;text-shadow:3px 3px 0 #0b121b}
+.ld-title span{color:var(--gold);text-shadow:3px 3px 0 #b37400,6px 6px 0 #0b121b}
+.ld-bar{width:min(260px,70vw);height:16px;border-radius:9px;background:#0b121b;padding:3px;box-shadow:inset 0 2px 4px #000a}
+.ld-bar i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,#ffb627,#ffd76a);transform-origin:left;transform:scaleX(0);animation:ldbar 5s linear forwards}
+@keyframes ldbar{to{transform:scaleX(1)}}
+.ld-txt{color:var(--muted);font-size:14px}
+.ld-txt b{color:var(--txt);font-variant-numeric:tabular-nums}
+.mode{display:block;width:100%;text-align:left;padding:12px 14px;margin-top:10px;background:#2a3a4e;font-size:17px}
+.mode small{display:block;color:var(--muted);font-weight:500;font-size:13px;margin-top:3px}
+.linkbox{width:100%;margin:10px 0 0;padding:10px;border-radius:10px;border:0;background:#0b121b;color:var(--txt);font:500 13px system-ui,sans-serif;text-align:center}
+.box .wide{width:100%;margin-top:10px}
+#netPill.on{background:#1f7a4a}
+#netPill.off{background:#8a2a2a}
 @media (max-width:420px){#hud{gap:4px}.pill{padding:4px 8px;font-size:14px}button.pill{padding:0 8px;min-width:44px}}
 </style>
 </head>
 <body>
+<div id="load" role="status" aria-label="Carregando o jogo">
+  <div class="ld-box">
+    <img src="icons/icon-192.png" alt="" class="ld-logo">
+    <div class="ld-title">VOXEL<br><span>DEFENSE</span></div>
+    <div class="ld-bar"><i></i></div>
+    <div class="ld-txt">Carregando o mundo… <b id="ldPct">0%</b></div>
+  </div>
+</div>
 <canvas id="c"></canvas>
 <div id="hud">
   <div class="pill" title="Ouro">🪙 <b id="gold">0</b></div>
-  <div class="pill" title="Vida do castelo">🏰 <b id="castle">100</b></div>
+  <div class="pill" title="Vida do seu castelo">🏰 <b id="castle">100</b></div>
+  <div class="pill" id="foePill" title="Vida do castelo inimigo" hidden>🎯 <b id="foeCastle">100</b></div>
   <div class="pill" title="Onda atual">Onda <b id="waveN">0</b></div>
   <div class="pill" title="Recorde de onda">🏆 <b id="best">0</b></div>
   <button id="speed" class="pill" aria-label="Velocidade do jogo">1x</button>
+  <button id="netPill" class="pill" hidden aria-label="Estado da conexão"></button>
   <button id="helpBtn" class="pill" aria-label="Como jogar">?</button>
 </div>
 <div id="inds"></div>
@@ -112,7 +141,7 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
     <div class="stats">Você tem 🪙 <b id="shopGold">0</b> · Força dos monstros: <b id="shopPow">normal</b></div>
     <h3>Armas do herói</h3><div id="shopHero"></div>
     <h3>Armas novas para o campo</h3><div id="shopTower"></div>
-    <p class="stats">Para o jogo continuar justo, cada compra deixa os monstros um pouco mais fortes e eles passam a dar mais ouro. O jogo fica pausado enquanto a loja está aberta.</p>
+    <p class="stats" id="shopNote">Para o jogo continuar justo, cada compra deixa os monstros um pouco mais fortes e eles passam a dar mais ouro. O jogo fica pausado enquanto a loja está aberta.</p>
   </div>
 </div>
 <div id="help" class="ov show">
@@ -120,20 +149,55 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
     <h1>Defenda o castelo!</h1>
     <ul id="helpList"></ul>
     <button id="play" class="pri">Jogar</button>
-    <button id="gfx" class="sec" style="margin-top:10px;width:100%"></button>
+    <button id="online" class="sec wide">🌐 Jogar online com um amigo</button>
+    <button id="gfx" class="sec wide"></button>
+  </div>
+</div>
+<div id="onl" class="ov">
+  <div class="box" role="dialog" aria-label="Jogar online">
+    <h1>Jogar online</h1>
+    <p>Escolha como vocês vão jogar. Depois é só mandar o link.</p>
+    <button class="mode" data-m="coop">🤝 Juntos<small>Os dois defendem o mesmo castelo. Dinheiro e armas do campo são dos dois.</small></button>
+    <button class="mode" data-m="pvp">⚔️ Um contra o outro<small>Cada um tem seu castelo. Seus monstros atacam o castelo do amigo. Quem derrubar o outro castelo vence.</small></button>
+    <button id="onlBack" class="sec wide">Voltar</button>
+  </div>
+</div>
+<div id="net" class="ov">
+  <div class="box" role="dialog" aria-label="Conexão online">
+    <h1 id="netTitle">Sala criada!</h1>
+    <p id="netMsg"></p>
+    <div id="netShare" hidden>
+      <input id="netLink" class="linkbox" readonly aria-label="Link da sala">
+      <button id="copyLink" class="pri">📋 Copiar link</button>
+      <button id="shareLink" class="sec wide" hidden>📤 Enviar pelo celular</button>
+    </div>
+    <button id="netGo" class="pri" hidden>Continuar jogando</button>
+    <button id="netMenu" class="sec wide">Voltar ao menu</button>
   </div>
 </div>
 <div id="over" class="ov">
   <div class="box">
-    <h1>O castelo caiu!</h1>
+    <h1 id="ovTitle">O castelo caiu!</h1>
+    <p id="ovPvp" hidden></p>
+    <div id="ovSolo">
     <p>Você chegou à onda <b id="ovWave">0</b></p>
     <p id="ovNew" hidden>🏆 Novo recorde!</p>
     <p>Recorde: onda <b id="ovBest">0</b></p>
+    </div>
     <button id="again" class="pri">Jogar de novo</button>
+    <button id="ovMenu" class="sec wide" hidden>Voltar ao menu</button>
   </div>
 </div>
 <script>
+// Tela de carregamento: barra de 5 segundos com a logo
+const LD0 = performance.now();
+(function ldTick() {
+  const p = Math.min(100, Math.floor((performance.now() - LD0) / 50)), el = document.getElementById('ldPct');
+  if (el) el.textContent = p + '%';
+  if (p < 100) requestAnimationFrame(ldTick);
+})();
 addEventListener('error', () => {
+  document.getElementById('load').classList.add('hide');
   const t = document.getElementById('toast');
   t.textContent = 'Não foi possível carregar o jogo. Confira a internet e recarregue a página.';
   t.classList.add('show');
@@ -143,6 +207,8 @@ if ('serviceWorker' in navigator) addEventListener('load', () => navigator.servi
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
 <script type="module">
 import * as THREE from 'three';
+// Deixa a tela de carregamento aparecer antes de montar o mundo (que trava a página por alguns segundos)
+await new Promise(r => requestAnimationFrame(() => setTimeout(r, 60)));
 
 const $ = id => document.getElementById(id);
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -154,6 +220,21 @@ document.body.classList.toggle('touch', TOUCH);
 
 // ===== Mapa aberto =====
 const N = 48, HALF = N / 2, C0 = HALF - .5;
+// Modos: solo, online "juntos" (coop) e online "um contra o outro" (pvp). ?sala=CÓDIGO&modo=coop|pvp (&host=1 para quem criou)
+const QS0 = new URLSearchParams(location.search), ROOM = QS0.get("sala");
+const MODE = ROOM ? (QS0.get("modo") === "pvp" ? "pvp" : "coop") : "solo", ROLE = ROOM ? (QS0.has("host") ? "host" : "guest") : "solo";
+const PVP = MODE === "pvp", ONLINE = MODE !== "solo", ME = ROLE === "guest" ? 1 : 0, GUEST = ROLE === "guest";
+// Castelos (centro em coordenadas de casa). No contra, cada jogador tem o seu: 0 a oeste, 1 a leste.
+const CASTLES = PVP ? [{ ci: 8.5, cj: 23.5 }, { ci: 38.5, cj: 23.5 }] : [{ ci: C0, cj: C0 }];
+// Portais: 0 norte, 1 sul, 2 oeste, 3 leste. No contra, os do jogador 0 são norte e oeste; os do jogador 1, sul e leste.
+const SIDE_TEAM = [0, 1, 0, 1];
+const castleDist = (i, j) => Math.min(...CASTLES.map(c => Math.max(Math.abs(i - c.ci), Math.abs(j - c.cj))));
+// Rede: o host roda o jogo; o convidado manda comandos e recebe o estado ~20 vezes por segundo
+const NET = { host: ROLE === 'host', live: false, rec: false, conn: null, inp: null, last: 0, snapMs: 0, snaps: 0, send(m) { if (this.conn && this.live) try { this.conn.send(m); } catch (e) {} } };
+const r2 = v => Math.round(v * 100) / 100;
+const fxLog = [];
+const fxRec = a => { if (NET.rec && fxLog.length < 240) fxLog.push(a); };
+const targetCastle = side => PVP ? CASTLES[1 - SIDE_TEAM[side]] : CASTLES[0];
 const wc = i => i - HALF + .5;
 const cellOf = x => Math.floor(x + HALF);
 const K = (i, j) => i * N + j;
@@ -165,7 +246,7 @@ const at = (i, j) => inMap(i, j) ? grid[i][j] : -1;
 const near = (i, j, r, f) => { for (let a = -r; a <= r; a++) for (let b = -r; b <= r; b++) if ((a || b) && f(at(i + a, j + b))) return true; return false; };
 const noise = (i, j) => Math.sin(i * .45 + 1) + Math.cos(j * .38) + Math.sin((i - j) * .23);
 
-for (let i = 22; i <= 25; i++) for (let j = 22; j <= 25; j++) grid[i][j] = CASTLE;
+for (const c of CASTLES) for (let i = c.ci - 1.5; i <= c.ci + 1.5; i++) for (let j = c.cj - 1.5; j <= c.cj + 1.5; j++) grid[i][j] = CASTLE;
 const riverJ = i => 10 + Math.round(Math.sin(i * .27) * 1.8);
 for (let i = 0; i < N; i++) { const j = riverJ(i); grid[i][j] = grid[i][j + 1] = WATER; }
 const BRIDGES = [7, 24, 41];
@@ -177,7 +258,7 @@ const PORTALS = [[15, 0, 0, 1], [32, N - 1, 0, -1], [0, 30, 1, 0], [N - 1, 17, -
 const SPAWNS = PORTALS.map(([i, j, di, dj]) => [i + di, j + dj]);
 const reserved = new Set();
 for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
-  if (Math.max(Math.abs(i - C0), Math.abs(j - C0)) < 6) reserved.add(K(i, j));
+  if (castleDist(i, j) < 6) reserved.add(K(i, j));
   for (const [pi, pj] of PORTALS) if (Math.hypot(i - pi, j - pj) < 4.5) reserved.add(K(i, j));
 }
 for (const bi of BRIDGES) { const j = riverJ(bi); for (let a = -1; a <= 1; a++) for (let b = -2; b <= 3; b++) reserved.add(K(bi + a, j + b)); }
@@ -195,11 +276,13 @@ for (const [i, j] of PORTALS) grid[i][j] = PORTAL;
 
 // Placas de pedra: os lugares onde dá para pôr armas
 const pads = [], padAt = new Array(N * N).fill(null);
-for (const [r, n, off] of [[5.5, 8, .39], [9.5, 12, 0], [13.5, 16, .2], [17.5, 20, .1]]) for (let k = 0; k < n; k++) {
-  const a = off + k / n * Math.PI * 2, i = Math.round(r * Math.cos(a) + C0), j = Math.round(r * Math.sin(a) + C0);
-  if (at(i, j) !== GRASS || near(i, j, 1, t => t !== GRASS && t !== TREE && t !== ROCK)) continue;
-  grid[i][j] = PAD; const p = { i, j, x: wc(i), z: wc(j), t: null }; pads.push(p); padAt[K(i, j)] = p;
-}
+CASTLES.forEach((c, owner) => {
+  for (const [r, n, off] of PVP ? [[5.5, 8, .39], [9.5, 12, 0], [13.5, 16, .2]] : [[5.5, 8, .39], [9.5, 12, 0], [13.5, 16, .2], [17.5, 20, .1]]) for (let k = 0; k < n; k++) {
+    const a = off + k / n * Math.PI * 2, i = Math.round(r * Math.cos(a) + c.ci), j = Math.round(r * Math.sin(a) + c.cj);
+    if (at(i, j) !== GRASS || near(i, j, 1, t => t !== GRASS && t !== TREE && t !== ROCK)) continue;
+    grid[i][j] = PAD; const p = { i, j, x: wc(i), z: wc(j), t: null, owner, n: pads.length }; pads.push(p); padAt[K(i, j)] = p;
+  }
+});
 
 // Vilas com casinhas de 3 tamanhos: pequena (1x1), média (2x1) e grande (3x2). Todas as casas do mapa que ela cobre ficam sólidas.
 const houses = [];
@@ -221,10 +304,10 @@ for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
   if (r < d) grid[i][j] = TREE; else if (r < d + .03) grid[i][j] = ROCK;
 }
 // Abre caminho do portal até o castelo, para nenhum portal ficar preso
-for (const [si, sj] of SPAWNS) {
-  const L = Math.hypot(C0 - si, C0 - sj);
+for (const [s, [si, sj]] of SPAWNS.entries()) {
+  const tc = targetCastle(s), L = Math.hypot(tc.ci - si, tc.cj - sj);
   for (let t = 0; t <= L; t += .5) {
-    const i = Math.round(si + (C0 - si) * t / L), j = Math.round(sj + (C0 - sj) * t / L);
+    const i = Math.round(si + (tc.ci - si) * t / L), j = Math.round(sj + (tc.cj - sj) * t / L);
     for (const [a, b] of [[0, 0], [1, 0], [0, 1]]) { const g = at(i + a, j + b); if (g === TREE || g === ROCK || g === MOUNT) grid[i + a][j + b] = GRASS; }
   }
 }
@@ -234,9 +317,9 @@ const giants = [];
 const segDist = (px, pz, ax, az, bx, bz) => { const dx = bx - ax, dz = bz - az, t = clamp(((px - ax) * dx + (pz - az) * dz) / (dx * dx + dz * dz), 0, 1); return Math.hypot(px - ax - dx * t, pz - az - dz * t); };
 for (let k = 0; k < 3000 && giants.length < 3; k++) {
   const i = 3 + Math.floor(rnd() * (N - 7)), j = 3 + Math.floor(rnd() * (N - 7)), cells = [[i, j], [i + 1, j], [i, j + 1], [i + 1, j + 1]];
-  if (Math.max(Math.abs(i + .5 - C0), Math.abs(j + .5 - C0)) < 9) continue;
+  if (castleDist(i + .5, j + .5) < 9) continue;
   if (cells.some(([a, b]) => reserved.has(K(a, b)) || ![GRASS, TREE, ROCK].includes(at(a, b)) || near(a, b, 1, t => t === PAD || t === HOUSE || t === WATER || t === BRIDGE || t === MOUNT || t === PORTAL))) continue;
-  if (SPAWNS.some(([si, sj]) => segDist(i + .5, j + .5, si, sj, C0, C0) < 4.5)) continue;
+  if (SPAWNS.some(([si, sj], s) => segDist(i + .5, j + .5, si, sj, targetCastle(s).ci, targetCastle(s).cj) < 4.5)) continue;
   if (giants.some(g => Math.hypot(g.i - i, g.j - j) < 12)) continue;
   for (let a = -2; a <= 3; a++) for (let b = -2; b <= 3; b++) { const t = at(i + a, j + b); if (t === TREE || t === ROCK) grid[i + a][j + b] = GRASS; }
   for (const [a, b] of cells) grid[a][b] = GIANT;
@@ -253,13 +336,14 @@ for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) { const t = grid[i][j]; 
 const free = (i, j) => inMap(i, j) && !blocked[K(i, j)];
 
 // Mapa de distâncias até o castelo: os monstros descem por ele e contornam o que for sólido.
-const flow = new Float64Array(N * N);
+const flows = CASTLES.map(() => new Float64Array(N * N)), flow = flows[0];
 const D8 = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]];
-function computeFlow() {
+function computeFlow() { flows.forEach((fl, c) => computeFlowTo(fl, CASTLES[c])); }
+function computeFlowTo(flow, cs) {
   flow.fill(Infinity); const h = [];
   const push = (d, k) => { h.push([d, k]); let n = h.length - 1; while (n) { const p = (n - 1) >> 1; if (h[p][0] <= h[n][0]) break; [h[p], h[n]] = [h[n], h[p]]; n = p; } };
   const pop = () => { const top = h[0], last = h.pop(); if (h.length) { h[0] = last; let n = 0; for (;;) { const l = 2 * n + 1, r = l + 1; let m = n; if (l < h.length && h[l][0] < h[m][0]) m = l; if (r < h.length && h[r][0] < h[m][0]) m = r; if (m === n) break; [h[m], h[n]] = [h[n], h[m]]; n = m; } } return top; };
-  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) if (free(i, j) && near(i, j, 1, t => t === CASTLE)) { flow[K(i, j)] = 0; push(0, K(i, j)); }
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) if (free(i, j) && Math.max(Math.abs(i - cs.ci), Math.abs(j - cs.cj)) < 2.6) { flow[K(i, j)] = 0; push(0, K(i, j)); }
   while (h.length) {
     const [d, k] = pop(); if (d > flow[k]) continue;
     const i = (k / N) | 0, j = k % N;
@@ -274,16 +358,16 @@ function computeFlow() {
 computeFlow();
 const SIDE_NAME = ['norte', 'sul', 'oeste', 'leste'];
 
-function flowDir(p, out) {
+function flowDir(p, out, flow = flows[0], cx = 0, cz = 0) {
   const i = cellOf(p.x), j = cellOf(p.z), f = inMap(i, j) ? flow[K(i, j)] : Infinity;
-  if (!(f > 0 && f < Infinity)) return out.set(-p.x, 0, -p.z).normalize();
+  if (!(f > 0 && f < Infinity)) return out.set(cx - p.x, 0, cz - p.z).normalize();
   let bi = -1, bj = -1, bf = f;
   for (const [a, b] of D8) {
     const ni = i + a, nj = j + b;
     if (!free(ni, nj) || (a && b && (!free(i + a, j) || !free(i, j + b)))) continue;
     const nf = flow[K(ni, nj)]; if (nf < bf) { bf = nf; bi = ni; bj = nj; }
   }
-  if (bi < 0) return out.set(-p.x, 0, -p.z).normalize();
+  if (bi < 0) return out.set(cx - p.x, 0, cz - p.z).normalize();
   return out.set(wc(bi) - p.x, 0, wc(bj) - p.z).normalize();
 }
 
@@ -579,9 +663,14 @@ for (const [i, j, di, dj] of PORTALS) {
 }
 
 // Castelo no centro: muralha de tijolos, 4 torres com telhado vermelho, torre principal, portões e bandeiras
-const CO = HALF * 8, CB = [(CO - 16) * Q, (CO + 16) * Q - 1];
-const RED = palX(0xd0453a, .07), REDD = palX(0xa8352c, .07), GOLD = palX(0xffc93c, .06, 3), DARK = pk(0x2a2a33), IRON = pk(0x4a525c);
-const cput = (u, y, w, c) => dset(CO + u, 8 + y, CO + w, c);
+const GOLD = palX(0xffc93c, .06, 3), DARK = pk(0x2a2a33), IRON = pk(0x4a525c);
+// cada castelo: telhado vermelho (solo/juntos), azul (jogador 1 no contra) ou vermelho (jogador 2)
+const TEAM_HEX = [0x3b82f6, 0xef4444];
+CASTLES.forEach((cs, ci) => {
+const ox = (cs.ci + .5) * 8, oz = (cs.cj + .5) * 8, roofHex = PVP ? TEAM_HEX[ci] : 0xd0453a;
+cs.CB = [(ox - 16) * Q, (ox + 16) * Q - 1, (oz - 16) * Q, (oz + 16) * Q - 1]; cs.x = ox / 8 - HALF; cs.z = oz / 8 - HALF;
+const RED = palX(roofHex, .07), REDD = palX(shade(roofHex, .8), .07);
+const cput = (u, y, w, c) => dset(ox + u, 8 + y, oz + w, c);
 const cfill = (u0, u1, y0, y1, w0, w1, f) => { for (let u = u0; u <= u1; u++) for (let w = w0; w <= w1; w++) for (let y = y0; y <= y1; y++) cput(u, y, w, typeof f === 'function' ? f(u, y, w) : f); };
 const cbrick = (pa, pb) => (u, y, w) => { const row = y >> 1; return h3(row, (u + w + (row & 1) * 2 + 64) >> 2, 5) < .55 ? pick(pa, u, y, w) : pick(pb, u, y, w); };
 const roofPyr = (u0, u1, w0, w1, y0, n) => { for (let L = 0; L < n; L++) cfill(u0 + L, u1 - L, y0 + L, y0 + L, w0 + L, w1 - L, (u, y, w) => pick(L % 2 ? REDD : RED, u, y, w)); };
@@ -603,6 +692,7 @@ for (const [nu, nw] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {           // portõ
   for (let s = -3; s <= 2; s++) for (let y = 0; y <= 5; y++) if (y < 5 || (s > -3 && s < 2)) at2(s, y, (s & 1) || y === 3 ? IRON : DARK);
   for (const b0 of [-9, 6]) for (let s = b0; s < b0 + 3; s++) for (let y = 4; y <= 9; y++) at2(s, y, y === 9 || y === 4 ? pick(GOLD, s, y, nu) : y === 7 && s === b0 + 1 ? pick(GOLD, s, y, 1) : pick(RED, s, y, nw), 1);
 }
+});
 
 // Regiões de gramado liso (verde claro, sem tufos) e regiões de mato (com tufos e flores)
 const lawn = (x, z) => Math.sin(x * .19 + 1.3) + Math.cos(z * .23 + .4) + Math.sin((x - z) * .13 + 2) * .8;
@@ -610,7 +700,7 @@ const lawn = (x, z) => Math.sin(x * .19 + 1.3) + Math.cos(z * .23 + .4) + Math.s
 const FLOWERS = [0xfacc15, 0xffffff, 0xf472b6, 0xa78bfa, 0xef4444].map(pk), TUFT = PH(.27, .55, .34, .1, 6);
 for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
   const t = grid[i][j]; if (t !== GRASS && t !== TREE && t !== ROCK) continue;
-  if (Math.max(Math.abs(i - C0), Math.abs(j - C0)) < 3.6) continue;
+  if (castleDist(i, j) < 3.6) continue;
   const L = lawn(i + .5, j + .5); if (L > .45) continue;
   for (let k = 0, nk = (L < -.8 ? 5 : 3) * Q; k < nk; k++) {
     const x = i * R + Math.floor(rnd() * R), z = j * R + Math.floor(rnd() * R);
@@ -678,7 +768,7 @@ function meshRegion(x0, x1, z0, z1, skip) {
   const m = new THREE.Mesh(g, voxMat); m.scale.setScalar(1 / R); m.position.set(-HALF, -Y0 / R, -HALF);
   m.castShadow = m.receiveShadow = true; return m;
 }
-const inCastle = (x, z) => x >= CB[0] && x <= CB[1] && z >= CB[0] && z <= CB[1];
+const inCastle = (x, z) => CASTLES.some(({ CB }) => x >= CB[0] && x <= CB[1] && z >= CB[2] && z <= CB[3]);
 const CHUNK = Q === 1 ? 64 : 96;
 for (let cx = 0; cx < VX; cx += CHUNK) for (let cz = 0; cz < VX; cz += CHUNK) { const m = meshRegion(cx, cx + CHUNK, cz, cz + CHUNK, inCastle); if (m) scene.add(m); }
 
@@ -706,7 +796,7 @@ const gdata = new Uint8Array(VX * VX * 4);
 for (let x = 0; x < VX; x++) for (let z = 0; z < VX; z++) {
   const i = x >> SH, j = z >> SH, t = grid[i][j], o = ((VX - 1 - z) * VX + x) * 4, hh = h3(x, 7, z);
   let c, a = 255;
-  const cd = Math.max(Math.abs(i - C0), Math.abs(j - C0));
+  const cd = castleDist(i, j);
   if (t === WATER || t === BRIDGE) { c = 0; a = 0; }
   else if (t === CASTLE || (cd < 3.6 && t !== PAD)) { const row = Math.floor(z / (3 * Q)), sx = x + (row & 1) * 2 * Q, col = Math.floor(sx / (4 * Q)), edge = z % (3 * Q) === 3 * Q - 1 || sx % (4 * Q) === 4 * Q - 1; c = shade(TSTONE[(h3(row, col, 1) * 5) | 0], edge ? .86 : 1 + (hh - .5) * .06); }
   else if (t === PORTAL || PORTALS.some(([pi, pj]) => Math.hypot(i - pi, j - pj) < 1.6)) { const row = Math.floor(z / (4 * Q)), sx = x + (row & 1) * 2 * Q, col = Math.floor(sx / (4 * Q)); c = shade(TPORT[(h3(row, col, 2) * 4) | 0], z % (4 * Q) === 4 * Q - 1 || sx % (4 * Q) === 4 * Q - 1 ? .8 : 1); }
@@ -777,13 +867,35 @@ function updateClouds3(rdt) {
   cloudMesh.instanceMatrix.needsUpdate = true;
 }
 
-const castle = new THREE.Group(); scene.add(castle);
-castle.add(meshRegion(CB[0], CB[1] + 1, CB[0], CB[1] + 1));
-const flag = new THREE.Group(); flag.position.set(1 / 16, 37 / 8, 1.5 / 8); castle.add(flag); box(mat.red, .55, .32, .05, .3, 0, 0, flag); box(mat.gold, .12, .12, .06, .3, 0, 0, flag);
+// Cada castelo é um grupo próprio (treme quando apanha) com bandeira que balança
+for (const [ci, cs] of CASTLES.entries()) {
+  cs.g = new THREE.Group(); scene.add(cs.g); cs.g.add(meshRegion(cs.CB[0], cs.CB[1] + 1, cs.CB[2], cs.CB[3] + 1));
+  cs.flag = new THREE.Group(); cs.flag.position.set(cs.x + 1 / 16, 37 / 8, cs.z + 1.5 / 8); cs.g.add(cs.flag);
+  box(PVP ? M(TEAM_HEX[ci]) : mat.red, .55, .32, .05, .3, 0, 0, cs.flag); box(mat.gold, .12, .12, .06, .3, 0, 0, cs.flag);
+  cs.shake = 0; cs.T = { kind: "castle", pl: ci, cs, pos: V(cs.x, 0, cs.z), r: 0, dead: false };
+}
 const voxStats = { faces: voxFaces };
 vox = null;                                           // libera a memória da grade
-let castleShake = 0;
-const CASTLE_T = { kind: 'castle', pos: V(), r: 0, dead: false };
+const CASTLE_T = CASTLES[0].T;
+// Jogadores: o estado "por jogador" (ouro, arma, compras...) fica em S para quem está "carregado";
+// withPlayer(p, fn) troca para o jogador p enquanto fn roda (o host simula os dois).
+const PF = PVP ? ['gold', 'hw', 'owned', 'unlocked', 'power', 'dmgMul', 'castle'] : ['hw', 'owned'];
+const PS = [null, null];
+let CTX = null, LOADED = 0;
+function loadPlayer(p) {
+  if (LOADED === p) return;
+  const keep = {}; for (const k of PF) keep[k] = S[k]; PS[LOADED] = keep;
+  for (const k of PF) S[k] = PS[p][k]; LOADED = p;
+}
+function withPlayer(p, fn) {
+  if (CTX === p) return fn();
+  const pc = CTX, pl = LOADED, ph = hero;
+  loadPlayer(p); CTX = p; hero = heroes[p] || heroes[0];
+  try { return fn(); } finally { loadPlayer(pl); CTX = pc; hero = ph; }
+}
+const pget = (p, k) => PF.includes(k) && LOADED !== p ? PS[p][k] : S[k];
+const isLocal = () => CTX === null || CTX === ME;
+const foeOf = e => PVP ? 1 - e.team : 0;
 
 // Anel de alcance, cursor de seleção, mira do mouse
 const basic = (c, o) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: o, depthWrite: false });
@@ -807,10 +919,12 @@ function emit(pos, color, size, vx, vy, vz, life, g = 9.8) {
   pm.setColorAt(pi, col.set(color).offsetHSL(0, 0, (Math.random() - .5) * .15)); pi = (pi + 1) % PMAX;
 }
 function burst(pos, color, n, spd, size) {
+  fxRec(['b', r2(pos.x), r2(pos.y), r2(pos.z), color, n, spd, size]);
   for (let k = 0; k < n; k++) emit(pos, color, size * (.6 + Math.random() * .6), (Math.random() - .5) * 2 * spd, Math.random() * spd * 1.2 + 1, (Math.random() - .5) * 2 * spd, .6 + Math.random() * .5);
   pm.instanceColor.needsUpdate = true;
 }
 function burstDir(pos, d, color, n, spd, size) {
+  fxRec(['d', r2(pos.x), r2(pos.y), r2(pos.z), r2(d.x), r2(d.z), color, n, spd, size]);
   for (let k = 0; k < n; k++) { const s = spd * (.7 + Math.random() * .5); emit(pos, color, size * (.6 + Math.random() * .6), d.x * s + (Math.random() - .5) * 1.5, 1 + Math.random(), d.z * s + (Math.random() - .5) * 1.5, .35 + Math.random() * .2); }
   pm.instanceColor.needsUpdate = true;
 }
@@ -829,7 +943,7 @@ function updateParticles(dt) {
 // Moedas
 const COIN = new THREE.CylinderGeometry(.16, .16, .05, 12).rotateX(Math.PI / 2);
 const coins = [];
-function dropCoin(p) { const m = new THREE.Mesh(COIN, mat.gold); m.position.set(p.x, .5, p.z); scene.add(m); coins.push({ m, t: 0 }); }
+function dropCoin(p) { fxRec(['c', r2(p.x), r2(p.z)]); const m = new THREE.Mesh(COIN, mat.gold); m.position.set(p.x, .5, p.z); scene.add(m); coins.push({ m, t: 0 }); }
 
 // Barras de vida
 const BAR = new THREE.PlaneGeometry(1, 1);
@@ -861,18 +975,22 @@ for (const T of Object.values(ET)) T.dmat = M(new THREE.Color(T.color).multiplyS
 const SPHERE = new THREE.SphereGeometry(1, 10, 8);
 const enemies = [];
 
-function spawnEnemy(type, x, z) {
-  const T = ET[type], s = T.size, g = new THREE.Group(), inner = new THREE.Group();
+const TEAM_MAT = [M(0x2563eb, 0x0a2a6a), M(0xdc2626, 0x5a0a0a)];
+let eid = 0;
+function spawnEnemy(type, x, z, team = 0) {
+  const T = ET[type], s = T.size, g = new THREE.Group(), inner = new THREE.Group(), band = PVP ? TEAM_MAT[team] : T.dmat;
   g.add(inner);
   const body = M(T.color, 0x000000);
   let f1 = null, f2 = null;
   if (type === 'aranha') {
     box(body, s * 1.1, s * .5, s * 1.2, 0, s * .45, 0, inner);
+    if (PVP) box(band, s * .7, s * .12, s * .7, 0, s * .76, 0, inner);
     for (const sx of [-1, 1]) for (let k = 0; k < 3; k++) box(T.dmat, s * .7, .05, .06, sx * s * .75, s * .25, (k - 1) * s * .4, inner);
     for (const sx of [-1, 1]) box(mat.red, .07, .07, .03, sx * s * .2, s * .55, s * .6, inner);
   } else {
     box(body, s, s * .8, s, 0, s * .5 + .1, 0, inner);
-    box(T.dmat, s * 1.04, s * .22, s * 1.04, 0, s * .86 + .1, 0, inner);
+    box(band, s * 1.04, s * .22, s * 1.04, 0, s * .86 + .1, 0, inner);
+    if (PVP) box(band, s * .2, s * .4, .04, 0, s * 1.15 + .1, -s * .3, inner);
     const eye = T.boss ? mat.red : mat.white;
     for (const sx of [-1, 1]) {
       box(eye, s * .22, s * .2, .04, sx * s * .22, s * .58 + .1, s / 2 + .01, inner);
@@ -889,8 +1007,9 @@ function spawnEnemy(type, x, z) {
   if (T.boss) { box(mat.gold, s * .8, .12, s * .8, 0, s * (type === 'bruxo' ? .95 : 1.05) + .14, 0, inner); for (const a of [-1, 1]) for (const b of [-1, 1]) box(mat.gold, .12, .2, .12, a * s * .32, s * (type === 'bruxo' ? .95 : 1.05) + .28, b * s * .32, inner); }
   const bar = makeBar(Math.max(.5, s * 1.1));
   scene.add(g);
-  const hp = Math.round(T.hp * S.hpMul * (1 + S.power));
-  const e = { kind: 'enemy', type, T, g, inner, body, f1, f2, bar, hp, maxHp: hp, pos: g.position, r: s * .45, cr: Math.min(s * .45, .48),
+  const hp = Math.round(T.hp * S.hpMul * (1 + S.power) * (MODE === 'coop' ? 1.3 : 1));
+  const tci = PVP ? 1 - team : 0;
+  const e = { id: ++eid, team, tc: CASTLES[tci], flowF: flows[tci], kind: 'enemy', type, T, g, inner, body, f1, f2, bar, hp, maxHp: hp, pos: g.position, r: s * .45, cr: Math.min(s * .45, .48),
     vel: V(), dir: V(), walk: 0, slowT: 0, slowF: 1, flashT: 0, burnT: 0, burnDps: 0, poisonT: 0, poisonDps: 0, think: 0, target: null, atkCd: Math.random(),
     healCd: 2, sumCd: 5, slamCd: 2, ph: Math.random() * 6.28, wf: .6 + Math.random() * .8, wob: .25 + Math.random() * .35,
     hitY: s * .5, fd: 99, dead: false, sp: T.sp * (.9 + Math.random() * .2), px: x, pz: z };
@@ -899,53 +1018,57 @@ function spawnEnemy(type, x, z) {
   return e;
 }
 function edgeDist(e, tg) {
-  if (tg.kind === 'castle') return Math.hypot(Math.max(Math.abs(e.pos.x) - 2, 0), Math.max(Math.abs(e.pos.z) - 2, 0)) - e.r;
+  if (tg.kind === 'castle') return Math.hypot(Math.max(Math.abs(e.pos.x - tg.cs.x) - 2, 0), Math.max(Math.abs(e.pos.z - tg.cs.z) - 2, 0)) - e.r;
   return Math.hypot(tg.pos.x - e.pos.x, tg.pos.z - e.pos.z) - tg.r - e.r;
 }
 function aimPoint(tg, from, out) {
-  if (tg.kind === 'castle') return out.set(clamp(from.x, -2, 2), 1.2, clamp(from.z, -2, 2));
+  if (tg.kind === 'castle') return out.set(clamp(from.x, tg.cs.x - 2, tg.cs.x + 2), 1.2, clamp(from.z, tg.cs.z - 2, tg.cs.z + 2));
   return out.set(tg.pos.x, tg.kind === 'hero' ? .7 : 1, tg.pos.z);
 }
 function pickTarget(e) {
   const T = e.T; if (T.kind === 'healer') return null;
   let best = null, bd = T.kind === 'ranged' ? T.range : T.kind === 'bomber' ? 3.5 : 2.2;
-  const cd = edgeDist(e, CASTLE_T); if (cd < bd) { best = CASTLE_T; bd = cd; }
-  if (!hero.dead) { const d = edgeDist(e, hero); if (d < bd) { best = hero; bd = d; } }
-  for (const t of towers) { const d = edgeDist(e, t); if (d < bd) { best = t; bd = d; } }
+  const foe = foeOf(e), cd = edgeDist(e, e.tc.T); if (cd < bd) { best = e.tc.T; bd = cd; }
+  for (const hh of heroes) if (!hh.dead && (!PVP || hh.pl === foe)) { const d = edgeDist(e, hh); if (d < bd) { best = hh; bd = d; } }
+  for (const t of towers) if (!PVP || t.owner === foe) { const d = edgeDist(e, t); if (d < bd) { best = t; bd = d; } }
   return best;
 }
 const desired = V(), tmp = V(), tmp2 = V();
 function updateEnemies(dt, time) {
   if (!dt) return;
-  for (const e of enemies) {
-    if (e.dead) continue;
+  if (PVP) for (const foe of [0, 1]) withPlayer(foe, () => { for (const e of enemies) if (!e.dead && e.team !== foe) stepEnemy(e, dt, time); });
+  else for (const e of enemies) if (!e.dead) stepEnemy(e, dt, time);
+  separateEnemies(dt, time);
+}
+function stepEnemy(e, dt, time) {
+  {
     const T = e.T;
     e.slowT -= dt; e.flashT -= dt;
-    if (e.burnT > 0) { e.burnT -= dt; hurt(e, e.burnDps * dt, false); if (e.dead) continue; if (Math.random() < dt * 8) burst(tmp.set(e.pos.x, e.hitY + .3, e.pos.z), 0xff8a1f, 1, .5, .08); }
-    if (e.poisonT > 0) { e.poisonT -= dt; hurt(e, e.poisonDps * dt, false); if (e.dead) continue; if (Math.random() < dt * 6) burst(tmp.set(e.pos.x, e.hitY + .3, e.pos.z), 0x84cc16, 1, .5, .08); }
+    if (e.burnT > 0) { e.burnT -= dt; hurt(e, e.burnDps * dt, false); if (e.dead) return; if (Math.random() < dt * 8) burst(tmp.set(e.pos.x, e.hitY + .3, e.pos.z), 0xff8a1f, 1, .5, .08); }
+    if (e.poisonT > 0) { e.poisonT -= dt; hurt(e, e.poisonDps * dt, false); if (e.dead) return; if (Math.random() < dt * 6) burst(tmp.set(e.pos.x, e.hitY + .3, e.pos.z), 0x84cc16, 1, .5, .08); }
     if (T.kind === 'healer') {
       e.healCd -= dt;
       if (e.healCd <= 0) {
         e.healCd = 2.2; let any = false;
-        for (const o of enemies) if (!o.dead && o !== e && o.hp < o.maxHp && Math.hypot(o.pos.x - e.pos.x, o.pos.z - e.pos.z) < 2.8) { o.hp = Math.min(o.maxHp, o.hp + o.maxHp * .12); any = true; burst(tmp.set(o.pos.x, o.hitY + .4, o.pos.z), 0x4ade80, 3, .6, .07); }
+        for (const o of enemies) if (!o.dead && o !== e && o.team === e.team && o.hp < o.maxHp && Math.hypot(o.pos.x - e.pos.x, o.pos.z - e.pos.z) < 2.8) { o.hp = Math.min(o.maxHp, o.hp + o.maxHp * .12); any = true; burst(tmp.set(o.pos.x, o.hitY + .4, o.pos.z), 0x4ade80, 3, .6, .07); }
         if (any) burst(tmp.set(e.pos.x, .9, e.pos.z), 0x4ade80, 8, 1.5, .08);
       }
     }
     if (T.summon) {
       e.sumCd -= dt;
-      if (e.sumCd <= 0) { e.sumCd = 7; for (let k = 0; k < 3; k++) spawnEnemy('aranha', e.pos.x + (Math.random() - .5) * 1.6, e.pos.z + (Math.random() - .5) * 1.6); burst(tmp.set(e.pos.x, 1, e.pos.z), 0x8b5cf6, 14, 2, .1); }
+      if (e.sumCd <= 0) { e.sumCd = 7; for (let k = 0; k < 3; k++) spawnEnemy('aranha', e.pos.x + (Math.random() - .5) * 1.6, e.pos.z + (Math.random() - .5) * 1.6, e.team); burst(tmp.set(e.pos.x, 1, e.pos.z), 0x8b5cf6, 14, 2, .1); }
     }
     e.think -= dt;
     if (e.think <= 0 || (e.target && e.target.dead)) { e.think = .35; e.target = pickTarget(e); }
     const sp = e.sp * (e.slowT > 0 ? e.slowF : 1), tg = e.target;
     let mode = 'walk';
     if (tg) { const d = edgeDist(e, tg); if (T.kind === 'ranged') { if (d <= T.range) mode = 'shoot'; } else if (d <= .12) mode = T.kind === 'bomber' ? 'boom' : 'hit'; }
-    if (mode === 'boom') { explodeBomber(e); continue; }
+    if (mode === 'boom') { explodeBomber(e); return; }
     e.px = e.pos.x; e.pz = e.pos.z;
     if (mode === 'walk') {
       if (tg && tg.kind !== 'castle') desired.set(tg.pos.x - e.pos.x, 0, tg.pos.z - e.pos.z).normalize();
       else {
-        flowDir(e.pos, desired);
+        flowDir(e.pos, desired, e.flowF, e.tc.x, e.tc.z);
         if (e.fd > 2.5) { const w = Math.sin(time * e.wf + e.ph) * e.wob, c = Math.cos(w), s = Math.sin(w); desired.set(desired.x * c - desired.z * s, 0, desired.x * s + desired.z * c); }
       }
       e.dir.lerp(desired, Math.min(1, dt * 8));
@@ -964,6 +1087,8 @@ function updateEnemies(dt, time) {
       } else if (e.atkCd <= 0) { e.atkCd = T.rate; enemyShoot(e, tg); }
     }
   }
+}
+function separateEnemies(dt, time) {
   // Separação: ninguém fica dentro do outro
   for (let a = 0; a < enemies.length; a++) {
     const A = enemies[a]; if (A.dead) continue;
@@ -979,7 +1104,7 @@ function updateEnemies(dt, time) {
     if (e.dead) continue;
     collide(e.pos, e.cr); collide(e.pos, e.cr);
     e.vel.set((e.pos.x - e.px) / dt, 0, (e.pos.z - e.pz) / dt);
-    const i = cellOf(e.pos.x), j = cellOf(e.pos.z); e.fd = inMap(i, j) && flow[K(i, j)] < Infinity ? flow[K(i, j)] : 99;
+    const i = cellOf(e.pos.x), j = cellOf(e.pos.z); e.fd = inMap(i, j) && e.flowF[K(i, j)] < Infinity ? e.flowF[K(i, j)] : 99;
     e.inner.position.y = Math.abs(Math.sin(e.walk * 6)) * .07;
     if (e.f1) { e.f1.position.z = Math.sin(e.walk * 6) * .12 * e.T.size; e.f2.position.z = -e.f1.position.z; }
     e.body.emissive.setHex(e.flashT > 0 ? 0xffffff : e.radU > time ? 0x2fbf00 : e.burnT > 0 ? 0x6a2000 : e.poisonT > 0 ? 0x2f5f00 : e.slowT > 0 ? 0x1f6fb5 : 0x000000);
@@ -1000,30 +1125,42 @@ function hurt(e, dmg, flash = true) {
   burst(tmp, e.T.color, 10 + e.T.size * 14, 3, .14 + e.T.size * .08);
   burst(tmp, 0x222222, 4, 2.5, .1);
   dropCoin(e.pos);
-  S.gold += Math.round(e.T.reward * (1 + .05 * (S.wave - 1)) * (1 + S.power * .6));
-  if (e.T.boss) toast(`Você derrotou o ${e.T.name}! 👑`);
-  bump('gold'); updateUI();
+  const pay = () => {
+    S.gold += Math.round(e.T.reward * (1 + .05 * (S.wave - 1)) * (1 + S.power * .6));
+    if (e.T.boss) toast(`Você derrotou o ${e.T.name}! 👑`);
+    bump('gold'); updateUI();
+  };
+  if (PVP) withPlayer(foeOf(e), pay); else pay();
 }
-function areaDamage(p, radius, dmg, castleDmg) {
-  if (!hero.dead && Math.hypot(hero.pos.x - p.x, hero.pos.z - p.z) < radius + hero.r) damageTarget(hero, dmg);
-  for (const t of [...towers]) if (Math.hypot(t.pos.x - p.x, t.pos.z - p.z) < radius + t.r) damageTarget(t, dmg);
-  if (castleDmg && Math.hypot(Math.max(Math.abs(p.x) - 2, 0), Math.max(Math.abs(p.z) - 2, 0)) < radius) damageTarget(CASTLE_T, castleDmg);
+// Acerta um monstro ou (no contra) o herói inimigo
+const hitAny = (tg, dmg, flash) => tg.kind === 'hero' ? damageTarget(tg, dmg) : hurt(tg, dmg, flash);
+// Herói inimigo (só no contra) que um tiro/área do jogador pl pode acertar
+const foeHero = pl => PVP ? heroes[1 - pl] : null;
+function hitFoeHero(pl, x, z, rad, dmg) { const fh = foeHero(pl); if (fh && !fh.dead && Math.hypot(fh.pos.x - x, fh.pos.z - z) < rad + fh.r) { damageTarget(fh, dmg); return fh; } return null; }
+function areaDamage(p, radius, dmg, castleDmg, team = -1) {
+  const foe = PVP ? 1 - team : -1, ok = pl => !PVP || pl === foe;
+  for (const hh of heroes) if (!hh.dead && ok(hh.pl) && Math.hypot(hh.pos.x - p.x, hh.pos.z - p.z) < radius + hh.r) damageTarget(hh, dmg);
+  for (const t of [...towers]) if (ok(t.owner) && Math.hypot(t.pos.x - p.x, t.pos.z - p.z) < radius + t.r) damageTarget(t, dmg);
+  if (castleDmg) for (const cs of CASTLES) if (ok(cs.T.pl) && Math.hypot(Math.max(Math.abs(p.x - cs.x) - 2, 0), Math.max(Math.abs(p.z - cs.z) - 2, 0)) < radius) damageTarget(cs.T, castleDmg);
 }
 function explodeBomber(e) {
   removeEnemy(e);
   tmp.set(e.pos.x, .4, e.pos.z);
   burst(tmp, 0xffa53a, 22, 4, .16); burst(tmp, 0x444444, 10, 3, .14);
-  areaDamage(e.pos, e.T.radius, e.T.dmg * S.hpMul ** .5 * S.dmgMul, 8);
+  areaDamage(e.pos, e.T.radius, e.T.dmg * S.hpMul ** .5 * S.dmgMul, 8, e.team);
 }
 function slam(e) {
   burst(tmp.set(e.pos.x, .2, e.pos.z), 0x9a948a, 18, 4, .14);
-  areaDamage(e.pos, 2.2, 30, 0);
+  areaDamage(e.pos, 2.2, 30, 0, e.team);
 }
 function damageTarget(tg, amt) {
   if (tg.dead || S.over) return;
-  if (tg.kind === 'hero') { hero.hp -= amt; hero.hurtT = .12; }
+  if (tg.kind === 'hero') { tg.hp -= amt; tg.hurtT = .12; }
   else if (tg.kind === 'tower') { tg.hp -= amt; tg.shake = .15; tg.bar.g.visible = true; if (tg.hp <= 0) destroyTower(tg); }
-  else { S.castle -= amt; castleShake = .3; if (S.castle <= 0) gameOver(); }
+  else {
+    const f = () => { S.castle -= amt; tg.cs.shake = .3; if (S.castle <= 0) { if (PVP) pvpEnd(1 - tg.pl); else gameOver(); } };
+    if (PVP) withPlayer(tg.pl, f); else f();
+  }
 }
 
 // ===== Armas =====
@@ -1119,17 +1256,23 @@ function buildTowerMesh(t) {
       t.fireY = Y(.6); break; }
   }
 }
-function placeTower(type, pad) {
+function makeTower(type, pad, owner, lv = 0) {
   const T = TT[type];
-  if (S.gold < T.cost || pad.t || (T.unlock && !S.unlocked.has(T))) return;
-  S.gold -= T.cost;
-  const t = { kind: 'tower', type, T, pad, lv: 0, inv: T.cost, cd: .3, pop: 0, root: new THREE.Group(), pos: V(pad.x, 0, pad.z), r: .42,
-    hp: T.hp[0], maxHp: T.hp[0], shake: 0, bar: makeBar(.7), dead: false };
+  const t = { kind: 'tower', type, T, pad, owner, lv, inv: T.cost + T.up.slice(0, lv).reduce((a, b) => a + b, 0), cd: .3, pop: 0, root: new THREE.Group(), pos: V(pad.x, 0, pad.z), r: .42,
+    hp: T.hp[lv], maxHp: T.hp[lv], shake: 0, bar: makeBar(.7), dead: false };
   t.root.position.copy(t.pos); t.root.userData.tower = t; scene.add(t.root);
   buildTowerMesh(t); towers.push(t); pad.t = t;
   blocked[K(pad.i, pad.j)] = 1; computeFlow();
+  return t;
+}
+function placeTower(type, pad) {
+  const T = TT[type];
+  if (S.gold < T.cost || pad.t || (T.unlock && !S.unlocked.has(T))) return;
+  if (PVP && pad.owner !== (CTX ?? 0)) return toast('Essa placa é do outro jogador.');
+  S.gold -= T.cost;
+  const t = makeTower(type, pad, CTX ?? 0);
   burst(tmp.set(t.pos.x, .1, t.pos.z), 0xc9a46a, 10, 1.5, .1);
-  closeSheet(); updateUI();
+  if (isLocal()) closeSheet(); updateUI();
   if (S.wave === 0 && towers.length === 1) toast('Boa! Agora toque em ▶ Onda 1', 3500);
 }
 function upgradeTower(t) {
@@ -1139,7 +1282,7 @@ function upgradeTower(t) {
   t.maxHp = t.T.hp[t.lv]; t.hp = t.maxHp;
   buildTowerMesh(t);
   burst(tmp.set(t.pos.x, 1, t.pos.z), 0xffc93c, 14, 2, .1);
-  rangeG.scale.setScalar(t.T.lv[t.lv].range);
+  if (isLocal() && S.sel && S.sel.t === t) rangeG.scale.setScalar(t.T.lv[t.lv].range);
   updateUI();
 }
 const repairCost = t => t.hp >= t.maxHp ? 0 : Math.max(5, Math.ceil((1 - t.hp / t.maxHp) * t.inv * .35));
@@ -1156,7 +1299,7 @@ function removeTower(t) {
 function sellTower(t) {
   S.gold += Math.floor(t.inv * .6 * Math.max(.3, t.hp / t.maxHp));
   burst(tmp.set(t.pos.x, .4, t.pos.z), 0x9a948a, 12, 2, .12);
-  removeTower(t); closeSheet(); bump('gold'); updateUI();
+  removeTower(t); if (isLocal()) closeSheet(); bump('gold'); updateUI();
 }
 function destroyTower(t) {
   burst(tmp.set(t.pos.x, .6, t.pos.z), 0x9a948a, 20, 3, .15); burst(tmp, 0xffa53a, 10, 2.5, .12);
@@ -1175,7 +1318,7 @@ function updateTowers(dt, rdt, time) {
     if (!dt) continue;
     const st = t.T.lv[t.lv], sh = t.T.shot, r2 = st.range * st.range; let best = null;
     for (const e of enemies) {
-      if (e.dead) continue;
+      if (e.dead || (PVP && e.team === t.owner)) continue;
       const dx = e.pos.x - t.pos.x, dz = e.pos.z - t.pos.z, d2 = dx * dx + dz * dz;
       if (d2 > r2 || (sh === 'mortar' && d2 < 4)) continue;
       if (!best || (sh === 'bolt' ? e.hp > best.hp : e.fd < best.fd)) best = e;
@@ -1194,6 +1337,7 @@ const bulletMat = M(0xffe08a, 0xaa7700), heroShotMat = M(0x93c5fd, 0x3b82f6);
 const shots = [], bolts = [];
 const zapMat = new THREE.MeshBasicMaterial({ color: 0xfff6a8 });
 function zap(a, b, zm = zapMat) {
+  fxRec(['z', r2(a.x), r2(a.y), r2(a.z), r2(b.x), r2(b.y), r2(b.z), zm === zapMat ? 0 : 1]);
   let p = a.clone();
   for (let k = 1; k <= 3; k++) {
     const q = k === 3 ? b.clone() : V().lerpVectors(a, b, k / 3).add(V((Math.random() - .5) * .4, (Math.random() - .5) * .4, (Math.random() - .5) * .4));
@@ -1202,7 +1346,11 @@ function zap(a, b, zm = zapMat) {
   }
 }
 function fire(t, e, st) {
-  const o = V(t.pos.x, t.fireY, t.pos.z), sh = t.T.shot;
+  const o = V(t.pos.x, t.fireY, t.pos.z), sh = t.T.shot, pl = t.owner, n0 = shots.length;
+  fireInner(t, e, st, o, sh, pl);
+  for (let k = n0; k < shots.length; k++) shots[k].pl = pl;
+}
+function fireInner(t, e, st, o, sh, pl) {
   if (sh === 'poison') {
     const dist = Math.hypot(e.pos.x - o.x, e.pos.z - o.z), T = .6 + dist * .08;
     const m = new THREE.Mesh(BALL, mat.toxic); m.position.copy(o); scene.add(m);
@@ -1214,12 +1362,12 @@ function fire(t, e, st) {
     shots.push({ k: 'arc', m, from: o, to, t: 0, T, h: mort ? 3 + dist * .25 : 1.2 + T, dmg: st.dmg, splash: st.splash, big: mort });
     burst(o, 0xbbbbbb, mort ? 7 : 4, .8, .09);
   } else if (sh === 'chain') {
-    chainFrom(o, e, st.chain, st.dmg);
+    chainFrom(o, e, st.chain, st.dmg, pl);
   } else if (sh === 'flame') {
     const d = V(e.pos.x - t.pos.x, 0, e.pos.z - t.pos.z).normalize(), src = V(t.pos.x + d.x * .45, t.fireY, t.pos.z + d.z * .45);
     burstDir(src, d, 0xff7a18, 3, 6, .12); burstDir(src, d, 0xffd54a, 2, 5, .09);
     for (const o2 of enemies) {
-      if (o2.dead) continue;
+      if (o2.dead || (PVP && o2.team === pl)) continue;
       const dx = o2.pos.x - t.pos.x, dz = o2.pos.z - t.pos.z, dd = Math.hypot(dx, dz) || 1e-3;
       if (dd > st.range + o2.r || (dx * d.x + dz * d.z) / dd < .78) continue;
       hurt(o2, st.dmg); o2.burnT = 3; o2.burnDps = st.burn;
@@ -1245,11 +1393,11 @@ function updateLaser(t, e, st, dt) {
 }
 // Veneno: nuvem verde que dá dano por alguns segundos em todos que estão nela
 const CIRCLE = new THREE.CircleGeometry(1, 32).rotateX(-Math.PI / 2), clouds = [];
-function poisonArea(p, r, dmg, dps) {
+function poisonArea(p, r, dmg, dps, pl = 0) {
   const m = new THREE.Mesh(CIRCLE, basic(0x84cc16, .45)); m.scale.setScalar(r); m.position.set(p.x, .07, p.z); scene.add(m);
-  clouds.push({ m, x: p.x, z: p.z, r, dps, life: 2.5, tick: 0 });
+  clouds.push({ m, x: p.x, z: p.z, r, dps, life: 2.5, tick: 0, pl });
   burst(tmp.set(p.x, .3, p.z), 0x84cc16, 12, 2, .12);
-  if (dmg) for (const e of [...enemies]) if (!e.dead && Math.hypot(e.pos.x - p.x, e.pos.z - p.z) <= r + e.r) hurt(e, dmg);
+  if (dmg) for (const e of [...enemies]) if (!e.dead && !(PVP && e.team === pl) && Math.hypot(e.pos.x - p.x, e.pos.z - p.z) <= r + e.r) hurt(e, dmg);
 }
 function updateClouds(dt) {
   for (const c of clouds) {
@@ -1257,19 +1405,20 @@ function updateClouds(dt) {
     c.m.material.opacity = Math.max(0, Math.min(.45, c.life * .3));
     if (c.tick <= 0 && dt) {
       c.tick = .4;
-      for (const e of enemies) if (!e.dead && Math.hypot(e.pos.x - c.x, e.pos.z - c.z) <= c.r + e.r) { e.poisonDps = Math.max(e.poisonT > 0 ? e.poisonDps : 0, c.dps); e.poisonT = 3; }
+      for (const e of enemies) if (!e.dead && !(PVP && e.team === c.pl) && Math.hypot(e.pos.x - c.x, e.pos.z - c.z) <= c.r + e.r) { e.poisonDps = Math.max(e.poisonT > 0 ? e.poisonDps : 0, c.dps); e.poisonT = 3; }
+      if (c.hero) hitFoeHero(c.pl, c.x, c.z, c.r, c.dps * .4);
       burst(tmp.set(c.x + (Math.random() - .5) * c.r, .2, c.z + (Math.random() - .5) * c.r), 0xa3e635, 2, .6, .1);
     }
   }
   for (let k = clouds.length - 1; k >= 0; k--) if (clouds[k].life <= 0) { scene.remove(clouds[k].m); clouds[k].m.material.dispose(); clouds.splice(k, 1); }
 }
-function chainFrom(from, first, n, dmg) {
+function chainFrom(from, first, n, dmg, pl = 0) {
   let cur = first; const done = new Set();
   for (let k = 0; k < n && cur; k++) {
-    const to = V(cur.pos.x, cur.hitY + .1, cur.pos.z);
-    zap(from, to); done.add(cur); hurt(cur, dmg * (1 - k * .12)); burst(to, 0xfff3a0, 3, 1, .06);
+    const to = V(cur.pos.x, (cur.hitY || .6) + .1, cur.pos.z);
+    zap(from, to); done.add(cur); hitAny(cur, dmg * (1 - k * .12)); burst(to, 0xfff3a0, 3, 1, .06);
     from = to; let nx = null, nd = 2.8;
-    for (const o2 of enemies) { if (o2.dead || done.has(o2)) continue; const d = Math.hypot(o2.pos.x - to.x, o2.pos.z - to.z); if (d < nd) { nd = d; nx = o2; } }
+    for (const o2 of enemies) { if (o2.dead || done.has(o2) || (PVP && o2.team === pl)) continue; const d = Math.hypot(o2.pos.x - to.x, o2.pos.z - to.z); if (d < nd) { nd = d; nx = o2; } }
     cur = nx;
   }
 }
@@ -1278,10 +1427,11 @@ function enemyShoot(e, tg) {
   const m = new THREE.Mesh(boss ? BALL : ARROW, boss ? mat.purple : mat.green); m.position.copy(o); scene.add(m);
   shots.push({ k: 'e', m, tg, dmg: e.T.dmg * (1 + .04 * (S.wave - 1)) * S.dmgMul * (tg.kind === 'castle' ? .2 : 1), sp: boss ? 7 : 10, last: aimPoint(tg, e.pos, V()), boss });
 }
-function explodeAt(p, radius, dmg, big) {
+function explodeAt(p, radius, dmg, big, pl = 0, heroHit = false) {
   p.y = .2;
   burst(p, 0xffa53a, big ? 18 : 10, big ? 4 : 3, big ? .17 : .14); burst(p, 0x777777, big ? 9 : 6, 2, .12);
-  for (const e of [...enemies]) if (!e.dead && Math.hypot(e.pos.x - p.x, e.pos.z - p.z) <= radius + e.r) hurt(e, dmg);
+  for (const e of [...enemies]) if (!e.dead && !(PVP && e.team === pl) && Math.hypot(e.pos.x - p.x, e.pos.z - p.z) <= radius + e.r) hurt(e, dmg);
+  if (heroHit) hitFoeHero(pl, p.x, p.z, radius, dmg * .5);
 }
 function updateShots(dt) {
   for (const s of shots) {
@@ -1289,17 +1439,18 @@ function updateShots(dt) {
       s.t += dt; const p = Math.min(1, s.t / s.T);
       s.m.position.lerpVectors(s.from, s.to, p);
       s.m.position.y = s.from.y * (1 - p) + .2 * p + Math.sin(p * Math.PI) * s.h;
-      if (p >= 1) { if (s.poison) poisonArea(s.to, s.splash, s.dmg, s.poison); else explodeAt(s.to, s.splash, s.dmg, s.big); s.done = true; }
+      if (p >= 1) { if (s.poison) poisonArea(s.to, s.splash, s.dmg, s.poison, s.pl || 0); else explodeAt(s.to, s.splash, s.dmg, s.big, s.pl || 0, s.heroHit); s.done = true; }
       continue;
     }
     if (s.k === 'hb') {
       const step = s.sp * dt; s.m.position.addScaledVector(s.dir, step); s.life -= dt;
-      if (s.life <= 0 || hitsSolid(s.m.position.x, s.m.position.z)) { s.done = true; if (s.rad) radArea(s.m.position); else if (s.poison) poisonArea(s.m.position, 1.4, 0, s.poison); else burst(s.m.position, 0x93c5fd, 2, .8, .05); continue; }
-      for (const e of enemies) if (!e.dead && Math.hypot(e.pos.x - s.m.position.x, e.pos.z - s.m.position.z) < e.r + .18) {
-        hurt(e, s.dmg); s.done = true;
-        if (s.rad) radArea(s.m.position); else if (s.poison) poisonArea(s.m.position, 1.4, 0, s.poison); else burst(s.m.position, 0x93c5fd, 3, 1, .06);
+      const pl = s.pl || 0, land = () => { if (s.rad) radArea(s.m.position, pl); else if (s.poison) { poisonArea(s.m.position, 1.4, 0, s.poison, pl); clouds[clouds.length - 1].hero = PVP; } else burst(s.m.position, 0x93c5fd, 3, 1, .06); };
+      if (s.life <= 0 || hitsSolid(s.m.position.x, s.m.position.z)) { s.done = true; land(); continue; }
+      for (const e of enemies) if (!e.dead && !(PVP && e.team === pl) && Math.hypot(e.pos.x - s.m.position.x, e.pos.z - s.m.position.z) < e.r + .18) {
+        hurt(e, s.dmg); s.done = true; land();
         break;
       }
+      if (!s.done && hitFoeHero(pl, s.m.position.x, s.m.position.z, .18, s.dmg)) { s.done = true; land(); }
       continue;
     }
     if (s.k === 'e') { if (!s.tg.dead) aimPoint(s.tg, s.m.position, s.last); }
@@ -1309,42 +1460,55 @@ function updateShots(dt) {
     s.done = true;
     if (s.k === 'e') { if (!s.tg.dead) { damageTarget(s.tg, s.dmg); burst(s.last, s.boss ? 0x8b5cf6 : 0x9a948a, 4, 1.2, .08); } continue; }
     if (s.e.dead) continue;
-    hurt(s.e, s.dmg);
-    if (s.ice) {
+    hitAny(s.e, s.dmg);
+    if (s.ice && s.e.kind !== 'hero') {
       s.e.slowF = s.e.slowT > 0 ? Math.min(s.e.slowF, s.ice.slow) : s.ice.slow;
       s.e.slowT = Math.max(s.e.slowT, s.ice.slowT);
       burst(s.last, 0x9fe6ff, 5, 1.2, .08);
     }
   }
   for (let k = shots.length - 1; k >= 0; k--) if (shots[k].done) { scene.remove(shots[k].m); shots.splice(k, 1); }
-  for (let k = bolts.length - 1; k >= 0; k--) { bolts[k].life -= dt || .016; if (bolts[k].life <= 0) { scene.remove(bolts[k].m); bolts.splice(k, 1); } }
+  updateBolts(dt);
 }
+function updateBolts(dt) { for (let k = bolts.length - 1; k >= 0; k--) { bolts[k].life -= dt || .016; if (bolts[k].life <= 0) { scene.remove(bolts[k].m); bolts.splice(k, 1); } } }
 
 // ===== Herói =====
-const HOME = V(0, 0, 3.6);
-const hero = { kind: 'hero', g: new THREE.Group(), r: .25, hp: 150, maxHp: 150, cd: 0, bombCd: 0, walk: 0, dead: false, respawnT: 0, hurtT: 0, recoil: 0 };
-hero.pos = hero.g.position;
-{
-  const g = hero.g, skin = M(0xf1c7a0), blue = M(0x2f6fd6), blueD = M(0x1f4a91), steel = M(0xd5dde6);
-  hero.legs = [box(blueD, .14, .26, .16, -.09, .13, 0, g), box(blueD, .14, .26, .16, .09, .13, 0, g)];
-  hero.bodyMat = blue;
+// Cada jogador tem um herói. No modo sozinho só existe o azul.
+const HERO_COL = [[0x2f6fd6, 0x1f4a91, 0x60a5fa], [0xe0482f, 0x9a2a1a, 0xfb923c]];
+const homeOf = pl => PVP ? V(CASTLES[pl].x, 0, CASTLES[pl].z + 3.6) : V(ONLINE ? (pl ? .9 : -.9) : 0, 0, 3.6);
+function makeHero(pl) {
+  const hh = { kind: 'hero', pl, home: homeOf(pl), life: 0, g: new THREE.Group(), r: .25, hp: 150, maxHp: 150, cd: 0, bombCd: 0, walk: 0, dead: false, respawnT: 0, hurtT: 0, recoil: 0, hitY: .6 };
+  hh.pos = hh.g.position;
+  const g = hh.g, [c1, c2, c3] = HERO_COL[pl], skin = M(0xf1c7a0), blue = M(c1), blueD = M(c2), steel = M(0xd5dde6);
+  hh.legs = [box(blueD, .14, .26, .16, -.09, .13, 0, g), box(blueD, .14, .26, .16, .09, .13, 0, g)];
+  hh.bodyMat = blue;
   box(blue, .38, .36, .24, 0, .44, 0, g); box(mat.gold, .4, .05, .26, 0, .3, 0, g);
   box(skin, .26, .24, .24, 0, .74, 0, g); box(steel, .3, .12, .28, 0, .88, 0, g); box(mat.red, .05, .14, .2, 0, 1, 0, g);
   for (const sx of [-1, 1]) box(mat.black, .05, .05, .02, sx * .06, .75, .125, g);
   box(blue, .1, .26, .12, -.25, .45, 0, g);
-  hero.gun = new THREE.Group(); hero.gun.position.set(.25, .5, .05); g.add(hero.gun);
-  box(blue, .1, .22, .12, 0, 0, 0, hero.gun); box(mat.iron, .1, .12, .42, 0, -.05, .2, hero.gun); box(mat.glow, .07, .07, .08, 0, -.04, .44, hero.gun);
-  const ring = new THREE.Mesh(new THREE.RingGeometry(.3, .36, 24).rotateX(-Math.PI / 2), basic(0x60a5fa, .9));
+  hh.gun = new THREE.Group(); hh.gun.position.set(.25, .5, .05); g.add(hh.gun);
+  box(blue, .1, .22, .12, 0, 0, 0, hh.gun); box(mat.iron, .1, .12, .42, 0, -.05, .2, hh.gun); box(mat.glow, .07, .07, .08, 0, -.04, .44, hh.gun);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(.3, .36, 24).rotateX(-Math.PI / 2), basic(c3, .9));
   ring.position.y = .03; g.add(ring);
-  hero.bar = makeBar(.6, new THREE.MeshBasicMaterial({ color: 0x60a5fa, depthTest: false, transparent: true }));
-  hero.bar.g.visible = true;
-  g.scale.setScalar(1.3); g.position.copy(HOME); scene.add(g);
+  hh.bar = makeBar(.6, new THREE.MeshBasicMaterial({ color: c3, depthTest: false, transparent: true }));
+  hh.bar.g.visible = true;
+  g.scale.setScalar(1.3); g.position.copy(hh.home); scene.add(g);
+  return hh;
 }
+const heroes = [makeHero(0)];
+if (ONLINE) heroes.push(makeHero(1));
+let hero = heroes[ME];
 const keys = new Set(), joy = { x: 0, y: 0 }, mouse = { sx: 0, sy: 0, ok: false, p: V() };
 const aimV = V();
-function resetHero() {
-  hero.dead = false; hero.hp = hero.maxHp; hero.g.visible = hero.bar.g.visible = true;
-  hero.pos.copy(HOME); hero.cd = 0;
+function resetHero(hh = hero) {
+  hh.dead = false; hh.hp = hh.maxHp; hh.g.visible = hh.bar.g.visible = true;
+  hh.pos.copy(hh.home); hh.cd = 0; hh.life++;
+}
+// Alvos que o herói do jogador pl pode atacar: monstros do outro time e (no contra) o herói inimigo
+function heroTargets(pl) {
+  const L = enemies.filter(e => !e.dead && !(PVP && e.team === pl));
+  const fh = foeHero(pl); if (fh && !fh.dead) L.push(fh);
+  return L;
 }
 function heroDmg() { return 10 + S.wave * 1.6; }
 // Armas do herói (compradas na loja). O dano cresce com a onda, como a vida dos monstros.
@@ -1360,13 +1524,15 @@ const poisonMat = M(0xa3e635, 0x4d7c0f);
 // e a cada pulso faíscas verdes pulam em até 2 monstros perto.
 const radMat = new THREE.MeshBasicMaterial({ color: 0xb6ff3b }), radZapMat = new THREE.MeshBasicMaterial({ color: 0x7dff2a });
 const RING = new THREE.RingGeometry(.86, 1, 40).rotateX(-Math.PI / 2), rads = [];
-function radArea(p) {
+function radArea(p, pl = 0, id) {
   const n = S.wave, add = o => { scene.add(o); return o; };
   const disk = add(new THREE.Mesh(CIRCLE, new THREE.MeshBasicMaterial({ color: 0x39ff14, transparent: true, opacity: .28, depthWrite: false, blending: THREE.AdditiveBlending })));
   const ring = add(new THREE.Mesh(RING, new THREE.MeshBasicMaterial({ color: 0xccff66, transparent: true, opacity: .9, depthWrite: false, blending: THREE.AdditiveBlending })));
   const ring2 = add(new THREE.Mesh(RING, ring.material.clone()));
   const r = 2.1; disk.scale.setScalar(r); for (const o of [disk, ring, ring2]) o.position.set(p.x, .08, p.z);
-  rads.push({ x: p.x, z: p.z, r, disk, ring, ring2, t: 0, life: 3.2, pulse: 0, dps: 24 + n * 3.4, chain: 12 + n * 1.8 });
+  const z = { id: id ?? ++eid, pl, x: p.x, z: p.z, r, disk, ring, ring2, t: 0, life: 3.2, pulse: 0, dps: 24 + n * 3.4, chain: 12 + n * 1.8 };
+  rads.push(z);
+  if (id !== undefined) return z;
   burst(tmp.set(p.x, .4, p.z), 0x7dff2a, 16, 3, .12); burst(tmp.set(p.x, .4, p.z), 0xeaff9a, 8, 2, .08);
 }
 function updateRads(dt, rdt) {
@@ -1378,10 +1544,11 @@ function updateRads(dt, rdt) {
     z.disk.material.opacity = (.2 + Math.sin(z.t * 10) * .08) * fade;
     if (Math.random() < rdt * 22) { const a = Math.random() * 6.28, d = Math.random() * z.r; emit(tmp.set(z.x + Math.cos(a) * d, .1, z.z + Math.sin(a) * d), Math.random() < .3 ? 0xeaff9a : 0x7dff2a, .07 + Math.random() * .05, 0, .8 + Math.random(), 0, .9, -.5); pm.instanceColor.needsUpdate = true; }
     if (!dt) continue;
-    for (const e of enemies) if (!e.dead && Math.hypot(e.pos.x - z.x, e.pos.z - z.z) <= z.r + e.r) { hurt(e, z.dps * dt, false); e.radU = time + .15; }
+    for (const e of enemies) if (!e.dead && !(PVP && e.team === z.pl) && Math.hypot(e.pos.x - z.x, e.pos.z - z.z) <= z.r + e.r) { hurt(e, z.dps * dt, false); e.radU = time + .15; }
+    hitFoeHero(z.pl, z.x, z.z, z.r, z.dps * .35 * dt);
     if ((z.pulse -= dt) <= 0) {
       z.pulse = .5;
-      const near2 = enemies.filter(e => !e.dead && Math.hypot(e.pos.x - z.x, e.pos.z - z.z) <= z.r + 1.6).sort(() => Math.random() - .5).slice(0, 2);
+      const near2 = enemies.filter(e => !e.dead && !(PVP && e.team === z.pl) && Math.hypot(e.pos.x - z.x, e.pos.z - z.z) <= z.r + 1.6).sort(() => Math.random() - .5).slice(0, 2);
       for (const e of near2) { const to = V(e.pos.x, e.hitY + .1, e.pos.z); zap(V(z.x, .5, z.z), to, radZapMat); hurt(e, z.chain); burst(to, 0x9dff4a, 4, 1.2, .07); }
     }
   }
@@ -1395,10 +1562,10 @@ function heroAttack(dir) {
     hero.cd = .12;
     const src = V(hero.pos.x + dir.x * .5, .75, hero.pos.z + dir.z * .5);
     burstDir(src, dir, 0xff7a18, 3, 7, .12); burstDir(src, dir, 0xffd54a, 2, 6, .09);
-    for (const e of enemies) {
-      if (e.dead) continue;
+    for (const e of heroTargets(hero.pl)) {
       const dx = e.pos.x - hero.pos.x, dz = e.pos.z - hero.pos.z, d = Math.hypot(dx, dz) || 1e-3;
       if (d > 4 + e.r || (dx * dir.x + dz * dir.z) / d < .8) continue;
+      if (e.kind === 'hero') { damageTarget(e, 3 + n * .6); continue; }
       hurt(e, 3 + n * .6); e.burnDps = Math.max(e.burnT > 0 ? e.burnDps : 0, 4 + n * .8); e.burnT = 2.5;
     }
     return;
@@ -1406,31 +1573,30 @@ function heroAttack(dir) {
   if (w === 'raio') {
     hero.cd = .45;
     let first = null, bs = -2;
-    for (const e of enemies) {
-      if (e.dead) continue;
+    for (const e of heroTargets(hero.pl)) {
       const dx = e.pos.x - hero.pos.x, dz = e.pos.z - hero.pos.z, d = Math.hypot(dx, dz);
       if (d > 7 + e.r) continue;
       const sc = (dx * dir.x + dz * dir.z) / (d || 1) - d * .05; if (sc > bs) { bs = sc; first = e; }
     }
-    if (first) chainFrom(V(hero.pos.x + dir.x * .5, .8, hero.pos.z + dir.z * .5), first, 3, 14 + n * 2.2);
+    if (first) chainFrom(V(hero.pos.x + dir.x * .5, .8, hero.pos.z + dir.z * .5), first, 3, 14 + n * 2.2, hero.pl);
     return;
   }
   if (w === 'radiacao') {
     hero.cd = .5;
     const o = V(hero.pos.x + dir.x * .55, .78, hero.pos.z + dir.z * .55), m = new THREE.Mesh(BIGBALL, radMat); m.position.copy(o); scene.add(m);
-    shots.push({ k: 'hb', m, dir: dir.clone(), sp: 12, life: .7, dmg: 20 + n * 3, rad: true });
+    shots.push({ k: 'hb', m, dir: dir.clone(), sp: 12, life: .7, dmg: 20 + n * 3, rad: true, pl: hero.pl });
     burstDir(o, dir, 0x7dff2a, 4, 4, .08);
     return;
   }
   hero.cd = .4;
   const o = V(hero.pos.x + dir.x * .55, .78, hero.pos.z + dir.z * .55);
   const m = new THREE.Mesh(BALL, poisonMat); m.position.copy(o); scene.add(m);
-  shots.push({ k: 'hb', m, dir: dir.clone(), sp: 13, life: .62, dmg: 12 + n * 2, poison: 10 + n * 2 });
+  shots.push({ k: 'hb', m, dir: dir.clone(), sp: 13, life: .62, dmg: 12 + n * 2, poison: 10 + n * 2, pl: hero.pl });
 }
 function heroFire(dir) {
   const o = V(hero.pos.x + dir.x * .55, .78, hero.pos.z + dir.z * .55);
   const m = new THREE.Mesh(BULLET, heroShotMat); m.position.copy(o); m.lookAt(o.x + dir.x, o.y, o.z + dir.z); scene.add(m);
-  shots.push({ k: 'hb', m, dir: dir.clone(), sp: 18, life: .45, dmg: heroDmg() });
+  shots.push({ k: 'hb', m, dir: dir.clone(), sp: 18, life: .45, dmg: heroDmg(), pl: hero.pl });
   hero.cd = .24; hero.recoil = 1;
 }
 function heroShootAt(p) {
@@ -1441,26 +1607,28 @@ function heroShootAt(p) {
 function throwBomb() {
   if (hero.dead || S.over || hero.bombCd > 0) return;
   let to;
+  const foes = GUEST ? enemies.filter(e => !e.dead && !(PVP && e.team === ME)) : heroTargets(hero.pl);
   if (!TOUCH && mouse.ok) to = mouse.p.clone();
   else {
     let best = null, bd = 9;
-    for (const e of enemies) { if (e.dead) continue; const d = Math.hypot(e.pos.x - hero.pos.x, e.pos.z - hero.pos.z); if (d < bd) { bd = d; best = e; } }
-    to = best ? V(best.pos.x + best.vel.x * .7, 0, best.pos.z + best.vel.z * .7) : V(hero.pos.x + Math.sin(hero.g.rotation.y) * 4, 0, hero.pos.z + Math.cos(hero.g.rotation.y) * 4);
+    for (const e of foes) { const d = Math.hypot(e.pos.x - hero.pos.x, e.pos.z - hero.pos.z); if (d < bd) { bd = d; best = e; } }
+    const bv = best && best.vel || tmp.set(0, 0, 0);
+    to = best ? V(best.pos.x + bv.x * .7, 0, best.pos.z + bv.z * .7) : V(hero.pos.x + Math.sin(hero.g.rotation.y) * 4, 0, hero.pos.z + Math.cos(hero.g.rotation.y) * 4);
   }
+  if (GUEST) hero.bombCd = 6;
+  act({ c: 'bomb', x: to.x, z: to.z });
+}
+function throwBombTo(to) {
+  if (hero.dead || S.over || hero.bombCd > 0) return;
   const d = V(to.x - hero.pos.x, 0, to.z - hero.pos.z), L = d.length();
   if (L > 9) to.set(hero.pos.x + d.x / L * 9, 0, hero.pos.z + d.z / L * 9);
   const dist = Math.min(L, 9), from = V(hero.pos.x, 1.1, hero.pos.z);
   const m = new THREE.Mesh(BIGBALL, mat.black); m.position.copy(from); m.castShadow = true; scene.add(m);
-  shots.push({ k: 'arc', m, from, to: V(to.x, .2, to.z), t: 0, T: .55 + dist * .05, h: 1.5 + dist * .15, dmg: 60 + S.wave * 10, splash: 2.3, big: true });
+  shots.push({ k: 'arc', m, from, to: V(to.x, .2, to.z), t: 0, T: .55 + dist * .05, h: 1.5 + dist * .15, dmg: 60 + S.wave * 10, splash: 2.3, big: true, pl: hero.pl, heroHit: PVP });
   hero.bombCd = 6;
 }
-function updateHero(dt, rdt, time) {
-  if (hero.dead) {
-    hero.respawnT -= dt;
-    if (hero.respawnT <= 0) { resetHero(); toast('O herói voltou!'); }
-    return;
-  }
-  hero.cd -= dt; hero.bombCd -= dt; hero.hurtT -= rdt; hero.recoil = Math.max(0, hero.recoil - rdt * 8);
+// Move o herói com teclado/controle (só o herói de quem está jogando neste aparelho)
+function moveLocalHero(dt) {
   let mx = joy.x, mz = joy.y;
   if (keys.has('KeyW') || keys.has('ArrowUp')) mz -= 1;
   if (keys.has('KeyS') || keys.has('ArrowDown')) mz += 1;
@@ -1475,25 +1643,48 @@ function updateHero(dt, rdt, time) {
     if (d < m && d > 1e-4) { hero.pos.x += dx / d * (m - d); hero.pos.z += dz / d * (m - d); }
   }
   collide(hero.pos, hero.r); collide(hero.pos, hero.r);
+  return moving ? Math.atan2(mx, mz) : null;
+}
+function animHero(hh, moving) {
+  const sw = moving ? Math.sin(hh.walk * 5) * .08 : 0;
+  hh.legs[0].position.z = sw; hh.legs[1].position.z = -sw;
+  hh.gun.position.z = .05 - hh.recoil * .08;
+  hh.bodyMat.emissive.setHex(hh.hurtT > 0 ? 0x993333 : 0x000000);
+}
+function updateHero(dt, rdt, time) {
+  if (hero.dead) {
+    hero.respawnT -= dt;
+    if (hero.respawnT <= 0) { resetHero(); toast('O herói voltou!'); }
+    return;
+  }
+  hero.cd -= dt; hero.bombCd -= dt; hero.hurtT -= rdt; hero.recoil = Math.max(0, hero.recoil - rdt * 8);
+  let face, moving, aimP = null;
+  if (hero.pl === ME) { face = moveLocalHero(dt); moving = face !== null; if (!TOUCH && mouse.ok) aimP = mouse.p; }
+  else {
+    // herói do amigo: a posição vem do aparelho dele
+    const inp = NET.inp; face = null; moving = false;
+    if (inp && inp.life === hero.life) {
+      const dx = inp.x - hero.pos.x, dz = inp.z - hero.pos.z; moving = dx * dx + dz * dz > 1e-5;
+      if (moving) { hero.walk += Math.hypot(dx, dz); face = Math.atan2(dx, dz); }
+      hero.pos.set(inp.x, 0, inp.z); if (inp.aim) aimP = tmp2.set(inp.aim[0], 0, inp.aim[1]);
+    }
+  }
   const sw = moving ? Math.sin(hero.walk * 5) * .08 : 0;
   hero.legs[0].position.z = sw; hero.legs[1].position.z = -sw;
   hero.gun.position.z = .05 - hero.recoil * .08;
   hero.bodyMat.emissive.setHex(hero.hurtT > 0 ? 0x993333 : 0x000000);
 
-  const HR = HW[S.hw].range; let nearE = null, nd = HR, danger = false;
-  for (const e of enemies) {
-    if (e.dead) continue;
+  const HR = HW[S.hw].range, TG = heroTargets(hero.pl); let nearE = null, nd = HR, danger = false;
+  for (const e of TG) {
     const d = Math.hypot(e.pos.x - hero.pos.x, e.pos.z - hero.pos.z);
     if (d < nd) { nd = d; nearE = e; }
     if (d < 3.5) danger = true;
   }
-  let face = moving ? Math.atan2(mx, mz) : null;
   if (nearE && dt) {
-    if (!TOUCH && mouse.ok) {
-      aimV.set(mouse.p.x - hero.pos.x, 0, mouse.p.z - hero.pos.z).normalize();
+    if (aimP) {
+      aimV.set(aimP.x - hero.pos.x, 0, aimP.z - hero.pos.z).normalize();
       let bestA = .5, tgt = null;
-      for (const e of enemies) {
-        if (e.dead) continue;
+      for (const e of TG) {
         const dx = e.pos.x - hero.pos.x, dz = e.pos.z - hero.pos.z, d = Math.hypot(dx, dz);
         if (d > HR || d < .01) continue;
         const a = Math.acos(clamp((dx * aimV.x + dz * aimV.z) / d, -1, 1)); if (a < bestA) { bestA = a; tgt = e; }
@@ -1506,23 +1697,28 @@ function updateHero(dt, rdt, time) {
   if (face !== null) hero.g.rotation.y = lerpAng(hero.g.rotation.y, face, Math.min(1, rdt * 14));
   if (!danger) hero.hp = Math.min(hero.maxHp, hero.hp + 6 * dt);
   if (hero.hp <= 0) {
-    hero.dead = true; hero.respawnT = 8; hero.g.visible = hero.bar.g.visible = false;
-    burst(tmp.set(hero.pos.x, .5, hero.pos.z), 0x2f6fd6, 16, 2.5, .12);
-    toast('O herói caiu! Volta em 8 segundos.', 3000);
+    const back = PVP ? 6 : 8;
+    hero.dead = true; hero.respawnT = back; hero.g.visible = hero.bar.g.visible = false;
+    burst(tmp.set(hero.pos.x, .5, hero.pos.z), HERO_COL[hero.pl][0], 16, 2.5, .12);
+    toast(`O herói caiu! Volta em ${back} segundos.`, 3000);
+    if (PVP) withPlayer(1 - hero.pl, () => { S.gold += 200; toast('Você derrubou o herói inimigo! +🪙 200', 3000); bump('gold'); updateUI(); });
     return;
   }
   setBar(hero.bar, hero.pos.x, 1.75, hero.pos.z, hero.hp / hero.maxHp);
 }
 
 // ===== Estado e ondas =====
-const START_GOLD = 500;
+const START_GOLD = 500, PVP_GOLD = 200;
+const freshPlayer = () => ({ gold: PVP ? PVP_GOLD : START_GOLD, castle: 100, power: 0, dmgMul: 1, hw: 'blaster', owned: new Set(['blaster']), unlocked: new Set() });
+const pickKeys = (o, ks) => Object.fromEntries(ks.map(k => [k, o[k]]));
 const loadBest = () => { try { return +localStorage.getItem('vd-best') || 0; } catch { return 0; } };
 const saveBest = () => { try { localStorage.setItem('vd-best', S.best); } catch {} };
 const S = { gold: START_GOLD, castle: 100, wave: 0, waveActive: false, queue: [], spawnT: 0, hpMul: 1, speed: 1, over: false, sel: null, best: loadBest(), started: false, power: 0, dmgMul: 1, hw: 'blaster', owned: new Set(['blaster']), unlocked: new Set(), shop: false };
-S.bestAtStart = S.best;
+S.bestAtStart = S.best; S.nextT = 10; S.winner = -1;
+if (ONLINE) { Object.assign(S, freshPlayer()); PS[1] = pickKeys(freshPlayer(), PF); }
 const bossWave = n => n % 3 === 0;
 
-function waveList(n) {
+function waveList(n, team = -1) {
   const W = [['rapido', 5], ['aranha', n >= 2 ? 2 : 0], ['tanque', n >= 2 ? 2 + n * .1 : 0], ['arqueiro', n >= 3 ? 2.2 : 0], ['bomba', n >= 4 ? 1.5 : 0], ['cura', n >= 5 ? 1 : 0]];
   const tot = W.reduce((a, [, w]) => a + w, 0), L = [];
   let side = Math.floor(Math.random() * 4);
@@ -1531,28 +1727,34 @@ function waveList(n) {
     if (k % 5 === 0 && k) side = Math.floor(Math.random() * 4);
     let r = Math.random() * tot, type = 'rapido';
     for (const [t, w] of W) { r -= w; if (r < 0) { type = t; break; } }
-    L.push({ type, side });
+    L.push({ type, side: team < 0 ? side : TEAM_SIDES[team][side % 2], team });
   }
   if (bossWave(n)) {
     const nb = 1 + Math.floor(n / 9);
-    for (let b = 0; b < nb; b++) L.splice(Math.floor(L.length * (b + 1) / (nb + 1)), 0, { type: (n / 3 + b) % 2 ? 'golem' : 'bruxo', side: Math.floor(Math.random() * 4), boss: true });
+    for (let b = 0; b < nb; b++) L.splice(Math.floor(L.length * (b + 1) / (nb + 1)), 0, { type: (n / 3 + b) % 2 ? 'golem' : 'bruxo', side: team < 0 ? Math.floor(Math.random() * 4) : TEAM_SIDES[team][b % 2], boss: true, team });
   }
   return L;
 }
+const TEAM_SIDES = [[0, 2], [1, 3]];
 function spawnFrom(item) {
-  const [i, j] = SPAWNS[item.side];
+  const [i, j] = SPAWNS[item.side], team = PVP ? item.team : 0;
   burst(tmp.set(wc(i), 1, wc(j)), 0x8b5cf6, 6, 1.5, .1);
   const n = item.type === 'aranha' ? 3 : 1;
-  for (let k = 0; k < n; k++) spawnEnemy(item.type, wc(i) + (Math.random() - .5) * .7, wc(j) + (Math.random() - .5) * .7);
-  if (item.boss) toast(`👑 Chefão ${ET[item.type].name} vem do ${SIDE_NAME[item.side]}!`, 3000);
+  // no contra, a força dos monstros é a do jogador que vai ser atacado
+  const go = () => { for (let k = 0; k < n; k++) spawnEnemy(item.type, wc(i) + (Math.random() - .5) * .7, wc(j) + (Math.random() - .5) * .7, team); };
+  if (PVP) withPlayer(1 - team, go); else go();
+  if (item.boss) toast(PVP ? `👑 Chefão ${ET[item.type].name} do time ${team ? 'vermelho' : 'azul'}!` : `👑 Chefão ${ET[item.type].name} vem do ${SIDE_NAME[item.side]}!`, 3000);
 }
 function startWave() {
   if (S.waveActive || S.over) return;
-  S.wave++; S.waveActive = true; S.queue = waveList(S.wave); S.spawnT = .3;
+  S.wave++; S.waveActive = true; S.spawnT = .3;
+  if (PVP) { const a = waveList(S.wave, 0), b = waveList(S.wave, 1); S.queue = []; for (let k = 0; k < Math.max(a.length, b.length); k++) { if (a[k]) S.queue.push(a[k]); if (b[k]) S.queue.push(b[k]); } }
+  else S.queue = waveList(S.wave);
   S.hpMul = 1.12 + .18 * (S.wave - 1) + .012 * (S.wave - 1) ** 2;
-  if (S.wave > S.best) { S.best = S.wave; saveBest(); }
+  if (!ONLINE && S.wave > S.best) { S.best = S.wave; saveBest(); }
   const dirs = [...new Set(S.queue.map(q => SIDE_NAME[q.side]))];
-  if (!bossWave(S.wave)) toast(`Monstros vindo de: ${dirs.join(', ')}`, 2500);
+  if (PVP) toast(`Onda ${S.wave}! Seus monstros vão atacar o castelo do outro.`, 2500);
+  else if (!bossWave(S.wave)) toast(`Monstros vindo de: ${dirs.join(', ')}`, 2500);
   updateUI();
 }
 function updateWave(dt) {
@@ -1561,17 +1763,32 @@ function updateWave(dt) {
     S.spawnT -= dt;
     if (S.spawnT <= 0) { spawnFrom(S.queue.shift()); S.spawnT = Math.max(.28, .85 - S.wave * .03); updateUI(); }
   } else if (!enemies.length) {
-    S.waveActive = false;
-    const bonus = 20 + S.wave * 4; S.gold += bonus; S.castle = Math.min(100, S.castle + 10);
+    S.waveActive = false; S.nextT = 20;
+    const bonus = 20 + S.wave * 4, give = () => { S.gold += bonus; S.castle = Math.min(100, S.castle + 10); };
+    if (PVP) { withPlayer(0, give); withPlayer(1, give); } else give();
     for (const t of towers) t.hp = Math.min(t.maxHp, t.hp + t.maxHp * .3);
     toast(`Onda ${S.wave} vencida! +🪙 ${bonus} e +10 de vida no castelo e nas armas`, 2800); bump('gold'); updateUI();
   }
 }
+// Modo contra: ondas saem sozinhas, de tempos em tempos
+function pvpTick(dt) { if (!S.waveActive && !S.over && (S.nextT -= dt) <= 0) startWave(); }
 function gameOver() {
   if (S.over) return;
-  S.over = true; S.castle = 0; closeSheet();
+  S.over = true; S.castle = 0; closeSheet(); showOver();
+}
+function pvpEnd(winner) {
+  if (S.over) return;
+  S.over = true; S.winner = winner; closeSheet();
+  const cs = CASTLES[1 - winner]; burst(tmp.set(cs.x, 2, cs.z), 0xffa53a, 40, 5, .2); burst(tmp, 0x777777, 20, 3, .15);
+  showOver();
+}
+function showOver() {
+  const pv = PVP, won = S.winner === ME;
+  $('ovTitle').textContent = pv ? (won ? 'Você venceu! 🏆' : 'Você perdeu!') : 'O castelo caiu!';
+  $('ovSolo').hidden = pv; $('ovPvp').hidden = !pv;
+  $('ovPvp').textContent = won ? 'Você destruiu o castelo do outro jogador.' : 'O outro jogador destruiu seu castelo.';
   $('ovWave').textContent = S.wave; $('ovBest').textContent = S.best;
-  $('ovNew').hidden = !(S.wave > S.bestAtStart);
+  $('ovNew').hidden = ONLINE || !(S.wave > S.bestAtStart);
   $('over').classList.add('show'); updateUI();
 }
 function resetGame() {
@@ -1581,30 +1798,43 @@ function resetGame() {
   for (const t of [...towers]) { scene.remove(t.root, t.bar.g); if (t.beam) scene.remove(t.beam); t.pad.t = null; blocked[K(t.pad.i, t.pad.j)] = 0; }
   for (const c of coins) scene.remove(c.m);
   enemies.length = shots.length = bolts.length = towers.length = coins.length = 0;
-  computeFlow(); resetHero();
+  computeFlow(); for (const hh of heroes) resetHero(hh);
   for (const c of clouds) scene.remove(c.m); clouds.length = 0;
   for (const z of rads) for (const o of [z.disk, z.ring, z.ring2]) scene.remove(o); rads.length = 0;
-  Object.assign(S, { gold: START_GOLD, castle: 100, wave: 0, waveActive: false, queue: [], over: false, bestAtStart: S.best, power: 0, dmgMul: 1, hw: 'blaster', owned: new Set(['blaster']), unlocked: new Set() });
+  Object.assign(S, freshPlayer(), { wave: 0, waveActive: false, queue: [], over: false, bestAtStart: S.best, nextT: 10, winner: -1 });
+  if (ONLINE) PS[1 - LOADED] = pickKeys(freshPlayer(), PF);
+  for (const cs of CASTLES) cs.shake = 0;
   $('over').classList.remove('show'); updateUI();
 }
 
 // ===== Interface =====
-function bump(id) { const el = $(id).parentElement; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+function bump(id) { if (!isLocal()) return; const el = $(id).parentElement; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
 let toastT;
-function toast(msg, ms = 2500) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms); }
+function toast(msg, ms = 2500) {
+  if (NET.host && (CTX === null || CTX === 1)) NET.send({ t: 'toast', msg, ms });
+  if (isLocal()) showToast(msg, ms);
+}
+function showToast(msg, ms = 2500) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms); }
 let shownCastle = -1;
+let foeCastleV = 100;
 function updateHUD() {
   const c = Math.max(0, Math.ceil(S.castle));
+  if (PVP) $('foeCastle').textContent = Math.max(0, Math.ceil(GUEST ? foeCastleV : pget(1 - ME, 'castle')));
   if (c !== shownCastle) { if (c < shownCastle) bump('castle'); shownCastle = c; $('castle').textContent = c; }
   $('bomb').style.setProperty('--cd', hero.dead ? 1 : Math.max(0, hero.bombCd / 6));
 }
-function updateUI() {
-  $('gold').textContent = S.gold; $('waveN').textContent = S.wave; $('best').textContent = S.best;
-  updateHUD();
-  const wb = $('wave');
+const qlen = () => GUEST ? S.qn || 0 : S.queue.length;
+function waveText() {
+  const wb = $('wave'), left = qlen() + enemies.filter(e => !e.dead).length;
+  if (PVP) { wb.disabled = true; wb.textContent = S.waveActive ? `Onda ${S.wave} · faltam ${left}` : `Onda ${S.wave + 1} em ${Math.max(0, Math.ceil(S.nextT))}s`; return; }
   wb.disabled = S.waveActive;
-  if (S.waveActive) wb.textContent = `Onda ${S.wave} · faltam ${S.queue.length + enemies.filter(e => !e.dead).length}`;
+  if (S.waveActive) wb.textContent = `Onda ${S.wave} · faltam ${left}`;
   else wb.textContent = `▶ Onda ${S.wave + 1}${bossWave(S.wave + 1) ? ' 👑' : ''}`;
+}
+function updateUI() {
+  if (!isLocal()) return;
+  $('gold').textContent = S.gold; $('waveN').textContent = S.wave; $('best').textContent = S.best;
+  updateHUD(); waveText();
   renderSheet();
 }
 const fmt = v => Math.round(v * 10) / 10;
@@ -1660,22 +1890,42 @@ function closeSheet() {
 $('sheet').addEventListener('click', ev => {
   const b = ev.target.closest('button'); if (!b || b.disabled) return;
   const a = b.dataset.a, sel = S.sel;
-  if (a === 'close') closeSheet();
-  else if (a === 'build') placeTower(b.dataset.t, sel.pad);
-  else if (a === 'up') upgradeTower(sel.t);
-  else if (a === 'fix') repairTower(sel.t);
-  else if (a === 'sell') sellTower(sel.t);
+  if (a === 'close') return closeSheet();
+  const n = sel.k === 'b' ? sel.pad.n : sel.t.pad.n;
+  if (a === 'build') act({ c: 'build', k: b.dataset.t, n });
+  else if (a === 'up' || a === 'fix' || a === 'sell') act({ c: a, n });
+  if (GUEST && (a === 'build' || a === 'sell')) closeSheet();
 });
-$('wave').onclick = startWave;
+// Tudo que muda o jogo passa por aqui: no convidado vai pela rede, no host/sozinho roda na hora
+function act(c) {
+  if (GUEST) { if (NET.live) NET.send({ t: 'c', ...c }); return; }
+  withPlayer(ME, () => applyCmd(c));
+}
+function applyCmd(c) {
+  const pad = pads[c.n], t = pad && pad.t, mine = t && (!PVP || t.owner === CTX);
+  if (c.c === 'build') { if (pad && TT[c.k]) placeTower(c.k, pad); }
+  else if (c.c === 'up') { if (mine) upgradeTower(t); }
+  else if (c.c === 'fix') { if (mine) repairTower(t); }
+  else if (c.c === 'sell') { if (mine) sellTower(t); }
+  else if (c.c === 'shop') shopAct(c);
+  else if (c.c === 'wave') { if (!PVP) startWave(); }
+  else if (c.c === 'bomb') { if (isFinite(c.x) && isFinite(c.z)) throwBombTo(V(c.x, 0, c.z)); }
+  else if (c.c === 'shoot') { if (isFinite(c.x) && isFinite(c.z)) heroShootAt(V(c.x, 0, c.z)); }
+  else if (c.c === 'again') { if (S.over) resetGame(); }
+}
+$('wave').onclick = () => act({ c: 'wave' });
 $('bomb').onclick = throwBomb;
 $('speed').onclick = () => { S.speed = S.speed === 1 ? 2 : 1; $('speed').textContent = S.speed + 'x'; };
-$('again').onclick = resetGame;
+$('again').onclick = () => act({ c: 'again' });
 $('helpList').innerHTML = TOUCH
   ? '<li>Ande com o controle redondo à esquerda.</li><li>O herói atira sozinho no monstro mais perto.</li><li>💣 joga uma bomba. 🛒 abre a loja de armas.</li><li>Toque nas placas de pedra para pôr armas.</li><li>Os monstros vêm de todos os lados e atacam suas armas.</li>'
   : '<li><b>WASD</b> ou setas: anda com o herói.</li><li>O herói atira sozinho quando um monstro chega perto. <b>O mouse escolhe a direção</b>. Clique para atirar também.</li><li><b>Q</b> ou <b>espaço</b>: joga bomba onde o mouse aponta.</li><li>Clique nas placas de pedra para pôr armas.</li><li><b>B</b> ou 🛒: loja com armas novas.</li><li><b>Enter</b> começa a onda. Arraste para mover a câmera, roda do mouse para zoom.</li>';
 $('bombKey').hidden = TOUCH;
 function addPower(p) { S.power = Math.round((S.power + p) * 100) / 100; S.dmgMul = 1 + S.power * .5; }
+let shopSig = '';
 function renderShop() {
+  if (!isLocal()) return;
+  const sig = [S.gold, S.power, S.hw, [...S.owned], [...S.unlocked].map(T => T.name)].join('|'); if (sig === shopSig && $('shop').classList.contains('show')) return; shopSig = sig;
   $('shopGold').textContent = S.gold;
   $('shopPow').textContent = S.power ? `+${Math.round(S.power * 100)}% de vida` : 'normal';
   const row = (ic, name, desc, btn) => `<div class="item"><span class="ic">${ic}</span><div class="tx">${name}<small>${desc}</small></div>${btn}</div>`;
@@ -1688,7 +1938,7 @@ function renderShop() {
     `${T.desc}. Depois custa 🪙 ${T.cost} cada${pw(S.unlocked.has(T) ? 0 : T.power)}`,
     S.unlocked.has(T) ? '<button class="on" disabled>✓ Liberada</button>' : `<button class="pri" data-unlock="${k}" ${S.gold >= T.unlock ? '' : 'disabled'}>Liberar 🪙 ${T.unlock}</button>`)).join('');
 }
-function openShop() { if (S.over) return; closeSheet(); S.shop = true; renderShop(); $('shop').classList.add('show'); }
+function openShop() { if (S.over) return; closeSheet(); S.shop = true; shopSig = ''; renderShop(); $('shop').classList.add('show'); }
 function closeShop() { S.shop = false; $('shop').classList.remove('show'); updateUI(); }
 $('shopBtn').onclick = openShop;
 $('shopClose').onclick = closeShop;
@@ -1696,12 +1946,15 @@ $('shop').addEventListener('click', ev => {
   if (ev.target.id === 'shop') return closeShop();
   const b = ev.target.closest('button'); if (!b || b.disabled) return;
   const d = b.dataset;
-  if (d.buy) { const w = HW[d.buy]; if (S.gold < w.cost) return; S.gold -= w.cost; S.owned.add(d.buy); S.hw = d.buy; addPower(w.power); toast(`${w.icon} ${w.name} comprada e equipada!`); }
-  else if (d.hw) { S.hw = d.hw; toast(`${HW[d.hw].icon} Usando ${HW[d.hw].name}`); }
-  else if (d.unlock) { const T = TT[d.unlock]; if (S.gold < T.unlock) return; S.gold -= T.unlock; S.unlocked.add(T); addPower(T.power); toast(`Arma ${T.name} liberada! Toque numa placa de pedra para colocar.`, 3500); }
+  if (d.buy || d.hw || d.unlock) act({ c: 'shop', buy: d.buy, hw: d.hw, unlock: d.unlock });
+});
+function shopAct(d) {
+  if (d.buy) { const w = HW[d.buy]; if (!w || S.owned.has(d.buy) || S.gold < w.cost) return; S.gold -= w.cost; S.owned.add(d.buy); S.hw = d.buy; addPower(w.power); toast(`${w.icon} ${w.name} comprada e equipada!`); }
+  else if (d.hw) { if (!S.owned.has(d.hw)) return; S.hw = d.hw; toast(`${HW[d.hw].icon} Usando ${HW[d.hw].name}`); }
+  else if (d.unlock) { const T = TT[d.unlock]; if (!T || !T.unlock || S.unlocked.has(T) || S.gold < T.unlock) return; S.gold -= T.unlock; S.unlocked.add(T); addPower(T.power); toast(`Arma ${T.name} liberada! Toque numa placa de pedra para colocar.`, 3500); }
   else return;
   bump('gold'); updateUI(); renderShop();
-});
+}
 $('gfx').textContent = HD ? '🖥️ Gráfico detalhado (PC) · trocar para leve' : '📱 Gráfico leve (celular) · trocar para detalhado';
 $('gfx').onclick = () => { try { localStorage.setItem('vd-grafico', HD ? 'leve' : 'hd'); } catch (e) {} location.reload(); };
 $('play').onclick = () => { $('help').classList.remove('show'); S.started = true; };
@@ -1710,7 +1963,7 @@ addEventListener('keydown', e => {
   if (e.target.closest && e.target.closest('button') && (e.code === 'Space' || e.code === 'Enter')) e.preventDefault();
   keys.add(e.code);
   if (e.code === 'Escape') closeSheet();
-  if (e.code === 'Enter') startWave();
+  if (e.code === 'Enter') act({ c: 'wave' });
   if (e.code === 'KeyB') { S.shop ? closeShop() : openShop(); }
   if (e.code === 'Escape' && S.shop) closeShop();
   if (e.code === 'KeyQ' || e.code === 'Space') { e.preventDefault(); throwBomb(); }
@@ -1726,7 +1979,7 @@ addEventListener('blur', () => keys.clear());
     knob.style.transform = `translate(${dx * k}px,${dy * k}px)`;
     const s = Math.min(1, L / m); joy.x = L ? dx / L * s : 0; joy.y = L ? dy / L * s : 0;
   };
-  el.addEventListener('pointerdown', e => { id = e.pointerId; el.setPointerCapture(id); move(e); });
+  el.addEventListener('pointerdown', e => { id = e.pointerId; try { el.setPointerCapture(id); } catch (err) {} move(e); });
   el.addEventListener('pointermove', e => { if (e.pointerId === id) move(e); });
   const end = e => { if (e.pointerId !== id) return; id = null; joy.x = joy.y = 0; knob.style.transform = ''; };
   el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
@@ -1797,15 +2050,16 @@ function onTap(x, y, isMouse) {
   const wasOpen = !!S.sel;
   setRay(x, y);
   const hitT = ray.intersectObjects(towers.map(t => t.root), true)[0];
-  if (hitT) { let o = hitT.object; while (o && !o.userData.tower) o = o.parent; if (o) return openTower(o.userData.tower); }
+  if (hitT) { let o = hitT.object; while (o && !o.userData.tower) o = o.parent; if (o) { if (PVP && o.userData.tower.owner !== ME) return toast('Essa arma é do outro jogador.'); return openTower(o.userData.tower); } }
   const p = groundAt(x, y, va);
   if (p) {
     let best = null, bd = .85 * .85;
     for (const pad of pads) { const d = (pad.x - p.x) ** 2 + (pad.z - p.z) ** 2; if (d < bd) { bd = d; best = pad; } }
+    if (best && PVP && best.owner !== ME) return toast('Essa placa é do outro jogador.');
     if (best) return best.t ? openTower(best.t) : openBuild(best);
   }
   if (wasOpen) return closeSheet();
-  if (isMouse && p) return heroShootAt(p);
+  if (isMouse && p) return act({ c: 'shoot', x: p.x, z: p.z });
   if (!hinted) { hinted = true; toast('Toque nas placas de pedra para pôr armas. Ande com o controle à esquerda.'); }
 }
 
@@ -1830,12 +2084,20 @@ function updateIndicators() {
 }
 
 // ===== Loop =====
-let last = performance.now(), time = 0, slowTick = 0;
+let last = performance.now(), time = 0, slowTick = 0, snapT = 0;
 function loop(now) {
   requestAnimationFrame(loop);
   const rdt = Math.min(.05, (now - last) / 1000); last = now; time += rdt;
-  const dt = S.over || !S.started || S.shop ? 0 : rdt * S.speed;
-  updateWave(dt); updateEnemies(dt, time); updateTowers(dt, rdt, time); updateHero(dt, rdt, time); updateShots(dt); updateClouds(dt); updateRads(dt, rdt); updateParticles(rdt);
+  const run = ONLINE ? NET.live : S.started && !S.shop;
+  const dt = S.over || !run ? 0 : rdt * S.speed;
+  if (GUEST) guestFrame(rdt, dt);
+  else {
+    if (PVP && dt) pvpTick(dt);
+    updateWave(dt); updateEnemies(dt, time); updateTowers(dt, rdt, time);
+    if (ONLINE) for (const hh of heroes) withPlayer(hh.pl, () => updateHero(dt, rdt, time)); else updateHero(dt, rdt, time);
+    updateShots(dt); updateClouds(dt); updateRads(dt, rdt);
+  }
+  updateParticles(rdt);
   updateEnemyBars();
   for (let k = coins.length - 1; k >= 0; k--) {
     const c = coins[k]; c.t += rdt;
@@ -1848,20 +2110,261 @@ function loop(now) {
   portalMat.opacity = .45 + Math.sin(time * 3) * .15;
   updateClouds3(rdt);
   if (Math.random() < rdt * 2.5 && chimneys.length) { const c = chimneys[Math.floor(Math.random() * chimneys.length)]; emit(c, 0xd4d4d8, .14, (Math.random() - .5) * .2, .5, (Math.random() - .5) * .2, 1.6, -.3); pm.instanceColor.needsUpdate = true; }
-  flag.rotation.y = Math.sin(time * 3) * .35;
-  castleShake = Math.max(0, castleShake - rdt);
-  castle.position.x = Math.sin(time * 70) * .06 * castleShake;
+  for (const cs of CASTLES) {
+    cs.flag.rotation.y = Math.sin(time * 3) * .35;
+    cs.shake = Math.max(0, cs.shake - rdt);
+    cs.g.position.x = Math.sin(time * 70) * .06 * cs.shake;
+  }
+  if (NET.host && NET.live && (snapT += rdt) >= .05) { NET.send(makeSnap(snapT)); snapT = 0; }
   if (C.follow && !hero.dead) { const f = Math.min(1, rdt * 5); C.tx += (hero.pos.x - C.tx) * f; C.tz += (hero.pos.z - C.tz) * f; clampCam(); }
   if (C.goal !== null) { C.tz += (C.goal - C.tz) * Math.min(1, rdt * 8); if (Math.abs(C.goal - C.tz) < .01) C.goal = null; }
   updateCam();
   if (!TOUCH && mouse.ok && groundAt(mouse.sx, mouse.sy, mouse.p)) { aimMark.visible = !hero.dead; aimMark.position.set(mouse.p.x, .06, mouse.p.z); } else aimMark.visible = false;
   updateHUD();
-  if ((slowTick += rdt) > .2) { slowTick = 0; refreshSheet(); updateIndicators(); if (S.waveActive) $('wave').textContent = `Onda ${S.wave} · faltam ${S.queue.length + enemies.length}`; }
+  if ((slowTick += rdt) > .2) { slowTick = 0; refreshSheet(); updateIndicators(); waveText(); if (ONLINE) { updateUI(); if (S.shop) renderShop(); } }
   renderer.render(scene, cam);
 }
+// ===== Online: o que o host manda e o convidado desenha =====
+const ETK = Object.keys(ET), TTK = Object.keys(TT);
+const VK = [[ARROW, mat.woodD], [SHARD, mat.ice], [BULLET, bulletMat], [BOLT, mat.woodD], [BALL, mat.toxic], [BALL, mat.black], [BIGBALL, mat.black], [ARROW, mat.green], [BALL, mat.purple], [BIGBALL, radMat], [BALL, poisonMat], [BULLET, heroShotMat]];
+const LONG = new Set([0, 2, 3, 7, 11]);
+const vkOf = m => VK.findIndex(([g, mm]) => g === m.geometry && mm === m.material);
+const tint = e => e.flashT > 0 ? 1 : e.radU > time ? 2 : e.burnT > 0 ? 3 : e.poisonT > 0 ? 4 : e.slowT > 0 ? 5 : 0;
+const TINT = [0x000000, 0xffffff, 0x2fbf00, 0x6a2000, 0x2f5f00, 0x1f6fb5];
+function makeSnap(sdt) {
+  const me = { g: pget(1, 'gold'), c: Math.ceil(pget(1, 'castle')), hw: pget(1, 'hw'), ow: [...pget(1, 'owned')], un: [...pget(1, 'unlocked')].map(T => TTK.find(k => TT[k] === T)), pw: pget(1, 'power') };
+  return { t: 's', me, foe: Math.ceil(pget(0, 'castle')), w: S.wave, wa: S.waveActive, q: S.queue.length, o: S.over, win: S.winner, nt: r2(S.nextT), cs: CASTLES.map(c => r2(c.shake)),
+    h: heroes.map(hh => [r2(hh.pos.x), r2(hh.pos.z), r2(hh.g.rotation.y), Math.ceil(hh.hp), hh.dead ? 1 : 0, hh.life, r2(hh.recoil), hh.hurtT > 0 ? 1 : 0, r2(Math.max(0, hh.bombCd))]),
+    e: enemies.filter(e => !e.dead).map(e => [e.id, ETK.indexOf(e.type), e.team, r2(e.pos.x), r2(e.pos.z), r2(e.g.rotation.y), Math.ceil(e.hp), e.maxHp, e.bar.g.visible ? 1 : 0, tint(e), r2(e.inner.position.z), r2(e.walk)]),
+    tw: towers.map(t => [t.pad.n, TTK.indexOf(t.type), t.lv, Math.ceil(t.hp), t.owner, t.aim ? r2(t.aim.rotation.y) : 0, t.bar.g.visible ? 1 : 0,
+      t.beam && t.beam.visible ? [t.beam.position.x, t.beam.position.y, t.beam.position.z, t.beam.rotation.x, t.beam.rotation.y, t.beam.rotation.z, t.beam.scale.x, t.beam.scale.z].map(r2) : 0]),
+    s: shots.map(s => {
+      const k = vkOf(s.m); if (k < 0) return null;
+      const p = s.m.position, v = s.lp ? tmp.subVectors(p, s.lp).multiplyScalar(1 / sdt) : s.dir ? tmp.copy(s.dir).multiplyScalar(s.sp) : tmp.set(0, 0, 0);
+      s.lp = p.clone(); return [k, r2(p.x), r2(p.y), r2(p.z), r2(v.x), r2(v.y), r2(v.z)];
+    }).filter(Boolean),
+    cl: clouds.map(c => [r2(c.x), r2(c.z), c.r, r2(c.m.material.opacity)]),
+    rd: rads.map(z => [z.id, r2(z.x), r2(z.z), r2(z.life)]),
+    fx: fxLog.splice(0) };
+}
+const gE = new Map(); let gShots = [], gClouds = [], gLastSnap = 0;
+function applySnap(m) {
+  const now = performance.now(), sdt = gLastSnap ? Math.min(.3, (now - gLastSnap) / 1000) : .05; gLastSnap = now;
+  const me = m.me;
+  Object.assign(S, { gold: me.g, castle: me.c, hw: me.hw, owned: new Set(me.ow), unlocked: new Set(me.un.map(k => TT[k])), power: me.pw, wave: m.w, waveActive: m.wa, qn: m.q, nextT: m.nt });
+  foeCastleV = m.foe;
+  CASTLES.forEach((c, k) => { c.shake = Math.max(c.shake, m.cs[k] || 0); });
+  if (m.o && !S.over) { S.over = true; S.winner = m.win; closeSheet(); closeShop(); showOver(); }
+  else if (!m.o && S.over) { S.over = false; S.winner = -1; $('over').classList.remove('show'); updateUI(); }
+  m.h.forEach((a, k) => {
+    const hh = heroes[k]; if (!hh) return;
+    const mine = k === ME;
+    if (hh.life !== a[5]) { hh.life = a[5]; if (mine) { hh.pos.set(a[0], 0, a[1]); C.follow = true; } }
+    hh.hp = a[3]; hh.recoil = Math.max(hh.recoil, a[6]); if (a[7]) hh.hurtT = .12; hh.netRy = a[2];
+    if (mine) hh.bombCd = Math.max(hh.bombCd, a[8]);
+    else { hh.tx = a[0]; hh.tz = a[1]; }
+    if (!!a[4] !== hh.dead) { hh.dead = !!a[4]; hh.g.visible = hh.bar.g.visible = !hh.dead; if (!mine && !hh.dead) hh.pos.set(a[0], 0, a[1]); }
+  });
+  const seen = new Set();
+  for (const a of m.e) {
+    let e = gE.get(a[0]);
+    if (!e) { e = spawnEnemy(ETK[a[1]], a[3], a[4], a[2]); e.g.rotation.y = a[5]; gE.set(a[0], e); e.tx = a[3]; e.tz = a[4]; }
+    seen.add(a[0]);
+    e.vel.set((a[3] - e.tx) / sdt, 0, (a[4] - e.tz) / sdt);
+    e.tx = a[3]; e.tz = a[4]; e.try = a[5]; e.hp = a[6]; e.maxHp = a[7]; e.bar.g.visible = !!a[8]; e.tint = a[9]; e.inner.position.z = a[10]; e.tw = a[11];
+  }
+  for (const [id, e] of gE) if (!seen.has(id)) { removeEnemy(e); gE.delete(id); }
+  for (let k = enemies.length - 1; k >= 0; k--) if (enemies[k].dead) enemies.splice(k, 1);
+  const tseen = new Set();
+  for (const a of m.tw) {
+    const pad = pads[a[0]], type = TTK[a[1]]; if (!pad || !type) continue;
+    let t = pad.t;
+    if (t && t.type !== type) { removeTower(t); t = null; }
+    if (!t) t = makeTower(type, pad, a[4], a[2]);
+    else if (t.lv !== a[2]) { t.lv = a[2]; t.pop = 0; buildTowerMesh(t); if (S.sel && S.sel.t === t) rangeG.scale.setScalar(t.T.lv[t.lv].range); }
+    tseen.add(t); t.maxHp = t.T.hp[t.lv]; t.hp = a[3]; if (t.aim) t.aim.rotation.y = a[5]; t.bar.g.visible = !!a[6];
+    const b = a[7];
+    if (b) { if (!t.beam) { t.beam = new THREE.Mesh(BOX, laserMat); scene.add(t.beam); } t.beam.visible = true; t.beam.position.set(b[0], b[1], b[2]); t.beam.rotation.set(b[3], b[4], b[5]); t.beam.scale.set(b[6], b[6], b[7]); }
+    else if (t.beam) t.beam.visible = false;
+  }
+  for (const t of [...towers]) if (!tseen.has(t)) removeTower(t);
+  m.s.forEach((a, k) => {
+    let g = gShots[k];
+    if (g && g.k !== a[0]) { scene.remove(g.m); g = null; }
+    if (!g) { const [geo, mm] = VK[a[0]]; g = gShots[k] = { k: a[0], m: new THREE.Mesh(geo, mm), v: V() }; scene.add(g.m); }
+    g.m.position.set(a[1], a[2], a[3]); g.v.set(a[4], a[5], a[6]);
+  });
+  for (let k = m.s.length; k < gShots.length; k++) scene.remove(gShots[k].m);
+  gShots.length = m.s.length;
+  m.cl.forEach((a, k) => {
+    let c = gClouds[k];
+    if (!c) { c = gClouds[k] = new THREE.Mesh(CIRCLE, basic(0x84cc16, .45)); scene.add(c); }
+    c.position.set(a[0], .07, a[1]); c.scale.setScalar(a[2]); c.material.opacity = a[3];
+  });
+  for (let k = m.cl.length; k < gClouds.length; k++) { scene.remove(gClouds[k]); gClouds[k].material.dispose(); }
+  gClouds.length = m.cl.length;
+  const rseen = new Set();
+  for (const a of m.rd) { let z = rads.find(q => q.id === a[0]); if (!z) z = radArea(V(a[1], 0, a[2]), 0, a[0]); z.life = a[3]; rseen.add(a[0]); }
+  for (const z of rads) if (!rseen.has(z.id)) z.life = 0;
+  for (const a of m.fx) {
+    if (a[0] === 'b') burst(V(a[1], a[2], a[3]), a[4], a[5], a[6], a[7]);
+    else if (a[0] === 'd') burstDir(V(a[1], a[2], a[3]), V(a[4], 0, a[5]), a[6], a[7], a[8], a[9]);
+    else if (a[0] === 'z') zap(V(a[1], a[2], a[3]), V(a[4], a[5], a[6]), a[7] ? radZapMat : zapMat);
+    else if (a[0] === 'c') dropCoin(V(a[1], 0, a[2]));
+  }
+}
+let inT = 0;
+function guestFrame(rdt, dt) {
+  const f = 1 - Math.exp(-rdt * 15);
+  for (const hh of heroes) {
+    if (hh.dead) continue;
+    hh.hurtT -= rdt; hh.recoil = Math.max(0, hh.recoil - rdt * 8);
+    let moving;
+    if (hh.pl === ME) {
+      hh.bombCd -= rdt;
+      const face = moveLocalHero(dt); moving = face !== null;
+      hh.g.rotation.y = lerpAng(hh.g.rotation.y, moving ? face : hh.netRy ?? hh.g.rotation.y, Math.min(1, rdt * 14));
+    } else if (hh.tx !== undefined) {
+      const dx = hh.tx - hh.pos.x, dz = hh.tz - hh.pos.z; moving = dx * dx + dz * dz > 1e-4;
+      hh.walk += Math.hypot(dx, dz) * f; hh.pos.x += dx * f; hh.pos.z += dz * f;
+      hh.g.rotation.y = lerpAng(hh.g.rotation.y, hh.netRy, f);
+    }
+    animHero(hh, moving);
+    setBar(hh.bar, hh.pos.x, 1.75, hh.pos.z, Math.max(0, hh.hp / hh.maxHp));
+  }
+  for (const e of enemies) {
+    if (e.dead || e.tx === undefined) continue;
+    e.pos.x += (e.tx - e.pos.x) * f; e.pos.z += (e.tz - e.pos.z) * f;
+    e.g.rotation.y = lerpAng(e.g.rotation.y, e.try, f); e.walk += (e.tw - e.walk) * f;
+    e.inner.position.y = Math.abs(Math.sin(e.walk * 6)) * .07;
+    if (e.f1) { e.f1.position.z = Math.sin(e.walk * 6) * .12 * e.T.size; e.f2.position.z = -e.f1.position.z; }
+    e.body.emissive.setHex(TINT[e.tint || 0]); e.body.emissiveIntensity = e.tint === 1 ? .8 : .6;
+  }
+  for (const g of gShots) { g.m.position.addScaledVector(g.v, rdt); if (LONG.has(g.k) && g.v.lengthSq() > .01) g.m.lookAt(tmp.copy(g.m.position).add(g.v)); }
+  updateTowers(0, rdt, time); updateRads(0, rdt); updateBolts(rdt);
+  if (NET.live && (inT += rdt) >= .05) {
+    inT = 0; const hh = heroes[ME];
+    NET.send({ t: 'i', x: r2(hh.pos.x), z: r2(hh.pos.z), life: hh.life, aim: !TOUCH && mouse.ok ? [r2(mouse.p.x), r2(mouse.p.z)] : null });
+  }
+}
+function onNet(m) {
+  if (!m || typeof m !== 'object') return;
+  NET.last = performance.now();
+  if (m.t === 'bye') return NET.drop && NET.drop();
+  if (NET.host) {
+    if (m.t === 'i') NET.inp = m;
+    else if (m.t === 'c') withPlayer(1, () => applyCmd(m));
+  } else {
+    if (m.t === 's') { const t0 = performance.now(); applySnap(m); NET.snapMs += performance.now() - t0; NET.snaps++; }
+    else if (m.t === 'toast') showToast(m.msg, m.ms);
+    else if (m.t === 'hi' && m.mode !== MODE) location.replace(roomLink(m.mode) + (TESTE ? '&teste' : ''));
+  }
+}
+
+// ===== Online: conexão (PeerJS, servidor gratuito) e telas =====
+const TESTE = location.search.includes('teste');
+const menuUrl = () => location.pathname + (TESTE ? '?teste' : '');
+const roomLink = (mode = MODE) => `${location.origin}${location.pathname}?sala=${ROOM}&modo=${mode}`;
+function netStatus(kind, text) { const p = $('netPill'); p.hidden = false; p.className = 'pill ' + kind; p.textContent = text; }
+function netPanel(title, msg, { share = false, go = false } = {}) {
+  $('netTitle').textContent = title; $('netMsg').textContent = msg;
+  $('netShare').hidden = !share; $('netGo').hidden = !go;
+  $('net').classList.add('show');
+}
+$('online').onclick = () => $('onl').classList.add('show');
+$('onlBack').onclick = () => $('onl').classList.remove('show');
+$('onl').addEventListener('click', ev => {
+  const b = ev.target.closest('button.mode'); if (!b) return;
+  const code = Math.random().toString(36).slice(2, 8);
+  location.href = `${location.pathname}?sala=${code}&modo=${b.dataset.m}&host=1${TESTE ? '&teste' : ''}`;
+});
+$('netMenu').onclick = $('ovMenu').onclick = () => { location.href = menuUrl(); };
+$('netGo').onclick = () => $('net').classList.remove('show');
+$('netPill').onclick = () => {
+  if (NET.live) netPanel('Partida online', MODE === 'pvp' ? 'Vocês estão jogando um contra o outro.' : 'Vocês estão jogando juntos.', { share: false, go: true });
+  else $('net').classList.add('show');
+};
+$('copyLink').onclick = async () => {
+  const link = $('netLink').value, b = $('copyLink');
+  let ok = false;
+  try { await navigator.clipboard.writeText(link); ok = true; } catch (e) { try { $('netLink').select(); ok = document.execCommand('copy'); } catch (e2) {} }
+  b.textContent = ok ? '✓ Link copiado! Agora mande para o amigo' : 'Não deu para copiar. Segure o link e copie';
+  setTimeout(() => { b.textContent = '📋 Copiar link'; }, 3000);
+};
+if (navigator.share) $('shareLink').hidden = false;
+$('shareLink').onclick = () => navigator.share({ title: 'Voxel Defense', text: 'Vem jogar Voxel Defense comigo!', url: $('netLink').value }).catch(() => {});
+function loadPeer() {
+  return new Promise((res, rej) => {
+    if (window.Peer) return res(window.Peer);
+    const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js';
+    s.onload = () => (window.Peer ? res(window.Peer) : rej(new Error('sem Peer'))); s.onerror = () => rej(new Error('cdn'));
+    document.head.appendChild(s);
+  });
+}
+const SERVER_FAIL = 'Não deu para falar com o servidor de conexão (PeerJS, gratuito). Ele pode estar fora do ar. Tente de novo em alguns minutos.';
+function linkUp(conn) {
+  conn.on('open', () => {
+    if (NET.conn && NET.live) { conn.close(); return; }
+    NET.conn = conn; NET.live = true; NET.rec = NET.host; S.started = true; NET.last = performance.now();
+    $('net').classList.remove('show'); $('help').classList.remove('show');
+    netStatus('on', '🟢 conectado');
+    if (NET.host) NET.send({ t: 'hi', mode: MODE });
+    showToast(PVP ? `Seu amigo entrou! Você é o castelo ${ME ? 'vermelho (direita)' : 'azul (esquerda)'}. A 1ª onda sai em 10 segundos.` : 'Seu amigo entrou! Defendam o castelo juntos.', 4500);
+  });
+  conn.on('data', onNet);
+  const drop = NET.drop = () => {
+    if (NET.conn !== conn || !NET.live) return;
+    try { conn.close(); } catch (e) {}
+    NET.live = false; NET.rec = false; NET.conn = null; NET.inp = null;
+    netStatus('off', '🔴 amigo saiu');
+    if (NET.host) { $('netLink').value = roomLink(); netPanel('Seu amigo saiu', 'A partida está parada. Ele pode voltar pelo mesmo link.', { share: true }); }
+    else netPanel('O amigo saiu', 'A partida acabou porque o dono da sala saiu.');
+  };
+  conn.on('close', drop);
+  conn.on('error', () => {});
+}
+addEventListener('pagehide', () => NET.send({ t: 'bye' }));
+setInterval(() => { if (NET.live) { if (NET.host) NET.send({ t: 'p' }); if (performance.now() - NET.last > 12000 && NET.drop) NET.drop(); } }, 1000);
+async function startNet() {
+  $('help').classList.remove('show');
+  $('speed').hidden = true; $('foePill').hidden = !PVP;
+  $('shopNote').textContent = 'Cada compra deixa os monstros um pouco mais fortes e eles dão mais ouro. No online o jogo não pausa com a loja aberta.';
+  if (PVP) $('helpList').insertAdjacentHTML('afterbegin', '<li><b>Modo contra:</b> as ondas saem sozinhas e seus monstros atacam o castelo do outro. Derrube o herói dele para ganhar 🪙 200. Destrua o castelo dele para vencer.</li>');
+  if (NET.host) {
+    $('netLink').value = roomLink();
+    netStatus('', '⏳ aguardando amigo');
+    netPanel('Sala criada!', `Modo: ${PVP ? '⚔️ um contra o outro' : '🤝 juntos'}. Mande este link para seu amigo. O jogo começa quando ele entrar.`, { share: true });
+  } else {
+    netStatus('', '⏳ conectando');
+    netPanel('Entrando na sala…', 'Conectando com seu amigo. Isso leva alguns segundos.');
+  }
+  let Peer;
+  try { Peer = await loadPeer(); } catch (e) { netStatus('off', '🔴 sem conexão'); return netPanel('Sem conexão', 'Não deu para carregar a parte online. Confira a internet e recarregue a página.'); }
+  const peer = NET.host ? new Peer('vdx-' + ROOM) : new Peer();
+  NET.peer = peer;
+  peer.on('error', err => {
+    const t = err && err.type;
+    if (NET.live) return;
+    netStatus('off', '🔴 sem conexão');
+    if (t === 'unavailable-id') netPanel('Sala já existe', 'Esse link de sala já está aberto em outro lugar. Volte ao menu e crie uma sala nova.');
+    else if (t === 'peer-unavailable') netPanel('Sala não encontrada', 'O dono da sala não está on-line ou fechou o jogo. Peça um link novo para seu amigo.');
+    else if (t === 'browser-incompatible') netPanel('Navegador sem suporte', 'Este navegador não aceita jogo online. Tente o Chrome ou o Safari atualizado.');
+    else netPanel('Servidor fora do ar', SERVER_FAIL);
+  });
+  if (NET.host) peer.on('connection', linkUp);
+  else peer.on('open', () => {
+    const conn = peer.connect('vdx-' + ROOM, { reliable: true, serialization: 'json' });
+    linkUp(conn);
+    setTimeout(() => { if (!NET.live && $('net').classList.contains('show') && $('netTitle').textContent.startsWith('Entrando')) { netStatus('off', '🔴 sem conexão'); netPanel('Não conectou', 'Não deu para chegar no seu amigo. Ele precisa estar com a sala aberta. Tente de novo.'); } }, 20000);
+  });
+}
+
 resize(); updateUI();
+C.tx = hero.home.x; C.tz = hero.home.z; clampCam(); updateCam();
+if (ONLINE) startNet();
+setTimeout(() => $('load').classList.add('hide'), Math.max(0, 5000 - performance.now()));
 requestAnimationFrame(loop);
-if (location.search.includes('teste')) window.__vd = { S, pads, placeTower, startWave, enemies, towers, hero, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, heroShootAt, rads, renderShop: () => renderShop(), giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE };
+if (location.search.includes('teste')) window.__vd = { S, pads, placeTower, startWave, enemies, towers, hero, heroes, NET, MODE, ROLE, ME, CASTLES, act, pget, PS, gE, roomLink, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, heroShootAt, rads, renderShop: () => renderShop(), giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE };
 </script>
 </body>
 </html>
