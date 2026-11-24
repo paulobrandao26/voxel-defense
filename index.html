@@ -982,7 +982,7 @@ function updateEnemies(dt, time) {
     const i = cellOf(e.pos.x), j = cellOf(e.pos.z); e.fd = inMap(i, j) && flow[K(i, j)] < Infinity ? flow[K(i, j)] : 99;
     e.inner.position.y = Math.abs(Math.sin(e.walk * 6)) * .07;
     if (e.f1) { e.f1.position.z = Math.sin(e.walk * 6) * .12 * e.T.size; e.f2.position.z = -e.f1.position.z; }
-    e.body.emissive.setHex(e.flashT > 0 ? 0xffffff : e.burnT > 0 ? 0x6a2000 : e.poisonT > 0 ? 0x2f5f00 : e.slowT > 0 ? 0x1f6fb5 : 0x000000);
+    e.body.emissive.setHex(e.flashT > 0 ? 0xffffff : e.radU > time ? 0x2fbf00 : e.burnT > 0 ? 0x6a2000 : e.poisonT > 0 ? 0x2f5f00 : e.slowT > 0 ? 0x1f6fb5 : 0x000000);
     e.body.emissiveIntensity = e.flashT > 0 ? .8 : .6;
   }
   for (let k = enemies.length - 1; k >= 0; k--) if (enemies[k].dead) enemies.splice(k, 1);
@@ -1193,11 +1193,11 @@ const BALL = new THREE.SphereGeometry(.13, 8, 6), BIGBALL = new THREE.SphereGeom
 const bulletMat = M(0xffe08a, 0xaa7700), heroShotMat = M(0x93c5fd, 0x3b82f6);
 const shots = [], bolts = [];
 const zapMat = new THREE.MeshBasicMaterial({ color: 0xfff6a8 });
-function zap(a, b) {
+function zap(a, b, zm = zapMat) {
   let p = a.clone();
   for (let k = 1; k <= 3; k++) {
     const q = k === 3 ? b.clone() : V().lerpVectors(a, b, k / 3).add(V((Math.random() - .5) * .4, (Math.random() - .5) * .4, (Math.random() - .5) * .4));
-    const m = new THREE.Mesh(BOX, zapMat), L = p.distanceTo(q);
+    const m = new THREE.Mesh(BOX, zm), L = p.distanceTo(q);
     m.scale.set(.06, .06, L); m.position.lerpVectors(p, q, .5); m.lookAt(q); scene.add(m); bolts.push({ m, life: .12 }); p = q;
   }
 }
@@ -1294,10 +1294,10 @@ function updateShots(dt) {
     }
     if (s.k === 'hb') {
       const step = s.sp * dt; s.m.position.addScaledVector(s.dir, step); s.life -= dt;
-      if (s.life <= 0 || hitsSolid(s.m.position.x, s.m.position.z)) { s.done = true; if (s.poison) poisonArea(s.m.position, 1.4, 0, s.poison); else burst(s.m.position, 0x93c5fd, 2, .8, .05); continue; }
+      if (s.life <= 0 || hitsSolid(s.m.position.x, s.m.position.z)) { s.done = true; if (s.rad) radArea(s.m.position); else if (s.poison) poisonArea(s.m.position, 1.4, 0, s.poison); else burst(s.m.position, 0x93c5fd, 2, .8, .05); continue; }
       for (const e of enemies) if (!e.dead && Math.hypot(e.pos.x - s.m.position.x, e.pos.z - s.m.position.z) < e.r + .18) {
         hurt(e, s.dmg); s.done = true;
-        if (s.poison) poisonArea(s.m.position, 1.4, 0, s.poison); else burst(s.m.position, 0x93c5fd, 3, 1, .06);
+        if (s.rad) radArea(s.m.position); else if (s.poison) poisonArea(s.m.position, 1.4, 0, s.poison); else burst(s.m.position, 0x93c5fd, 3, 1, .06);
         break;
       }
       continue;
@@ -1352,9 +1352,41 @@ const HW = {
   blaster: { name: 'Blaster', icon: '🔫', desc: 'Tiro rápido em um monstro', cost: 0, power: 0, range: 7.5 },
   fogo: { name: 'Lança-fogo', icon: '🔥', desc: 'Queima vários de perto', cost: 300, power: .06, range: 4 },
   raio: { name: 'Cajado de raio', icon: '⚡', desc: 'Raio pula em 3 monstros', cost: 500, power: .08, range: 7 },
-  veneno: { name: 'Arma de veneno', icon: '☠️', desc: 'A mais forte: nuvem que envenena em área', cost: 800, power: .12, range: 8 },
+  veneno: { name: 'Arma de veneno', icon: '☠️', desc: 'Nuvem que envenena em área', cost: 800, power: .12, range: 8 },
+  radiacao: { name: 'Arma de radiação', icon: '☢️', desc: 'A mais forte: área radioativa que queima sem parar e solta faíscas', cost: 1200, power: .16, range: 8 },
 };
 const poisonMat = M(0xa3e635, 0x4d7c0f);
+// Radiação: bola verde neon que vira uma área radioativa pulsando. Quem está dentro leva dano sem parar,
+// e a cada pulso faíscas verdes pulam em até 2 monstros perto.
+const radMat = new THREE.MeshBasicMaterial({ color: 0xb6ff3b }), radZapMat = new THREE.MeshBasicMaterial({ color: 0x7dff2a });
+const RING = new THREE.RingGeometry(.86, 1, 40).rotateX(-Math.PI / 2), rads = [];
+function radArea(p) {
+  const n = S.wave, add = o => { scene.add(o); return o; };
+  const disk = add(new THREE.Mesh(CIRCLE, new THREE.MeshBasicMaterial({ color: 0x39ff14, transparent: true, opacity: .28, depthWrite: false, blending: THREE.AdditiveBlending })));
+  const ring = add(new THREE.Mesh(RING, new THREE.MeshBasicMaterial({ color: 0xccff66, transparent: true, opacity: .9, depthWrite: false, blending: THREE.AdditiveBlending })));
+  const ring2 = add(new THREE.Mesh(RING, ring.material.clone()));
+  const r = 2.1; disk.scale.setScalar(r); for (const o of [disk, ring, ring2]) o.position.set(p.x, .08, p.z);
+  rads.push({ x: p.x, z: p.z, r, disk, ring, ring2, t: 0, life: 3.2, pulse: 0, dps: 24 + n * 3.4, chain: 12 + n * 1.8 });
+  burst(tmp.set(p.x, .4, p.z), 0x7dff2a, 16, 3, .12); burst(tmp.set(p.x, .4, p.z), 0xeaff9a, 8, 2, .08);
+}
+function updateRads(dt, rdt) {
+  for (const z of rads) {
+    z.t += rdt; if (dt) z.life -= dt;
+    const fade = Math.min(1, z.life / .6), f1 = (z.t * 1.6) % 1, f2 = (z.t * 1.6 + .5) % 1;
+    z.ring.scale.setScalar(z.r * (.15 + f1 * .85)); z.ring.material.opacity = (1 - f1) * .9 * fade;
+    z.ring2.scale.setScalar(z.r * (.15 + f2 * .85)); z.ring2.material.opacity = (1 - f2) * .9 * fade;
+    z.disk.material.opacity = (.2 + Math.sin(z.t * 10) * .08) * fade;
+    if (Math.random() < rdt * 22) { const a = Math.random() * 6.28, d = Math.random() * z.r; emit(tmp.set(z.x + Math.cos(a) * d, .1, z.z + Math.sin(a) * d), Math.random() < .3 ? 0xeaff9a : 0x7dff2a, .07 + Math.random() * .05, 0, .8 + Math.random(), 0, .9, -.5); pm.instanceColor.needsUpdate = true; }
+    if (!dt) continue;
+    for (const e of enemies) if (!e.dead && Math.hypot(e.pos.x - z.x, e.pos.z - z.z) <= z.r + e.r) { hurt(e, z.dps * dt, false); e.radU = time + .15; }
+    if ((z.pulse -= dt) <= 0) {
+      z.pulse = .5;
+      const near2 = enemies.filter(e => !e.dead && Math.hypot(e.pos.x - z.x, e.pos.z - z.z) <= z.r + 1.6).sort(() => Math.random() - .5).slice(0, 2);
+      for (const e of near2) { const to = V(e.pos.x, e.hitY + .1, e.pos.z); zap(V(z.x, .5, z.z), to, radZapMat); hurt(e, z.chain); burst(to, 0x9dff4a, 4, 1.2, .07); }
+    }
+  }
+  for (let k = rads.length - 1; k >= 0; k--) if (rads[k].life <= 0) { const z = rads[k]; for (const o of [z.disk, z.ring, z.ring2]) { scene.remove(o); o.material.dispose(); } rads.splice(k, 1); }
+}
 function heroAttack(dir) {
   const w = S.hw, n = S.wave;
   hero.recoil = 1;
@@ -1381,6 +1413,13 @@ function heroAttack(dir) {
       const sc = (dx * dir.x + dz * dir.z) / (d || 1) - d * .05; if (sc > bs) { bs = sc; first = e; }
     }
     if (first) chainFrom(V(hero.pos.x + dir.x * .5, .8, hero.pos.z + dir.z * .5), first, 3, 14 + n * 2.2);
+    return;
+  }
+  if (w === 'radiacao') {
+    hero.cd = .5;
+    const o = V(hero.pos.x + dir.x * .55, .78, hero.pos.z + dir.z * .55), m = new THREE.Mesh(BIGBALL, radMat); m.position.copy(o); scene.add(m);
+    shots.push({ k: 'hb', m, dir: dir.clone(), sp: 12, life: .7, dmg: 20 + n * 3, rad: true });
+    burstDir(o, dir, 0x7dff2a, 4, 4, .08);
     return;
   }
   hero.cd = .4;
@@ -1476,7 +1515,7 @@ function updateHero(dt, rdt, time) {
 }
 
 // ===== Estado e ondas =====
-const START_GOLD = 200;
+const START_GOLD = 500;
 const loadBest = () => { try { return +localStorage.getItem('vd-best') || 0; } catch { return 0; } };
 const saveBest = () => { try { localStorage.setItem('vd-best', S.best); } catch {} };
 const S = { gold: START_GOLD, castle: 100, wave: 0, waveActive: false, queue: [], spawnT: 0, hpMul: 1, speed: 1, over: false, sel: null, best: loadBest(), started: false, power: 0, dmgMul: 1, hw: 'blaster', owned: new Set(['blaster']), unlocked: new Set(), shop: false };
@@ -1510,7 +1549,7 @@ function spawnFrom(item) {
 function startWave() {
   if (S.waveActive || S.over) return;
   S.wave++; S.waveActive = true; S.queue = waveList(S.wave); S.spawnT = .3;
-  S.hpMul = 1 + .18 * (S.wave - 1) + .012 * (S.wave - 1) ** 2;
+  S.hpMul = 1.12 + .18 * (S.wave - 1) + .012 * (S.wave - 1) ** 2;
   if (S.wave > S.best) { S.best = S.wave; saveBest(); }
   const dirs = [...new Set(S.queue.map(q => SIDE_NAME[q.side]))];
   if (!bossWave(S.wave)) toast(`Monstros vindo de: ${dirs.join(', ')}`, 2500);
@@ -1544,6 +1583,7 @@ function resetGame() {
   enemies.length = shots.length = bolts.length = towers.length = coins.length = 0;
   computeFlow(); resetHero();
   for (const c of clouds) scene.remove(c.m); clouds.length = 0;
+  for (const z of rads) for (const o of [z.disk, z.ring, z.ring2]) scene.remove(o); rads.length = 0;
   Object.assign(S, { gold: START_GOLD, castle: 100, wave: 0, waveActive: false, queue: [], over: false, bestAtStart: S.best, power: 0, dmgMul: 1, hw: 'blaster', owned: new Set(['blaster']), unlocked: new Set() });
   $('over').classList.remove('show'); updateUI();
 }
@@ -1795,7 +1835,7 @@ function loop(now) {
   requestAnimationFrame(loop);
   const rdt = Math.min(.05, (now - last) / 1000); last = now; time += rdt;
   const dt = S.over || !S.started || S.shop ? 0 : rdt * S.speed;
-  updateWave(dt); updateEnemies(dt, time); updateTowers(dt, rdt, time); updateHero(dt, rdt, time); updateShots(dt); updateClouds(dt); updateParticles(rdt);
+  updateWave(dt); updateEnemies(dt, time); updateTowers(dt, rdt, time); updateHero(dt, rdt, time); updateShots(dt); updateClouds(dt); updateRads(dt, rdt); updateParticles(rdt);
   updateEnemyBars();
   for (let k = coins.length - 1; k >= 0; k--) {
     const c = coins[k]; c.t += rdt;
@@ -1821,7 +1861,7 @@ function loop(now) {
 }
 resize(); updateUI();
 requestAnimationFrame(loop);
-if (location.search.includes('teste')) window.__vd = { S, pads, placeTower, startWave, enemies, towers, hero, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE };
+if (location.search.includes('teste')) window.__vd = { S, pads, placeTower, startWave, enemies, towers, hero, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, heroShootAt, rads, renderShop: () => renderShop(), giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE };
 </script>
 </body>
 </html>
