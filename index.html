@@ -200,18 +200,19 @@ for (const [r, n, off] of [[5.5, 8, .39], [9.5, 12, 0], [13.5, 16, .2], [17.5, 2
   grid[i][j] = PAD; const p = { i, j, x: wc(i), z: wc(j), t: null }; pads.push(p); padAt[K(i, j)] = p;
 }
 
-// Vilas com casinhas
+// Vilas com casinhas: cada casa ocupa 2 casas do mapa (as duas ficam sólidas)
 const houses = [];
-for (const [ci, cj] of [[11, 36], [37, 27], [34, 15], [12, 17], [24, 40]]) for (let k = 0; k < 12 && houses.filter(h => h.v === ci).length < 4; k++) {
-  const i = ci + Math.round((rnd() - .5) * 7), j = cj + Math.round((rnd() - .5) * 7);
-  if (at(i, j) !== GRASS || reserved.has(K(i, j)) || near(i, j, 1, t => t !== GRASS)) continue;
-  grid[i][j] = HOUSE; houses.push({ i, j, v: ci, rot: Math.floor(rnd() * 4) });
+const houseOk = (i, j) => at(i, j) === GRASS && !reserved.has(K(i, j)) && !near(i, j, 1, t => t !== GRASS);
+for (const [ci, cj] of [[11, 36], [37, 27], [34, 15], [12, 17], [24, 40]]) for (let k = 0; k < 30 && houses.filter(h => h.v === ci).length < 4; k++) {
+  const i = ci + Math.round((rnd() - .5) * 8), j = cj + Math.round((rnd() - .5) * 8), o = rnd() < .5, i2 = i + (o ? 1 : 0), j2 = j + (o ? 0 : 1);
+  if (!houseOk(i, j) || !houseOk(i2, j2)) continue;
+  grid[i][j] = grid[i2][j2] = HOUSE; houses.push({ i, j, o, v: ci, flip: rnd() < .5 });
 }
 
 // Árvores e pedras (sólidas)
 for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
   if (grid[i][j] !== GRASS || reserved.has(K(i, j)) || near(i, j, 1, t => t === PAD || t === HOUSE)) continue;
-  const d = noise(i, j) > 1.1 ? .38 : .07, r = rnd();
+  const d = noise(i, j) > 1.1 ? .55 : .17, r = rnd();
   if (r < d) grid[i][j] = TREE; else if (r < d + .03) grid[i][j] = ROCK;
 }
 // Abre caminho do portal até o castelo, para nenhum portal ficar preso
@@ -334,131 +335,369 @@ function setInst(mesh, n, x, y, z, sx, sy, sz, ry = 0) {
   mesh.setMatrixAt(n, dummy.matrix);
 }
 
-// Chão em blocos pequenos (4 por casa) para dar mais detalhe
-const tiles = [], waterT = [];
-const nearT = (i, j, r, t) => near(i, j, r, x => x === t);
-for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) {
-  const x = i - HALF + .25 + a * .5, z = j - HALF + .25 + b * .5, t = grid[i][j];
-  (t === WATER || t === BRIDGE ? waterT : tiles).push([x, z, i, j, a, b]);
+// ===== Mundo de cubinhos (voxels) =====
+// Tudo que é fixo (chão, montanhas, árvores, pedras, casas, portais, castelo, grama) é feito de
+// cubinhos de 1/8 de casa. Só as faces que aparecem viram triângulos, com sombrinha nos cantos,
+// e o mundo é dividido em pedaços para a placa de vídeo desenhar só o que a câmera vê.
+const R = 8, VX = N * R, Y0 = 8, VH = 72;               // 8 cubinhos por casa; Y0 = altura do chão
+let vox = new Uint16Array(VX * VX * VH);
+const vtop = new Uint8Array(VX * VX), landV = new Uint8Array(VX * VX);
+const vI = (x, y, z) => (x * VX + z) * VH + y;
+const h3 = (x, y, z) => { let t = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(z | 0, 1274126177); t = Math.imul(t ^ t >>> 13, 1103515245); t ^= t >>> 16; return (t >>> 0) / 4294967296; };
+const hsl = (h, s, l) => new THREE.Color().setHSL(h, s, clamp(l, 0, 1)).getHex();
+const pk = hex => 0x8000 | (hex >> 19 & 31) << 10 | (hex >> 11 & 31) << 5 | (hex >> 3 & 31);
+const shade = (hex, m) => (clamp(Math.round((hex >> 16 & 255) * m), 0, 255) << 16) | (clamp(Math.round((hex >> 8 & 255) * m), 0, 255) << 8) | clamp(Math.round((hex & 255) * m), 0, 255);
+const palH = (h, s, l, d, n = 6) => Array.from({ length: n }, (_, k) => hsl(h, s, l + (k / (n - 1) - .5) * 2 * d));   // cores (texto)
+const palX = (hex, d = .1, n = 6) => Array.from({ length: n }, (_, k) => pk(shade(hex, 1 + (k / (n - 1) - .5) * 2 * d)));
+const PH = (h, s, l, d, n) => palH(h, s, l, d, n).map(pk);
+const pick = (p, x, y, z) => p[(h3(x, y, z) * p.length) | 0];
+const cellT = (x, z) => grid[x >> 3][z >> 3];
+for (let x = 0; x < VX; x++) for (let z = 0; z < VX; z++) { const t = cellT(x, z); landV[x * VX + z] = t !== WATER && t !== BRIDGE ? 1 : 0; }
+function vset(x, y, z, c) {
+  if (x < 0 || z < 0 || x >= VX || z >= VX || y < 0 || y >= VH) return;
+  vox[vI(x, y, z)] = c; const k = x * VX + z; if (c && y >= vtop[k]) vtop[k] = y + 1;
 }
-const ground = new THREE.InstancedMesh(BOX, mat.tint, tiles.length);
-tiles.forEach(([x, z, i, j, a, b], n) => {
-  const t = grid[i][j], cd = Math.max(Math.abs(i - C0), Math.abs(j - C0));
-  let h = 0;
-  if (t === CASTLE || (cd < 3.6 && t !== PAD)) col.setHSL(.08, .08 + rnd() * .05, .52 + rnd() * .1);
-  else if (t === PORTAL || PORTALS.some(([pi, pj]) => Math.hypot(i - pi, j - pj) < 1.6)) col.setHSL(.72, .12, .3 + rnd() * .08);
-  else if (nearT(i, j, 1, WATER)) col.setHSL(.12, .42, .66 + rnd() * .06);
-  else { const f = noise(i * .7, j * .7); col.setHSL(.25 + f * .008 + rnd() * .02, .5, .4 + rnd() * .06 + ((a + b) % 2) * .015); h = rnd() < .3 ? .02 : 0; }
-  setInst(ground, n, x, -.5 + h, z, .5, 1, .5);
-  ground.setColorAt(n, col);
-});
+const vget = (x, y, z) => x < 0 || z < 0 || x >= VX || z >= VX || y < 0 || y >= VH ? 0 : vox[vI(x, y, z)];
+// Enche uma caixa de cubinhos (limites inclusivos). f: cor, paleta ou função (x, y, z) => cor
+function vfill(x0, x1, y0, y1, z0, z1, f) {
+  for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) for (let y = y0; y <= y1; y++)
+    vset(x, y, z, typeof f === 'function' ? f(x, y, z) : Array.isArray(f) ? pick(f, x, y, z) : f);
+}
+
+// Paletas
+const SOIL = palX(0x7a5233, .12), SOILD = palX(0x5e3f27, .1), SAND = palX(0xe3cf98, .06);
+const STONE = palX(0xbdb8ae, .1), STONED = palX(0x8f8a80, .1), MOSS = PH(.27, .45, .3, .05);
+const ROCKP = PH(.08, .05, .5, .08), SNOW = palX(0xeef6ff, .04), WOODD = palX(0x6e4a2a, .08), WOOD = palX(0xa0703f, .08);
+const GRASSV = PH(.27, .55, .36, .06);
+const solidV = (x, y, z) => y < 0 || (x >= 0 && z >= 0 && x < VX && z < VX && y < VH && (vox[vI(x, y, z)] !== 0 || (y < Y0 && landV[x * VX + z] === 1)));
+
+// Barrancos do rio/lago e a borda do mapa (paredes de terra)
+for (let x = 0; x < VX; x++) for (let z = 0; z < VX; z++) {
+  if (!landV[x * VX + z]) continue;
+  const edge = x === 0 || z === 0 || x === VX - 1 || z === VX - 1;
+  const bank = !edge && (!landV[(x + 1) * VX + z] || !landV[(x - 1) * VX + z] || !landV[x * VX + z + 1] || !landV[x * VX + z - 1]);
+  if (!edge && !bank) continue;
+  const t = cellT(x, z), topC = t === MOUNT ? ROCKP : near(x >> 3, z >> 3, 1, q => q === WATER) ? SAND : GRASSV;
+  for (let y = edge ? 0 : Y0 - 4; y < Y0; y++) vset(x, y, z, pick(y === Y0 - 1 ? topC : (y >> 1) & 1 ? SOIL : SOILD, x, y, z));
+}
+
+// Montanhas: altura suave por coluna, em degraus de 2x2 cubinhos, com camadas de pedra e neve no topo
+const mh = (i, j) => inMap(i, j) && grid[i][j] === MOUNT ? mountH[K(i, j)] : 0;
+const ROCKS = [PH(.07, .2, .3, .06), PH(.08, .16, .38, .06), PH(.06, .12, .33, .05)];
+const MGRASS = PH(.27, .5, .34, .06), MSNOW = SNOW;
+for (let x = 0; x < VX; x++) for (let z = 0; z < VX; z++) {
+  if (cellT(x, z) !== MOUNT) continue;
+  const bx = (x >> 1) * 2 + 1, bz = (z >> 1) * 2 + 1, fx = bx / R - .5, fz = bz / R - .5, i0 = Math.floor(fx), j0 = Math.floor(fz), tx = fx - i0, tz = fz - j0;
+  let H = mh(i0, j0) * (1 - tx) * (1 - tz) + mh(i0 + 1, j0) * tx * (1 - tz) + mh(i0, j0 + 1) * (1 - tx) * tz + mh(i0 + 1, j0 + 1) * tx * tz;
+  H = Math.max(H, mh(x >> 3, z >> 3) * .55, .5) * (1 + (h3(bx, 1, bz) - .5) * .22);
+  const hv = clamp(Math.round(H * R), 3, VH - Y0 - 2);
+  for (let y = 0; y < hv; y++) {
+    const top = y === hv - 1, wy = y / R;
+    let c;
+    if (top) c = pick(H > 3.9 ? MSNOW : H < 2.4 ? MGRASS : ROCKS[1], x, y, z);
+    else if (H > 4.3 && y >= hv - 3) c = pick(MSNOW, x, y, z);
+    else if (H < 1.8 && y >= hv - 2) c = pick(MGRASS, x, y + 7, z);
+    else c = pick(wy < .3 ? MOSS : ROCKS[((y >> 2) + (h3(bx >> 2, y >> 2, bz >> 2) < .3 ? 1 : 0)) % 3], x, y, z);
+    vset(x, Y0 + y, z, c);
+  }
+}
+
+// Árvores: redondas, pinheiros e bétulas, de pequenas a enormes
+const blob = (spheres, P2, fruit) => {
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, z0 = 1e9, z1 = -1e9;
+  for (const [cx, cy, cz, rx, ry] of spheres) { x0 = Math.min(x0, cx - rx); x1 = Math.max(x1, cx + rx); y0 = Math.min(y0, cy - ry); y1 = Math.max(y1, cy + ry); z0 = Math.min(z0, cz - rx); z1 = Math.max(z1, cz + rx); }
+  const ytop = y1, ybot = y0;
+  for (let x = Math.floor(x0); x <= x1; x++) for (let z = Math.floor(z0); z <= z1; z++) for (let y = Math.floor(y0); y <= y1; y++) {
+    let best = 9;
+    for (const [cx, cy, cz, rx, ry] of spheres) { const a = (x + .5 - cx) / rx, b = (y + .5 - cy) / ry, c = (z + .5 - cz) / rx; best = Math.min(best, a * a + b * b + c * c); }
+    const j = h3(x, y, z);
+    if (best > .92 + (j - .5) * .45) continue;
+    const t = (y - ybot) / Math.max(1, ytop - ybot), k = clamp(Math.floor(t * P2.length + (j - .5) * 2.2), 0, P2.length - 1);
+    vset(x, y, z, fruit && best > .6 && j < .05 ? fruit : P2[k]);
+  }
+};
+const LEAF = [PH(.29, .55, .36, .08, 7), PH(.31, .5, .32, .08, 7), PH(.26, .6, .38, .08, 7)];
+const AUTUMN = [PH(.09, .75, .45, .1, 7), PH(.13, .8, .5, .1, 7)];
+const PINE = PH(.38, .45, .25, .06, 6), PINEL = PH(.36, .45, .33, .05, 4), BIRCHL = PH(.21, .62, .42, .08, 7);
+const BARK = PH(.07, .4, .3, .05, 4), BIRCHB = palX(0xe8e4da, .05, 4), APPLE = pk(0xdc2626);
+function oak(c, d, s, big) {
+  const tw = big ? 2 : 1, th = Math.round(R * .5 * s), rc = R * .44 * s, ry = rc * .85, cy = Y0 + th + ry * .7;
+  vfill(c - tw, c + tw - 1, Y0, cy | 0, d - tw, d + tw - 1, BARK);
+  if (big) for (const [a, b] of [[-tw - 1, 0], [tw, 0], [0, -tw - 1], [0, tw]]) vfill(c + a, c + a, Y0, Y0 + (h3(c, a, b) < .5 ? 0 : 1), d + b, d + b, BARK);
+  const sp = [[c, cy, d, rc, ry]];
+  const n = big ? 5 : 2;
+  for (let k = 0; k < n; k++) { const a = rnd() * 6.28, r = rc * (.45 + rnd() * .2); sp.push([c + Math.cos(a) * r, cy + (rnd() - .3) * ry * .6, d + Math.sin(a) * r, rc * (.55 + rnd() * .15), ry * .6]); }
+  if (big) sp.push([c, cy + ry * .6, d, rc * .6, ry * .55]);
+  const autumn = rnd() < .1;
+  blob(sp, autumn ? AUTUMN[rnd() < .5 ? 0 : 1] : LEAF[Math.floor(rnd() * 3)], !autumn && rnd() < .3 ? APPLE : 0);
+}
+function pine(c, d, s, big, snowy) {
+  const tw = big ? 2 : 1, th = Math.round(R * .28 * s), ht = Math.round(R * 1.3 * s), rmax = R * .5 * s, tiers = big ? 4 : 3;
+  vfill(c - tw, c + tw - 1, Y0, Y0 + th + 2, d - tw, d + tw - 1, BARK);
+  for (let y = 0; y <= ht; y++) {
+    const t = y / ht, f = (t * tiers) % 1, r = rmax * Math.pow(1 - t, .9) * (.5 + .5 * (1 - f)) + .7, ri = Math.ceil(r);
+    for (let a = -ri; a < ri; a++) for (let b = -ri; b < ri; b++) {
+      const dd = Math.hypot(a + .5, b + .5); if (dd > r) continue;
+      const x = c + a, z = d + b, yy = Y0 + th + y, rim = r - dd < 1.1;
+      vset(x, yy, z, snowy && (t > .82 || (rim && f > .7 && h3(x, yy, z) < .6)) ? pick(SNOW, x, yy, z) : pick(rim && f > .6 ? PINEL : PINE, x, yy, z));
+    }
+  }
+}
+function birch(c, d, s) {
+  const th = Math.round(R * .85 * s), rc = R * .32 * s, ry = rc * 1.35, cy = Y0 + th + ry * .3;
+  vfill(c - 1, c, Y0, Math.floor(cy), d - 1, d, (x, y, z) => h3(x, y, z) < .18 ? pk(0x2a2a2a) : pick(BIRCHB, x, y, z));
+  blob([[c, cy, d, rc, ry], [c + (rnd() - .5) * rc * .6, cy + ry * .5, d + (rnd() - .5) * rc * .6, rc * .7, ry * .6]], BIRCHL);
+}
+for (const [i, j] of trees) {
+  const c = i * R + 3 + Math.floor(rnd() * 3), d = j * R + 3 + Math.floor(rnd() * 3), forest = noise(i, j) > 1.1;
+  const roomy = !near(i, j, 2, t => t === PAD || t === HOUSE || t === PORTAL || t === CASTLE);
+  const r = rnd(), big = roomy && r < (forest ? .35 : .22), small = !big && r > .78;
+  const s = big ? 1.55 + rnd() * .6 : small ? .55 + rnd() * .2 : .85 + rnd() * .35, kind = rnd();
+  if (kind < (forest ? .45 : .3)) pine(c, d, s, big, near(i, j, 2, t => t === MOUNT));
+  else if (kind < (forest ? .58 : .45) && !big) birch(c, d, s);
+  else oak(c, d, s, big);
+}
+
+// Pedras em vários cubinhos, algumas com musgo
+for (const [i, j] of rocks) {
+  const c = i * R + 4, d = j * R + 4, big = rnd() < .2, n = big ? 6 : 3 + Math.floor(rnd() * 3);
+  for (let k = 0; k < n; k++) {
+    const w = (big ? 2 : 1) + Math.floor(rnd() * (big ? 3 : 2)), x = c + Math.round((rnd() - .5) * 4) - w, z = d + Math.round((rnd() - .5) * 4) - w, h = Math.max(1, Math.round(w * (.6 + rnd() * .5))), y = k > 2 ? Y0 + 1 : Y0;
+    vfill(x, x + w * 2 - 1, y, y + h, z, z + w * 2 - 1, (xx, yy, zz) => yy === y + h && h3(xx, yy, zz) < .35 ? pick(MOSS, xx, yy, zz) : pick(ROCKP, xx, yy, zz));
+  }
+}
+
+// Casinhas (2 casas do mapa cada): base de pedra, paredes com vigas, janelas, porta, telhado e chaminé
+const chimneys = [];
+const WALLS = [0xf1e3c6, 0xe8d3b0, 0xd9c7a5, 0xf5efe0], ROOFS = [0xb3412f, 0x5a6b8c, 0x8a5a3b, 0x9b2d2d];
+const GLASS = pk(0x9fd8f0), GLASSL = pk(0xd8f3ff), DOOR = palX(0x5a3a20, .08, 3), FLOWB = [pk(0xef4444), pk(0xfacc15), pk(0xf472b6), pk(0xffffff)];
+for (const h of houses) {
+  const x0 = h.i * R, z0 = h.j * R, wallP = palX(WALLS[Math.floor(rnd() * 4)], .05), roofP = ROOFS[Math.floor(rnd() * 4)];
+  const roofA = palX(roofP, .06), roofB = palX(shade(roofP, .82), .06);
+  // a = ao longo da casa (0..15), b = largura (0..7), y = altura a partir do chão
+  const put = (a, b, y, c) => { const bb = h.flip ? 7 - b : b; if (h.o) vset(x0 + a, Y0 + y, z0 + bb, c); else vset(x0 + bb, Y0 + y, z0 + a, c); };
+  const fill = (a0, a1, b0, b1, y0, y1, f) => { for (let a = a0; a <= a1; a++) for (let b = b0; b <= b1; b++) for (let y = y0; y <= y1; y++) put(a, b, y, typeof f === 'function' ? f(a, b, y) : f); };
+  fill(1, 14, 0, 7, 0, 0, (a, b, y) => pick(STONED, a + x0, b, z0));
+  fill(2, 13, 1, 6, 1, 6, (a, b, y) => {
+    const side = b === 1 || b === 6, end = a === 2 || a === 13;
+    if ((a === 2 || a === 13 || a === 7 || a === 8) && (b === 1 || b === 6) || (end && (b === 1 || b === 6)) || y === 6) return pick(WOODD, a, y, b + x0);
+    if (side && y >= 3 && y <= 4 && (a === 4 || a === 5 || a === 10 || a === 11)) return a === 4 || a === 10 ? GLASSL : GLASS;
+    if (end && y >= 3 && y <= 4 && (b === 3 || b === 4)) return GLASS;
+    return pick(wallP, a + x0, y, b + z0);
+  });
+  fill(7, 8, 7, 7, 0, 0, pick(STONE, x0, 1, z0));           // degrau
+  fill(7, 8, 6, 6, 1, 3, (a, b, y) => y === 2 && a === 8 ? pk(0xffc93c) : pick(DOOR, a, y, b));
+  fill(4, 5, 0, 0, 2, 2, (a, b, y) => FLOWB[(h3(a + x0, y, z0) * 4) | 0]); fill(10, 11, 0, 0, 2, 2, (a, b, y) => FLOWB[(h3(a + z0, y, x0) * 4) | 0]);
+  fill(4, 5, 7, 7, 2, 2, (a, b, y) => FLOWB[(h3(a, y, x0 + z0) * 4) | 0]); fill(10, 11, 7, 7, 2, 2, pk(0x3f7a2a));
+  for (let k = 0; k < 4; k++) {                               // telhado de duas águas, com beiral
+    fill(1, 14, k, 7 - k, 7 + k, 7 + k, (a, b, y) => b === k || b === 7 - k ? pick(k % 2 ? roofB : roofA, a, y, b + x0) : pick(wallP, a, y, b));
+  }
+  fill(1, 14, 3, 4, 11, 11, (a, b, y) => pick(roofB, a, y, b + z0));
+  fill(11, 12, 1, 2, 7, 12, (a, b, y) => y === 12 ? pick(STONED, a, y, b) : pick(STONE, a + x0, y, b + z0));  // chaminé
+  const ca = 12, cb = h.flip ? 6 : 2, cx = h.o ? x0 + ca : x0 + cb, cz = h.o ? z0 + cb : z0 + ca;
+  chimneys.push(V(cx / R - HALF, 13 / R + .05, cz / R - HALF));
+}
+
+// Portais: arcos de pedra em tijolinhos, com uma pedra roxa no topo
+const portalFx = [];
+const portalMat = new THREE.MeshBasicMaterial({ color: 0x8b5cf6, transparent: true, opacity: .55, side: THREE.DoubleSide });
+const PURP = palX(0x8b5cf6, .12, 4);
+for (const [i, j, di, dj] of PORTALS) {
+  const c = i * R + 4, d = j * R + 4, along = dj !== 0;     // along: pilares espalhados no eixo x
+  const put = (s, w, y, col) => along ? vset(c + s, Y0 + y, d + w, col) : vset(c + w, Y0 + y, d + s, col);
+  const brick = (s, w, y) => { const row = y >> 1; return h3(s < 0 ? 1 : 2, row, ((s + w + (row & 1) * 2) >> 2)) < .5 ? pick(STONE, s, y, w) : pick(STONED, s, y, w); };
+  for (const s0 of [-7, 4]) for (let s = s0; s < s0 + 3; s++) for (let w = -2; w <= 0; w++) for (let y = 0; y < 17; y++) put(s, w, y, y < 3 && h3(s, y, w + i) < .3 ? pick(MOSS, s, y, w) : brick(s, w, y));
+  for (let s = -8; s <= 7; s++) for (let w = -2; w <= 0; w++) for (let y = 17; y <= 18; y++) put(s, w, y, pick(STONED, s, y, w + j));
+  for (let s = -5; s <= 4; s++) for (let w = -2; w <= 0; w++) put(s, w, 19, pick(STONE, s, 19, w));
+  for (let s = -1; s <= 0; s++) for (let w = -2; w <= -1; w++) for (let y = 20; y <= 21; y++) put(s, w, y, pick(PURP, s, y, w));
+  const g = new THREE.Group(); g.position.set(wc(i), 0, wc(j)); g.rotation.y = Math.atan2(di, dj); scene.add(g);
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(.95, 1.95), portalMat); plane.position.set(0, 1.02, 0); g.add(plane);
+  const ring = new THREE.Group(); ring.position.set(0, 1.02, 0); g.add(ring);
+  for (let k = 0; k < 14; k++) { const a = k / 14 * Math.PI * 2; box(mat.purple, .09, .09, .09, Math.cos(a) * .38, Math.sin(a) * .82, .02, ring); }
+  portalFx.push({ ring, x: wc(i + di), z: wc(j + dj) });
+}
+
+// Castelo no centro: muralha de tijolos, 4 torres com telhado vermelho, torre principal, portões e bandeiras
+const CO = HALF * R, CB = [CO - 16, CO + 15];
+const RED = palX(0xd0453a, .07), REDD = palX(0xa8352c, .07), GOLD = palX(0xffc93c, .06, 3), DARK = pk(0x2a2a33), IRON = pk(0x4a525c);
+const cput = (u, y, w, c) => vset(CO + u, Y0 + y, CO + w, c);
+const cfill = (u0, u1, y0, y1, w0, w1, f) => { for (let u = u0; u <= u1; u++) for (let w = w0; w <= w1; w++) for (let y = y0; y <= y1; y++) cput(u, y, w, typeof f === 'function' ? f(u, y, w) : f); };
+const cbrick = (pa, pb) => (u, y, w) => { const row = y >> 1; return h3(row, (u + w + (row & 1) * 2 + 64) >> 2, 5) < .55 ? pick(pa, u, y, w) : pick(pb, u, y, w); };
+const roofPyr = (u0, u1, w0, w1, y0, n) => { for (let L = 0; L < n; L++) cfill(u0 + L, u1 - L, y0 + L, y0 + L, w0 + L, w1 - L, (u, y, w) => pick(L % 2 ? REDD : RED, u, y, w)); };
+cfill(-13, 12, 0, 11, -13, 12, cbrick(STONE, STONED));
+for (let u = -13; u <= 12; u++) for (let w = -13; w <= 12; w++) if ((u === -13 || u === 12 || w === -13 || w === 12) && ((u + w + 40) >> 1) % 2 === 0) cfill(u, u, 12, 13, w, w, pick(STONE, u, 12, w));
+for (const cu of [-13, 12]) for (const cw of [-13, 12]) {
+  cfill(cu - 3, cu + 3, 0, 18, cw - 3, cw + 3, cbrick(STONED, ROCKS[1]));
+  roofPyr(cu - 4, cu + 4, cw - 4, cw + 4, 19, 5);
+  cfill(cu, cu, 24, 27, cw, cw, pick(WOODD, cu, 1, cw)); cfill(cu + 1, cu + 2, 26, 27, cw, cw, pick(GOLD, cu, 2, cw));
+  for (const [du, dw] of [[Math.sign(cu + .5) * 3, 0], [0, Math.sign(cw + .5) * 3]]) cfill(cu + du, cu + du, 12, 13, cw + dw, cw + dw, DARK);
+}
+cfill(-5, 4, 0, 23, -3, 6, cbrick(STONE, STONED));
+for (let u = -5; u <= 4; u++) for (let w = -3; w <= 6; w++) if ((u === -5 || u === 4 || w === -3 || w === 6) && ((u + w + 40) >> 1) % 2 === 0) cput(u, 24, w, pick(STONE, u, 24, w));
+for (const [u, w] of [[-5, 1], [4, 1], [0, -3], [0, 6]]) cfill(u, u, 16, 17, w, w, DARK);
+roofPyr(-6, 5, -4, 7, 25, 6);
+cfill(0, 0, 31, 31, 1, 1, pick(GOLD, 0, 3, 1)); cfill(0, 0, 32, 37, 1, 1, pick(WOODD, 0, 4, 1));
+for (const [nu, nw] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {           // portões com grade e bandeiras dos lados
+  const face = (nu || nw) > 0 ? 12 : -13, at2 = (s, y, c, out = 0) => nu ? cput(face + nu * out, y, s, c) : cput(s, y, face + nw * out, c);
+  for (let s = -3; s <= 2; s++) for (let y = 0; y <= 5; y++) if (y < 5 || (s > -3 && s < 2)) at2(s, y, (s & 1) || y === 3 ? IRON : DARK);
+  for (const b0 of [-9, 6]) for (let s = b0; s < b0 + 3; s++) for (let y = 4; y <= 9; y++) at2(s, y, y === 9 || y === 4 ? pick(GOLD, s, y, nu) : y === 7 && s === b0 + 1 ? pick(GOLD, s, y, 1) : pick(RED, s, y, nw), 1);
+}
+
+// Grama alta e flores (cubinhos soltos no chão)
+const FLOWERS = [0xfacc15, 0xffffff, 0xf472b6, 0xa78bfa, 0xef4444].map(pk), TUFT = PH(.27, .55, .34, .1, 6);
+for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+  const t = grid[i][j]; if (t !== GRASS && t !== TREE && t !== ROCK) continue;
+  if (Math.max(Math.abs(i - C0), Math.abs(j - C0)) < 3.6) continue;
+  for (let k = 0; k < 3; k++) {
+    const x = i * R + Math.floor(rnd() * R), z = j * R + Math.floor(rnd() * R);
+    if (vget(x, Y0, z)) continue;
+    vset(x, Y0, z, pick(TUFT, x, 0, z)); if (rnd() < .45) vset(x, Y0 + 1, z, pick(TUFT, x, 1, z));
+  }
+  if (rnd() < .06) {
+    const x = i * R + 2 + Math.floor(rnd() * 4), z = j * R + 2 + Math.floor(rnd() * 4), fc = FLOWERS[Math.floor(rnd() * 5)];
+    if (!vget(x, Y0, z)) { vset(x, Y0, z, pk(0x3f7a2a)); vset(x, Y0 + 1, z, pk(0xfde68a)); for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (!vget(x + a, Y0 + 1, z + b)) vset(x + a, Y0 + 1, z + b, fc); }
+  }
+}
+
+// Faz a malha: só as faces visíveis, com sombra suave (AO) nos cantos
+const LIN = Float32Array.from({ length: 32 }, (_, k) => { const c = k / 31; return c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4; });
+const AOK = [.42, .62, .82, 1];
+const FD = [[1, 0, 0, 0, 1, 0, 0, 0, 1], [-1, 0, 0, 0, 0, 1, 0, 1, 0], [0, 1, 0, 0, 0, 1, 1, 0, 0], [0, -1, 0, 1, 0, 0, 0, 0, 1], [0, 0, 1, 1, 0, 0, 0, 1, 0], [0, 0, -1, 0, 1, 0, 1, 0, 0]];
+const visFace = (x, y, z, f) => f !== 3 && !(f === 2 && y < Y0) && !solidV(x + FD[f][0], y + FD[f][1], z + FD[f][2]);
+const voxMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+let voxFaces = 0;
+function meshRegion(x0, x1, z0, z1, skip) {
+  let nf = 0;
+  for (let x = x0; x < x1; x++) for (let z = z0; z < z1; z++) {
+    if (skip && skip(x, z)) continue;
+    const t = vtop[x * VX + z], b = (x * VX + z) * VH;
+    for (let y = 0; y < t; y++) if (vox[b + y]) for (let f = 0; f < 6; f++) if (visFace(x, y, z, f)) nf++;
+  }
+  if (!nf) return null;
+  voxFaces += nf;
+  const pos = new Int16Array(nf * 12), nor = new Int8Array(nf * 12), cl = new Uint16Array(nf * 12);
+  const idx = nf * 4 > 65535 ? new Uint32Array(nf * 6) : new Uint16Array(nf * 6), ao = [0, 0, 0, 0];
+  let q = 0;
+  for (let x = x0; x < x1; x++) for (let z = z0; z < z1; z++) {
+    if (skip && skip(x, z)) continue;
+    const t = vtop[x * VX + z], b = (x * VX + z) * VH;
+    for (let y = 0; y < t; y++) {
+      const c = vox[b + y]; if (!c) continue;
+      const cr = LIN[c >> 10 & 31], cg = LIN[c >> 5 & 31], cb = LIN[c & 31];
+      for (let f = 0; f < 6; f++) {
+        if (!visFace(x, y, z, f)) continue;
+        const d = FD[f], nx = x + d[0], ny = y + d[1], nz = z + d[2];
+        const bx = x + (d[0] > 0), by = y + (d[1] > 0), bz = z + (d[2] > 0);
+        for (let k = 0; k < 4; k++) {
+          const cu = k === 1 || k === 2 ? 1 : 0, cv = k >= 2 ? 1 : 0, su = cu ? 1 : -1, sv = cv ? 1 : -1;
+          const s1 = solidV(nx + su * d[3], ny + su * d[4], nz + su * d[5]), s2 = solidV(nx + sv * d[6], ny + sv * d[7], nz + sv * d[8]);
+          const cc = solidV(nx + su * d[3] + sv * d[6], ny + su * d[4] + sv * d[7], nz + su * d[5] + sv * d[8]);
+          const a = s1 && s2 ? 0 : 3 - s1 - s2 - cc; ao[k] = a;
+          const o = (q * 4 + k) * 3, m = AOK[a] * 65535;
+          pos[o] = bx + cu * d[3] + cv * d[6]; pos[o + 1] = by + cu * d[4] + cv * d[7]; pos[o + 2] = bz + cu * d[5] + cv * d[8];
+          nor[o] = d[0] * 127; nor[o + 1] = d[1] * 127; nor[o + 2] = d[2] * 127;
+          cl[o] = cr * m; cl[o + 1] = cg * m; cl[o + 2] = cb * m;
+        }
+        const v = q * 4, io = q * 6;
+        if (ao[0] + ao[2] < ao[1] + ao[3]) { idx[io] = v + 1; idx[io + 1] = v + 2; idx[io + 2] = v + 3; idx[io + 3] = v + 1; idx[io + 4] = v + 3; idx[io + 5] = v; }
+        else { idx[io] = v; idx[io + 1] = v + 1; idx[io + 2] = v + 2; idx[io + 3] = v; idx[io + 4] = v + 2; idx[io + 5] = v + 3; }
+        q++;
+      }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(nor, 3, true));
+  g.setAttribute('color', new THREE.BufferAttribute(cl, 3, true));
+  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  g.computeBoundingSphere();
+  const m = new THREE.Mesh(g, voxMat); m.scale.setScalar(1 / R); m.position.set(-HALF, -Y0 / R, -HALF);
+  m.castShadow = m.receiveShadow = true; return m;
+}
+const inCastle = (x, z) => x >= CB[0] && x <= CB[1] && z >= CB[0] && z <= CB[1];
+const CHUNK = 64;
+for (let cx = 0; cx < VX; cx += CHUNK) for (let cz = 0; cz < VX; cz += CHUNK) { const m = meshRegion(cx, cx + CHUNK, cz, cz + CHUNK, inCastle); if (m) scene.add(m); }
+
+// Chão: uma placa só, com uma imagem de 8x8 pontinhos por casa (grama, areia, terra, calçada)
+const dirt = new Uint8Array(VX * VX);
+for (const [si, sj] of SPAWNS) {                     // trilhas de terra batida do portal ao castelo
+  let i = si, j = sj, px = wc(i), pz = wc(j);
+  for (let g = 0; g < 300 && flow[K(i, j)] > 0; g++) {
+    let bi = -1, bj = -1, bf = flow[K(i, j)];
+    for (const [a, b] of D8) { const ni = i + a, nj = j + b; if (!free(ni, nj) || (a && b && (!free(i + a, j) || !free(i, j + b)))) continue; if (flow[K(ni, nj)] < bf) { bf = flow[K(ni, nj)]; bi = ni; bj = nj; } }
+    if (bi < 0) break;
+    const qx = wc(bi), qz = wc(bj);
+    for (let s = 0; s <= 1; s += .08) {
+      const x = ((px + (qx - px) * s) + HALF) * R, z = ((pz + (qz - pz) * s) + HALF) * R;
+      for (let a = -4; a <= 4; a++) for (let b = -4; b <= 4; b++) { const X = Math.floor(x + a), Z = Math.floor(z + b); if (X >= 0 && Z >= 0 && X < VX && Z < VX && Math.hypot(a, b) < 2.4 + (h3(X, 3, Z) - .5) * 1.8) dirt[X * VX + Z] = 1; }
+    }
+    i = bi; j = bj; px = qx; pz = qz;
+  }
+}
+const GT = [palH(.25, .5, .4, .035, 8), palH(.27, .5, .36, .035, 8), palH(.23, .55, .43, .03, 8)];
+const TSAND = [0, 1, 2, 3, 4].map(k => shade(0xe3cf98, .94 + k * .03)), TDIRT = [0x9a7148, 0x8e6740, 0xa47a50, 0x86603b, 0xb08a5c];
+const TSTONE = [0xc9c2b5, 0xbab3a6, 0xd2ccc0, 0xb1aa9d, 0xc3bcae], TPORT = [0x5b4a78, 0x4e4068, 0x67558a, 0x463a5e];
+const gdata = new Uint8Array(VX * VX * 4);
+for (let x = 0; x < VX; x++) for (let z = 0; z < VX; z++) {
+  const i = x >> 3, j = z >> 3, t = grid[i][j], o = ((VX - 1 - z) * VX + x) * 4, hh = h3(x, 7, z);
+  let c, a = 255;
+  const cd = Math.max(Math.abs(i - C0), Math.abs(j - C0));
+  if (t === WATER || t === BRIDGE) { c = 0; a = 0; }
+  else if (t === CASTLE || (cd < 3.6 && t !== PAD)) { const row = Math.floor(z / 3), col = Math.floor((x + (row & 1) * 2) / 4), edge = z % 3 === 2 || (x + (row & 1) * 2) % 4 === 3; c = shade(TSTONE[(h3(row, col, 1) * 5) | 0], edge ? .86 : 1 + (hh - .5) * .06); }
+  else if (t === PORTAL || PORTALS.some(([pi, pj]) => Math.hypot(i - pi, j - pj) < 1.6)) { const row = z >> 2, col = (x + (row & 1) * 2) >> 2; c = shade(TPORT[(h3(row, col, 2) * 4) | 0], z % 4 === 3 || (x + (row & 1) * 2) % 4 === 3 ? .8 : 1); }
+  else if (dirt[x * VX + z] && t !== PAD) c = hh < .06 ? 0x777066 : TDIRT[(h3(x, 1, z) * 5) | 0];
+  else if (near(i, j, 1, q => q === WATER)) c = hh < .04 ? 0xa89c84 : TSAND[(h3(x, 2, z) * TSAND.length) | 0];
+  else {
+    const f = noise(x / R * .7, z / R * .7) + (h3(x >> 2, 4, z >> 2) - .5) * .9, p = f > .9 ? GT[1] : f < -.8 ? GT[2] : GT[0];
+    c = hh < .004 ? 0xfacc15 : hh < .008 ? 0xffffff : hh < .014 ? 0x8a8a80 : p[(h3(x, 5, z) * 8) | 0];
+  }
+  gdata[o] = c >> 16 & 255; gdata[o + 1] = c >> 8 & 255; gdata[o + 2] = c & 255; gdata[o + 3] = a;
+}
+const gtex = new THREE.DataTexture(gdata, VX, VX, THREE.RGBAFormat);
+Object.assign(gtex, { colorSpace: THREE.SRGBColorSpace, magFilter: THREE.NearestFilter, minFilter: THREE.LinearMipmapLinearFilter, generateMipmaps: true, anisotropy: Math.min(4, renderer.capabilities.getMaxAnisotropy()), needsUpdate: true });
+// Uma placa quadrada por casa do mapa (só onde é chão, ou só onde é água)
+function cellQuads(ok) {
+  const p = [], uv = [], ix = [];
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) if (ok(grid[i][j])) {
+    const v = p.length / 3, x0 = i - HALF, z0 = j - HALF;
+    for (const [a, b] of [[0, 0], [0, 1], [1, 1], [1, 0]]) { p.push(x0 + a, 0, z0 + b); uv.push((x0 + a + HALF) / N, (HALF - z0 - b) / N); }
+    ix.push(v, v + 1, v + 2, v, v + 2, v + 3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(p, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute("normal", new THREE.Float32BufferAttribute(p.map((_, k) => k % 3 === 1 ? 1 : 0), 3)); g.setIndex(ix); return g;
+}
+const isWet = t => t === WATER || t === BRIDGE;
+const ground = new THREE.Mesh(cellQuads(t => !isWet(t)), new THREE.MeshLambertMaterial({ map: gtex }));
 ground.receiveShadow = true; scene.add(ground);
-const waterMesh = new THREE.InstancedMesh(BOX, M(0xffffff), waterT.length);
-waterT.forEach(([x, z], n) => { setInst(waterMesh, n, x, -.8, z, .5, 1, .5); waterMesh.setColorAt(n, col.setHSL(.56, .65, .48 + rnd() * .08)); });
-waterMesh.receiveShadow = true; scene.add(waterMesh);
+// Água: placa logo abaixo do chão com pontinhos que correm devagar
+const WS = 64, wdata = new Uint8Array(WS * WS * 4);
+for (let x = 0; x < WS; x++) for (let z = 0; z < WS; z++) {
+  const o = (z * WS + x) * 4, r = h3(x, 11, z), wave = Math.sin((x + z * .5) * Math.PI * 2 / 16 + Math.sin(z * Math.PI * 2 / 32) * 2) > .82;
+  const c = r < .025 ? 0xe0f6ff : wave ? 0x7cc8ec : r < .5 ? 0x3f9fd6 : r < .8 ? 0x4aa8de : 0x3793cc;
+  wdata[o] = c >> 16 & 255; wdata[o + 1] = c >> 8 & 255; wdata[o + 2] = c & 255; wdata[o + 3] = 255;
+}
+const wtex = new THREE.DataTexture(wdata, WS, WS, THREE.RGBAFormat);
+Object.assign(wtex, { colorSpace: THREE.SRGBColorSpace, magFilter: THREE.NearestFilter, minFilter: THREE.LinearMipmapLinearFilter, generateMipmaps: true, wrapS: THREE.RepeatWrapping, wrapT: THREE.RepeatWrapping, needsUpdate: true });
+wtex.repeat.set(N * R / WS, N * R / WS);
+const waterMesh = new THREE.Mesh(cellQuads(isWet), new THREE.MeshLambertMaterial({ map: wtex, emissive: 0x0b3550 }));
+waterMesh.position.y = -.22; waterMesh.receiveShadow = true; scene.add(waterMesh);
 box(mat.soil, N, 1.2, N, 0, -1.6, 0, scene);
 box(mat.soilD, N - .4, .8, N - .4, 0, -2.6, 0, scene);
-for (const [, , i, j, a, b] of waterT) if (grid[i][j] === BRIDGE && !a && !b) {
-  for (let k = 0; k < 5; k++) box(mat.wood, 1.15, .08, .16, wc(i), 0, wc(j) - .4 + k * .2, scene);
-  for (const s of [-1, 1]) box(mat.woodD, .08, .25, 1.05, wc(i) + s * .56, .14, wc(j), scene);
+for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) if (grid[i][j] === BRIDGE && grid[i][j - 1] !== BRIDGE) {
+  for (let k = 0; k < 10; k++) box(k % 2 ? mat.woodD : mat.wood, 1.15, .08, .19, wc(i), .0, wc(j) - .4 + k * .2, scene);
+  for (const s of [-1, 1]) { box(mat.woodD, .08, .25, 2.05, wc(i) + s * .56, .14, wc(j) + .5, scene); for (let k = 0; k < 3; k++) box(mat.woodD, .1, .4, .1, wc(i) + s * .56, .1, wc(j) - .45 + k * .95, scene); }
 }
 const padMesh = new THREE.InstancedMesh(BOX, mat.pad, pads.length * 4);
 pads.forEach((p, n) => { for (let k = 0; k < 4; k++) { setInst(padMesh, n * 4 + k, p.x - .22 + (k % 2) * .44, .04, p.z - .22 + (k >> 1) * .44, .42, .08, .42); padMesh.setColorAt(n * 4 + k, col.setHSL(.11, .2, .7 + rnd() * .08)); } });
 padMesh.receiveShadow = true; scene.add(padMesh);
 
-// Helper: junta muitos cubinhos num InstancedMesh só (rápido no celular)
-function voxMesh(list, shadow = true) {
-  const m = new THREE.InstancedMesh(BOX, M(0xffffff), list.length);
-  list.forEach(([x, y, z, sx, sy, sz, c, r], n) => { setInst(m, n, x, y, z, sx, sy, sz, r || 0); m.setColorAt(n, col.set(c)); });
-  m.castShadow = shadow; m.receiveShadow = true; scene.add(m); return m;
-}
-const hsl = (h, s, l) => new THREE.Color().setHSL(h, s, l).getHex();
-
-// Grama alta e flores
-const deco = [], FLOWERS = [0xfacc15, 0xffffff, 0xf472b6, 0xa78bfa, 0xef4444];
-for (const [x, z, i, j] of tiles) {
-  const t = grid[i][j]; if (t !== GRASS && t !== TREE && t !== ROCK) continue;
-  if (Math.max(Math.abs(i - C0), Math.abs(j - C0)) < 3.6) continue;
-  if (rnd() < .35) deco.push([x + (rnd() - .5) * .3, .07, z + (rnd() - .5) * .3, .07, .14, .07, hsl(.27 + rnd() * .04, .55, .3 + rnd() * .12)]);
-  if (rnd() < .04) { const fx = x + (rnd() - .5) * .3, fz = z + (rnd() - .5) * .3; deco.push([fx, .06, fz, .03, .12, .03, 0x3f7a2a]); deco.push([fx, .14, fz, .09, .07, .09, FLOWERS[Math.floor(rnd() * 5)]]); }
-}
-voxMesh(deco, false);
-
-// Árvores feitas de cubinhos: redondas e pinheiros
-const trunkV = [], leafV = [];
-for (const [i, j] of trees) {
-  const x = wc(i) + (rnd() - .5) * .15, z = wc(j) + (rnd() - .5) * .15, s = .85 + rnd() * .35;
-  trunkV.push([x, .28 * s, z, .16 * s, .56 * s, .16 * s, hsl(.07, .4, .28 + rnd() * .06)]);
-  if (rnd() < .4) {
-    [[.5, .74], [.72, .56], [.92, .38], [1.1, .2]].forEach(([y, w], k) => leafV.push([x, y * s, z, w * s, .2 * s, w * s, hsl(.38, .45, .22 + k * .03 + rnd() * .03), rnd()]));
-    leafV.push([x, 1.24 * s, z, .1 * s, .1 * s, .1 * s, hsl(.38, .45, .32)]);
-  } else {
-    const c = .26 * s;
-    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) if (!(a && b) || rnd() < .55) leafV.push([x + a * c, .66 * s + rnd() * .05, z + b * c, c * 1.02, c, c * 1.02, hsl(.29 + rnd() * .04, .55, .3 + rnd() * .08)]);
-    for (const [a, b] of [[-.5, -.5], [.5, -.5], [-.5, .5], [.5, .5]]) leafV.push([x + a * c, .9 * s, z + b * c, c, c, c, hsl(.29 + rnd() * .04, .55, .36 + rnd() * .08)]);
-    leafV.push([x, 1.12 * s, z, c, c * .9, c, hsl(.29, .55, .42 + rnd() * .06)]);
-    if (rnd() < .3) leafV.push([x + c * .9, .8 * s, z + c * .3, .07, .07, .07, 0xdc2626]);
-  }
-}
-voxMesh(trunkV); voxMesh(leafV);
-
-// Pedras em vários cubinhos
-const rockV = [];
-for (const [i, j] of rocks) {
-  const x = wc(i), z = wc(j), n = 4 + Math.floor(rnd() * 3);
-  for (let k = 0; k < n; k++) { const sz = .18 + rnd() * .24; rockV.push([x + (rnd() - .5) * .45, sz / 2 + (k > 2 ? sz * .6 : 0), z + (rnd() - .5) * .45, sz, sz * (.8 + rnd() * .3), sz, hsl(.08, .05, .42 + rnd() * .16), rnd() * 2]); }
-  if (rnd() < .5) rockV.push([x + .1, .32, z - .05, .2, .06, .2, 0x5f8f3a]);
-}
-voxMesh(rockV);
-
-// Montanhas em degraus, com neve no topo
-const mountV = [];
-for (const [i, j] of mounts) for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) {
-  const x = i - HALF + .25 + a * .5, z = j - HALF + .25 + b * .5, h = Math.max(.5, Math.round(mountH[K(i, j)] * (.85 + rnd() * .3) * 4) / 4);
-  mountV.push([x, h / 2, z, .5, h, .5, h < 1.8 ? hsl(.26, .4, .3 + rnd() * .05) : hsl(.07, .2, .26 + rnd() * .08)]);
-  mountV.push([x, h + .08, z, .5, .16, .5, h > 3.9 ? hsl(.58, .2, .93 + rnd() * .05) : h < 2.4 ? hsl(.27, .5, .36 + rnd() * .06) : hsl(.08, .14, .36 + rnd() * .07)]);
-}
-voxMesh(mountV);
-
-// Casinhas
-const chimneys = [];
-const WALLS = [0xf1e3c6, 0xe8d3b0, 0xd9c7a5, 0xf5efe0], ROOFS = [0xb3412f, 0x5a6b8c, 0x8a5a3b, 0x9b2d2d];
-for (const h of houses) {
-  const g = new THREE.Group(); g.position.set(wc(h.i), 0, wc(h.j)); g.rotation.y = h.rot * Math.PI / 2; scene.add(g);
-  const wall = M(WALLS[Math.floor(rnd() * 4)]), roof = M(ROOFS[Math.floor(rnd() * 4)]);
-  box(mat.stoneD, .82, .08, .7, 0, .04, 0, g);
-  box(wall, .76, .52, .64, 0, .34, 0, g);
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(mat.woodD, .06, .54, .06, sx * .38, .34, sz * .32, g);
-  box(mat.woodD, .78, .05, .66, 0, .6, 0, g);
-  for (let k = 0; k < 4; k++) box(roof, .9, .11, .78 - k * .2, 0, .67 + k * .11, 0, g);
-  box(mat.woodD, .16, .28, .03, 0, .22, .33, g);
-  box(mat.gold, .03, .03, .02, .05, .22, .35, g);
-  for (const sx of [-1, 1]) { box(mat.ice, .13, .12, .03, sx * .23, .4, .33, g); box(mat.woodD, .17, .03, .04, sx * .23, .33, .34, g); }
-  box(mat.ice, .03, .12, .13, .39, .4, 0, g);
-  box(mat.stoneD, .12, .34, .12, .26, .9, -.18, g);
-  chimneys.push(V(wc(h.i), 1.1, wc(h.j)).add(V(.26, 0, -.18).applyAxisAngle(V(0, 1, 0), g.rotation.y)));
-}
-
-// Portais (arcos de pedra com um redemoinho roxo)
-const portalFx = [];
-const portalMat = new THREE.MeshBasicMaterial({ color: 0x8b5cf6, transparent: true, opacity: .55, side: THREE.DoubleSide });
-for (const [i, j, di, dj] of PORTALS) {
-  const g = new THREE.Group(); g.position.set(wc(i), 0, wc(j)); g.rotation.y = Math.atan2(di, dj); scene.add(g);
-  for (const sx of [-1, 1]) for (let k = 0; k < 5; k++) box(k % 2 ? mat.stone : mat.stoneD, .32, .42, .34, sx * .62, .21 + k * .42, 0, g);
-  box(mat.stoneD, 1.6, .3, .38, 0, 2.2, 0, g); box(mat.stone, 1.2, .14, .3, 0, 2.42, 0, g);
-  box(mat.purple, .2, .2, .2, 0, 2.6, 0, g);
-  const plane = new THREE.Mesh(new THREE.PlaneGeometry(.92, 1.9), portalMat); plane.position.y = 1.05; g.add(plane);
-  const ring = new THREE.Group(); ring.position.y = 1.05; g.add(ring);
-  for (let k = 0; k < 10; k++) { const a = k / 10 * Math.PI * 2; box(mat.purple, .1, .1, .1, Math.cos(a) * .36, Math.sin(a) * .8, .02, ring); }
-  portalFx.push({ ring, x: wc(i + di), z: wc(j + dj) });
-}
-
 // Nuvens de cubos passando devagar
 const cloudParts = [], clouds3 = [];
 for (let k = 0; k < 16; k++) {
   const c = { x: (rnd() - .5) * 90, z: (rnd() - .5) * 70, y: 6.5 + rnd() * 1.5, sp: .25 + rnd() * .35, parts: [] };
-  const n = 5 + Math.floor(rnd() * 6);
-  for (let q = 0; q < n; q++) { const sz = .4 + rnd() * .45; c.parts.push([(rnd() - .5) * 1.8, rnd() * .35, (rnd() - .5) * 1.1, sz * 1.4, sz * .6, sz]); }
+  const n = 10 + Math.floor(rnd() * 10);
+  for (let q = 0; q < n; q++) { const sz = .25 + rnd() * .35; c.parts.push([(rnd() - .5) * 2, rnd() * .4, (rnd() - .5) * 1.2, sz * 1.4, sz * .6, sz]); }
   clouds3.push(c); cloudParts.push(...c.parts);
 }
 const cloudMesh = new THREE.InstancedMesh(BOX, new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x9aa7b5, transparent: true, opacity: .6, depthWrite: false }), cloudParts.length);
@@ -472,21 +711,11 @@ function updateClouds3(rdt) {
   cloudMesh.instanceMatrix.needsUpdate = true;
 }
 
-// Castelo no centro
-const castle = new THREE.Group(); castle.scale.setScalar(1.45); scene.add(castle);
-box(mat.stone, 2.6, 1.1, 2.5, 0, .55, 0, castle);
-for (let k = -1.1; k <= 1.11; k += .44) {
-  box(mat.stone, .22, .22, .22, k, 1.21, -1.15, castle); box(mat.stone, .22, .22, .22, k, 1.21, 1.15, castle);
-  box(mat.stone, .22, .22, .22, -1.2, 1.21, k, castle); box(mat.stone, .22, .22, .22, 1.2, 1.21, k, castle);
-}
-for (const sx of [-1, 1]) for (const sz of [-1, 1]) { box(mat.stoneD, .7, 1.8, .7, sx * 1.25, .9, sz * 1.2, castle); cone(mat.red, .55, .6, sx * 1.25, 2.1, sz * 1.2, castle); }
-box(mat.stone, 1.1, 2.2, 1.1, 0, 1.1, .2, castle); cone(mat.red, .85, .8, 0, 2.6, .2, castle);
-for (const s of [-1, 1]) { box(mat.dark, .6, .7, .1, 0, .35, s * 1.27, castle); box(mat.dark, .1, .7, .6, s * 1.32, .35, 0, castle); }
-box(mat.woodD, .05, .9, .05, 0, 3.3, .2, castle);
-const flag = new THREE.Group(); flag.position.set(0, 3.6, .2); castle.add(flag); box(mat.red, .45, .26, .04, .23, 0, 0, flag);
-for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(mat.dark, .14, .22, .04, sx * 1.25, 1.35, sz * 1.57, castle);
-for (const s of [-1, 1]) for (const f of [-1, 1]) { box(mat.red, .3, .5, .03, s * .62, .72, f * 1.27, castle); box(mat.gold, .3, .05, .035, s * .62, .5, f * 1.275, castle); box(mat.gold, .1, .1, .04, s * .62, .78, f * 1.28, castle); }
-for (const sx of [-1, 1]) for (const sz of [-1, 1]) { box(mat.woodD, .03, .45, .03, sx * 1.25, 2.6, sz * 1.2, castle); box(mat.gold, .2, .12, .02, sx * 1.25 + .1, 2.75, sz * 1.2, castle); }
+const castle = new THREE.Group(); scene.add(castle);
+castle.add(meshRegion(CB[0], CB[1] + 1, CB[0], CB[1] + 1));
+const flag = new THREE.Group(); flag.position.set(1 / R / 2, 37 / R, 1.5 / R); castle.add(flag); box(mat.red, .55, .32, .05, .3, 0, 0, flag); box(mat.gold, .12, .12, .06, .3, 0, 0, flag);
+const voxStats = { faces: voxFaces };
+vox = null;                                           // libera a memória da grade
 let castleShake = 0;
 const CASTLE_T = { kind: 'castle', pos: V(), r: 0, dead: false };
 
@@ -1506,12 +1735,11 @@ function loop(now) {
     if (c.t > .5) c.m.scale.setScalar(Math.max(0, 1 - (c.t - .5) / .35));
     if (c.t > .85) { scene.remove(c.m); coins.splice(k, 1); }
   }
-  waterT.forEach(([x, z], n) => setInst(waterMesh, n, x, -.8 + Math.sin(time * 2 + x * 1.4 + z) * .03, z, .5, 1, .5));
+  wtex.offset.x = (time * .035) % 1; wtex.offset.y = (time * .012) % 1;
   for (const pf of portalFx) { pf.ring.rotation.z += rdt * 2; }
   portalMat.opacity = .45 + Math.sin(time * 3) * .15;
   updateClouds3(rdt);
   if (Math.random() < rdt * 2.5 && chimneys.length) { const c = chimneys[Math.floor(Math.random() * chimneys.length)]; emit(c, 0xd4d4d8, .14, (Math.random() - .5) * .2, .5, (Math.random() - .5) * .2, 1.6, -.3); pm.instanceColor.needsUpdate = true; }
-  waterMesh.instanceMatrix.needsUpdate = true;
   flag.rotation.y = Math.sin(time * 3) * .35;
   castleShake = Math.max(0, castleShake - rdt);
   castle.position.x = Math.sin(time * 70) * .06 * castleShake;
@@ -1525,7 +1753,7 @@ function loop(now) {
 }
 resize(); updateUI();
 requestAnimationFrame(loop);
-if (location.search.includes('teste')) window.__vd = { S, pads, placeTower, startWave, enemies, towers, hero, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked };
+if (location.search.includes('teste')) window.__vd = { S, pads, placeTower, startWave, enemies, towers, hero, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, houses, trees, collide, hitsSolid, cellOf, HOUSE, TREE };
 </script>
 </body>
 </html>
