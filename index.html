@@ -120,6 +120,7 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
     <h1>Defenda o castelo!</h1>
     <ul id="helpList"></ul>
     <button id="play" class="pri">Jogar</button>
+    <button id="gfx" class="sec" style="margin-top:10px;width:100%"></button>
   </div>
 </div>
 <div id="over" class="ov">
@@ -200,13 +201,17 @@ for (const [r, n, off] of [[5.5, 8, .39], [9.5, 12, 0], [13.5, 16, .2], [17.5, 2
   grid[i][j] = PAD; const p = { i, j, x: wc(i), z: wc(j), t: null }; pads.push(p); padAt[K(i, j)] = p;
 }
 
-// Vilas com casinhas: cada casa ocupa 2 casas do mapa (as duas ficam sólidas)
+// Vilas com casinhas de 3 tamanhos: pequena (1x1), média (2x1) e grande (3x2). Todas as casas do mapa que ela cobre ficam sólidas.
 const houses = [];
 const houseOk = (i, j) => at(i, j) === GRASS && !reserved.has(K(i, j)) && !near(i, j, 1, t => t !== GRASS);
-for (const [ci, cj] of [[11, 36], [37, 27], [34, 15], [12, 17], [24, 40]]) for (let k = 0; k < 30 && houses.filter(h => h.v === ci).length < 4; k++) {
-  const i = ci + Math.round((rnd() - .5) * 8), j = cj + Math.round((rnd() - .5) * 8), o = rnd() < .5, i2 = i + (o ? 1 : 0), j2 = j + (o ? 0 : 1);
-  if (!houseOk(i, j) || !houseOk(i2, j2)) continue;
-  grid[i][j] = grid[i2][j2] = HOUSE; houses.push({ i, j, o, v: ci, flip: rnd() < .5 });
+const houseCells = h => { const c = []; for (let a = 0; a < h.Lc; a++) for (let b = 0; b < h.Wc; b++) c.push(h.o ? [h.i + a, h.j + b] : [h.i + b, h.j + a]); return c; };
+for (const [ci, cj] of [[11, 36], [37, 27], [34, 15], [12, 17], [24, 40]]) for (let k = 0; k < 50 && houses.filter(h => h.v === ci).length < 5; k++) {
+  const r = rnd(), [Lc, Wc] = r < .3 ? [1, 1] : r < .68 ? [2, 1] : [3, 2];
+  const h = { i: ci + Math.round((rnd() - .5) * 9), j: cj + Math.round((rnd() - .5) * 9), o: rnd() < .5, Lc, Wc, v: ci, flip: rnd() < .5 };
+  const cells = houseCells(h);
+  if (!cells.every(([a, b]) => houseOk(a, b))) continue;
+  for (const [a, b] of cells) grid[a][b] = HOUSE;
+  houses.push(h);
 }
 
 // Árvores e pedras (sólidas)
@@ -222,6 +227,20 @@ for (const [si, sj] of SPAWNS) {
     const i = Math.round(si + (C0 - si) * t / L), j = Math.round(sj + (C0 - sj) * t / L);
     for (const [a, b] of [[0, 0], [1, 0], [0, 1]]) { const g = at(i + a, j + b); if (g === TREE || g === ROCK || g === MOUNT) grid[i + a][j + b] = GRASS; }
   }
+}
+// Árvores gigantes (2 ou 3): base de 2x2 casas, sólida, longe do castelo e dos caminhos dos portais
+const GIANT = 10; SOLIDBOX.add(GIANT);
+const giants = [];
+const segDist = (px, pz, ax, az, bx, bz) => { const dx = bx - ax, dz = bz - az, t = clamp(((px - ax) * dx + (pz - az) * dz) / (dx * dx + dz * dz), 0, 1); return Math.hypot(px - ax - dx * t, pz - az - dz * t); };
+for (let k = 0; k < 3000 && giants.length < 3; k++) {
+  const i = 3 + Math.floor(rnd() * (N - 7)), j = 3 + Math.floor(rnd() * (N - 7)), cells = [[i, j], [i + 1, j], [i, j + 1], [i + 1, j + 1]];
+  if (Math.max(Math.abs(i + .5 - C0), Math.abs(j + .5 - C0)) < 9) continue;
+  if (cells.some(([a, b]) => reserved.has(K(a, b)) || ![GRASS, TREE, ROCK].includes(at(a, b)) || near(a, b, 1, t => t === PAD || t === HOUSE || t === WATER || t === BRIDGE || t === MOUNT || t === PORTAL))) continue;
+  if (SPAWNS.some(([si, sj]) => segDist(i + .5, j + .5, si, sj, C0, C0) < 4.5)) continue;
+  if (giants.some(g => Math.hypot(g.i - i, g.j - j) < 12)) continue;
+  for (let a = -2; a <= 3; a++) for (let b = -2; b <= 3; b++) { const t = at(i + a, j + b); if (t === TREE || t === ROCK) grid[i + a][j + b] = GRASS; }
+  for (const [a, b] of cells) grid[a][b] = GIANT;
+  giants.push({ i, j });
 }
 const trees = [], rocks = [], mounts = [];
 for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
@@ -293,7 +312,7 @@ function collide(p, r) {
 }
 function hitsSolid(x, z) {
   const i = cellOf(x), j = cellOf(z), t = at(i, j);
-  if (t === CASTLE || t === MOUNT || t === HOUSE || t === PORTAL) return true;
+  if (t === CASTLE || t === MOUNT || t === HOUSE || t === PORTAL || t === GIANT) return true;
   const R = SOLID_R[t] || (t === PAD && padAt[K(i, j)].t ? .42 : 0);
   return R && Math.hypot(x - wc(i), z - wc(j)) < R;
 }
@@ -339,7 +358,12 @@ function setInst(mesh, n, x, y, z, sx, sy, sz, ry = 0) {
 // Tudo que é fixo (chão, montanhas, árvores, pedras, casas, portais, castelo, grama) é feito de
 // cubinhos de 1/8 de casa. Só as faces que aparecem viram triângulos, com sombrinha nos cantos,
 // e o mundo é dividido em pedaços para a placa de vídeo desenhar só o que a câmera vê.
-const R = 8, VX = N * R, Y0 = 8, VH = 72;               // 8 cubinhos por casa; Y0 = altura do chão
+// Dois modos de gráfico: "leve" (celular, 8 cubinhos por casa) e "detalhado" (PC, 16 por casa: 4x mais fino).
+const qs = new URLSearchParams(location.search);
+let GFX = qs.has("hd") ? "hd" : qs.has("leve") ? "leve" : null;
+try { GFX = GFX || localStorage.getItem("vd-grafico"); } catch (e) {}
+const HD = (GFX || (TOUCH ? "leve" : "hd")) === "hd";
+const Q = HD ? 2 : 1, R = 8 * Q, SH = HD ? 4 : 3, VX = N * R, Y0 = 8 * Q, VH = 72 * Q;   // Y0 = altura do chão
 let vox = new Uint16Array(VX * VX * VH);
 const vtop = new Uint8Array(VX * VX), landV = new Uint8Array(VX * VX);
 const vI = (x, y, z) => (x * VX + z) * VH + y;
@@ -351,13 +375,24 @@ const palH = (h, s, l, d, n = 6) => Array.from({ length: n }, (_, k) => hsl(h, s
 const palX = (hex, d = .1, n = 6) => Array.from({ length: n }, (_, k) => pk(shade(hex, 1 + (k / (n - 1) - .5) * 2 * d)));
 const PH = (h, s, l, d, n) => palH(h, s, l, d, n).map(pk);
 const pick = (p, x, y, z) => p[(h3(x, y, z) * p.length) | 0];
-const cellT = (x, z) => grid[x >> 3][z >> 3];
+const cellT = (x, z) => grid[x >> SH][z >> SH];
 for (let x = 0; x < VX; x++) for (let z = 0; z < VX; z++) { const t = cellT(x, z); landV[x * VX + z] = t !== WATER && t !== BRIDGE ? 1 : 0; }
 function vset(x, y, z, c) {
   if (x < 0 || z < 0 || x >= VX || z >= VX || y < 0 || y >= VH) return;
   vox[vI(x, y, z)] = c; const k = x * VX + z; if (c && y >= vtop[k]) vtop[k] = y + 1;
 }
 const vget = (x, y, z) => x < 0 || z < 0 || x >= VX || z >= VX || y < 0 || y >= VH ? 0 : vox[vI(x, y, z)];
+// Peças desenhadas na medida do modo leve (castelo, casas, portais, pedras): no modo detalhado
+// cada cubinho vira 2x2x2 menores, com leve variação de cor para dar textura.
+const jit = (c, x, y, z) => { const m = .94 + h3(x, y, z) * .12; return 0x8000 | Math.min(31, Math.round((c >> 10 & 31) * m)) << 10 | Math.min(31, Math.round((c >> 5 & 31) * m)) << 5 | Math.min(31, Math.round((c & 31) * m)); };
+function dset(x, y, z, c) {
+  if (Q === 1) return vset(x, y, z, c);
+  for (let a = 0; a < Q; a++) for (let b = 0; b < Q; b++) for (let e = 0; e < Q; e++) { const X = x * Q + a, Y = y * Q + e, Z = z * Q + b; vset(X, Y, Z, c && jit(c, X, Y, Z)); }
+}
+function dfill(x0, x1, y0, y1, z0, z1, f) {
+  for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) for (let y = y0; y <= y1; y++)
+    dset(x, y, z, typeof f === "function" ? f(x, y, z) : Array.isArray(f) ? pick(f, x, y, z) : f);
+}
 // Enche uma caixa de cubinhos (limites inclusivos). f: cor, paleta ou função (x, y, z) => cor
 function vfill(x0, x1, y0, y1, z0, z1, f) {
   for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) for (let y = y0; y <= y1; y++)
@@ -377,8 +412,8 @@ for (let x = 0; x < VX; x++) for (let z = 0; z < VX; z++) {
   const edge = x === 0 || z === 0 || x === VX - 1 || z === VX - 1;
   const bank = !edge && (!landV[(x + 1) * VX + z] || !landV[(x - 1) * VX + z] || !landV[x * VX + z + 1] || !landV[x * VX + z - 1]);
   if (!edge && !bank) continue;
-  const t = cellT(x, z), topC = t === MOUNT ? ROCKP : near(x >> 3, z >> 3, 1, q => q === WATER) ? SAND : GRASSV;
-  for (let y = edge ? 0 : Y0 - 4; y < Y0; y++) vset(x, y, z, pick(y === Y0 - 1 ? topC : (y >> 1) & 1 ? SOIL : SOILD, x, y, z));
+  const t = cellT(x, z), topC = t === MOUNT ? ROCKP : near(x >> SH, z >> SH, 1, q => q === WATER) ? SAND : GRASSV;
+  for (let y = edge ? 0 : Y0 - 4 * Q; y < Y0; y++) vset(x, y, z, pick(y === Y0 - 1 ? topC : (y >> 1) & 1 ? SOIL : SOILD, x, y, z));
 }
 
 // Montanhas: altura suave por coluna, em degraus de 2x2 cubinhos, com camadas de pedra e neve no topo
@@ -389,7 +424,7 @@ for (let x = 0; x < VX; x++) for (let z = 0; z < VX; z++) {
   if (cellT(x, z) !== MOUNT) continue;
   const bx = (x >> 1) * 2 + 1, bz = (z >> 1) * 2 + 1, fx = bx / R - .5, fz = bz / R - .5, i0 = Math.floor(fx), j0 = Math.floor(fz), tx = fx - i0, tz = fz - j0;
   let H = mh(i0, j0) * (1 - tx) * (1 - tz) + mh(i0 + 1, j0) * tx * (1 - tz) + mh(i0, j0 + 1) * (1 - tx) * tz + mh(i0 + 1, j0 + 1) * tx * tz;
-  H = Math.max(H, mh(x >> 3, z >> 3) * .55, .5) * (1 + (h3(bx, 1, bz) - .5) * .22);
+  H = Math.max(H, mh(x >> SH, z >> SH) * .55, .5) * (1 + (h3(bx, 1, bz) - .5) * .22);
   const hv = clamp(Math.round(H * R), 3, VH - Y0 - 2);
   for (let y = 0; y < hv; y++) {
     const top = y === hv - 1, wy = y / R;
@@ -421,7 +456,7 @@ const AUTUMN = [PH(.09, .75, .45, .1, 7), PH(.13, .8, .5, .1, 7)];
 const PINE = PH(.38, .45, .25, .06, 6), PINEL = PH(.36, .45, .33, .05, 4), BIRCHL = PH(.21, .62, .42, .08, 7);
 const BARK = PH(.07, .4, .3, .05, 4), BIRCHB = palX(0xe8e4da, .05, 4), APPLE = pk(0xdc2626);
 function oak(c, d, s, big) {
-  const tw = big ? 2 : 1, th = Math.round(R * .5 * s), rc = R * .44 * s, ry = rc * .85, cy = Y0 + th + ry * .7;
+  const tw = (big ? 2 : 1) * Q, th = Math.round(R * .5 * s), rc = R * .44 * s, ry = rc * .85, cy = Y0 + th + ry * .7;
   vfill(c - tw, c + tw - 1, Y0, cy | 0, d - tw, d + tw - 1, BARK);
   if (big) for (const [a, b] of [[-tw - 1, 0], [tw, 0], [0, -tw - 1], [0, tw]]) vfill(c + a, c + a, Y0, Y0 + (h3(c, a, b) < .5 ? 0 : 1), d + b, d + b, BARK);
   const sp = [[c, cy, d, rc, ry]];
@@ -431,8 +466,8 @@ function oak(c, d, s, big) {
   const autumn = rnd() < .1;
   blob(sp, autumn ? AUTUMN[rnd() < .5 ? 0 : 1] : LEAF[Math.floor(rnd() * 3)], !autumn && rnd() < .3 ? APPLE : 0);
 }
-function pine(c, d, s, big, snowy) {
-  const tw = big ? 2 : 1, th = Math.round(R * .28 * s), ht = Math.round(R * 1.3 * s), rmax = R * .5 * s, tiers = big ? 4 : 3;
+function pine(c, d, s, big, snowy, tw = (big ? 2 : 1) * Q, th = Math.round(R * .28 * s)) {
+  const ht = Math.round(R * 1.3 * s), rmax = R * .5 * s, tiers = big ? 4 : 3;
   vfill(c - tw, c + tw - 1, Y0, Y0 + th + 2, d - tw, d + tw - 1, BARK);
   for (let y = 0; y <= ht; y++) {
     const t = y / ht, f = (t * tiers) % 1, r = rmax * Math.pow(1 - t, .9) * (.5 + .5 * (1 - f)) + .7, ri = Math.ceil(r);
@@ -445,11 +480,11 @@ function pine(c, d, s, big, snowy) {
 }
 function birch(c, d, s) {
   const th = Math.round(R * .85 * s), rc = R * .32 * s, ry = rc * 1.35, cy = Y0 + th + ry * .3;
-  vfill(c - 1, c, Y0, Math.floor(cy), d - 1, d, (x, y, z) => h3(x, y, z) < .18 ? pk(0x2a2a2a) : pick(BIRCHB, x, y, z));
+  vfill(c - Q, c + Q - 1, Y0, Math.floor(cy), d - Q, d + Q - 1, (x, y, z) => h3(x, y, z) < .18 ? pk(0x2a2a2a) : pick(BIRCHB, x, y, z));
   blob([[c, cy, d, rc, ry], [c + (rnd() - .5) * rc * .6, cy + ry * .5, d + (rnd() - .5) * rc * .6, rc * .7, ry * .6]], BIRCHL);
 }
 for (const [i, j] of trees) {
-  const c = i * R + 3 + Math.floor(rnd() * 3), d = j * R + 3 + Math.floor(rnd() * 3), forest = noise(i, j) > 1.1;
+  const c = i * R + (3 + Math.floor(rnd() * 3)) * Q, d = j * R + (3 + Math.floor(rnd() * 3)) * Q, forest = noise(i, j) > 1.1;
   const roomy = !near(i, j, 2, t => t === PAD || t === HOUSE || t === PORTAL || t === CASTLE);
   const r = rnd(), big = roomy && r < (forest ? .35 : .22), small = !big && r > .78;
   const s = big ? 1.55 + rnd() * .6 : small ? .55 + rnd() * .2 : .85 + rnd() * .35, kind = rnd();
@@ -458,44 +493,70 @@ for (const [i, j] of trees) {
   else oak(c, d, s, big);
 }
 
+// As gigantes: tronco grosso com raízes, galhos e copa enorme (mais altas que o castelo)
+giants.forEach((g, n) => {
+  const c = (g.i + 1) * 8, d = (g.j + 1) * 8;
+  if (n === 2) { pine(c * Q, d * Q, 3.7, true, false, 3 * Q, 16 * Q); for (const [a, b] of [[-5, -1], [4, 0], [-1, -5], [0, 4]]) dfill(c + a, c + a + (a < 0 ? 1 : 0), 8, 8 + 1, d + b, d + b + (b < 0 ? 1 : 0), BARK); return; }
+  const top = 30;
+  for (let y = 0; y < top; y++) {                               // tronco que alarga na base
+    const r = 4.2 + Math.max(0, 3 - y) * 1.3 + (y > top - 6 ? -.8 : 0);
+    for (let a = -8; a < 8; a++) for (let b = -8; b < 8; b++) { const q = Math.hypot(a + .5, b + .5); if (q < r + (h3(a + c, y, b + d) - .5) * .8) dset(c + a, 8 + y, d + b, pick(BARK, a + c, y >> 1, b + d)); }
+  }
+  for (let k = 0; k < 6; k++) {                                 // raízes espalhadas no chão
+    const ang = k / 6 * 6.28 + rnd() * .5;
+    for (let s = 3; s < 8; s++) dfill(c + Math.round(Math.cos(ang) * s) - 1, c + Math.round(Math.cos(ang) * s), 8, 8 + (s < 6 ? 1 : 0), d + Math.round(Math.sin(ang) * s) - 1, d + Math.round(Math.sin(ang) * s), BARK);
+  }
+  const sp = [[c, 8 + top + 8, d, 15, 10]];
+  for (let k = 0; k < 7; k++) {                                 // galhos e tufos de folhas
+    const ang = k / 7 * 6.28 + rnd() * .6, dist = 10 + rnd() * 4, ly = 8 + top + (rnd() - .4) * 8;
+    for (let s = 0; s <= 1; s += .08) { const x = Math.round(c + Math.cos(ang) * dist * s * .8), z = Math.round(d + Math.sin(ang) * dist * s * .8), y = Math.round(8 + top - 8 + (ly - 8 - top + 8) * s); dfill(x - 1, x, y, y + 1, z - 1, z, BARK); }
+    sp.push([c + Math.cos(ang) * dist, ly, d + Math.sin(ang) * dist, 8 + rnd() * 3, 6 + rnd() * 2]);
+  }
+  sp.push([c, 8 + top + 15, d, 9, 7]);
+  blob(sp.map(s => s.map(v => v * Q)), LEAF[n % 3]);
+});
+
 // Pedras em vários cubinhos, algumas com musgo
 for (const [i, j] of rocks) {
-  const c = i * R + 4, d = j * R + 4, big = rnd() < .2, n = big ? 6 : 3 + Math.floor(rnd() * 3);
+  const c = i * 8 + 4, d = j * 8 + 4, big = rnd() < .2, n = big ? 6 : 3 + Math.floor(rnd() * 3);
   for (let k = 0; k < n; k++) {
-    const w = (big ? 2 : 1) + Math.floor(rnd() * (big ? 3 : 2)), x = c + Math.round((rnd() - .5) * 4) - w, z = d + Math.round((rnd() - .5) * 4) - w, h = Math.max(1, Math.round(w * (.6 + rnd() * .5))), y = k > 2 ? Y0 + 1 : Y0;
-    vfill(x, x + w * 2 - 1, y, y + h, z, z + w * 2 - 1, (xx, yy, zz) => yy === y + h && h3(xx, yy, zz) < .35 ? pick(MOSS, xx, yy, zz) : pick(ROCKP, xx, yy, zz));
+    const w = (big ? 2 : 1) + Math.floor(rnd() * (big ? 3 : 2)), x = c + Math.round((rnd() - .5) * 4) - w, z = d + Math.round((rnd() - .5) * 4) - w, h = Math.max(1, Math.round(w * (.6 + rnd() * .5))), y = k > 2 ? 8 + 1 : 8;
+    dfill(x, x + w * 2 - 1, y, y + h, z, z + w * 2 - 1, (xx, yy, zz) => yy === y + h && h3(xx, yy, zz) < .35 ? pick(MOSS, xx, yy, zz) : pick(ROCKP, xx, yy, zz));
   }
 }
 
-// Casinhas (2 casas do mapa cada): base de pedra, paredes com vigas, janelas, porta, telhado e chaminé
+// Casinhas de 3 tamanhos: base de pedra, paredes com vigas, janelas, porta, floreiras, telhado e chaminé
 const chimneys = [];
 const WALLS = [0xf1e3c6, 0xe8d3b0, 0xd9c7a5, 0xf5efe0], ROOFS = [0xb3412f, 0x5a6b8c, 0x8a5a3b, 0x9b2d2d];
 const GLASS = pk(0x9fd8f0), GLASSL = pk(0xd8f3ff), DOOR = palX(0x5a3a20, .08, 3), FLOWB = [pk(0xef4444), pk(0xfacc15), pk(0xf472b6), pk(0xffffff)];
 for (const h of houses) {
-  const x0 = h.i * R, z0 = h.j * R, wallP = palX(WALLS[Math.floor(rnd() * 4)], .05), roofP = ROOFS[Math.floor(rnd() * 4)];
-  const roofA = palX(roofP, .06), roofB = palX(shade(roofP, .82), .06);
-  // a = ao longo da casa (0..15), b = largura (0..7), y = altura a partir do chão
-  const put = (a, b, y, c) => { const bb = h.flip ? 7 - b : b; if (h.o) vset(x0 + a, Y0 + y, z0 + bb, c); else vset(x0 + bb, Y0 + y, z0 + a, c); };
+  const x0 = h.i * 8, z0 = h.j * 8, A = h.Lc * 8, B = h.Wc * 8, small = h.Lc === 1, large = h.Wc > 1;
+  const Hw = small ? 5 : large ? 10 : 7, wa0 = small ? 1 : 2, wa1 = A - 1 - wa0, rows = large ? [3, 7] : [3];
+  const wallP = palX(WALLS[Math.floor(rnd() * 4)], .05), roofP = ROOFS[Math.floor(rnd() * 4)], roofA = palX(roofP, .06), roofB = palX(shade(roofP, .82), .06);
+  // a = ao longo da casa, b = largura, y = altura a partir do chão
+  const put = (a, b, y, c) => { const bb = h.flip ? B - 1 - b : b; if (h.o) dset(x0 + a, 8 + y, z0 + bb, c); else dset(x0 + bb, 8 + y, z0 + a, c); };
   const fill = (a0, a1, b0, b1, y0, y1, f) => { for (let a = a0; a <= a1; a++) for (let b = b0; b <= b1; b++) for (let y = y0; y <= y1; y++) put(a, b, y, typeof f === 'function' ? f(a, b, y) : f); };
-  fill(1, 14, 0, 7, 0, 0, (a, b, y) => pick(STONED, a + x0, b, z0));
-  fill(2, 13, 1, 6, 1, 6, (a, b, y) => {
-    const side = b === 1 || b === 6, end = a === 2 || a === 13;
-    if ((a === 2 || a === 13 || a === 7 || a === 8) && (b === 1 || b === 6) || (end && (b === 1 || b === 6)) || y === 6) return pick(WOODD, a, y, b + x0);
-    if (side && y >= 3 && y <= 4 && (a === 4 || a === 5 || a === 10 || a === 11)) return a === 4 || a === 10 ? GLASSL : GLASS;
-    if (end && y >= 3 && y <= 4 && (b === 3 || b === 4)) return GLASS;
+  const dm = (A >> 1) - 1, win = a => !small && a > wa0 + 1 && a < wa1 - 1 && Math.abs(a - dm - .5) > 2 && (a - wa0) % 5 >= 2 && (a - wa0) % 5 <= 3;
+  const winRow = y => rows.some(r => y === r || y === r + 1);
+  fill(wa0 - 1, wa1 + 1, 0, B - 1, 0, 0, (a, b, y) => pick(STONED, a + x0, b, z0));
+  fill(wa0, wa1, 1, B - 2, 1, Hw, (a, b, y) => {
+    const side = b === 1 || b === B - 2, end = a === wa0 || a === wa1;
+    if ((side && (end || (!small && (a - wa0) % 5 === 0))) || y === Hw || (large && y === 6 && (side || end))) return pick(WOODD, a, y, b + x0);
+    if (side && winRow(y) && win(a)) return (a - wa0) % 5 === 2 ? GLASSL : GLASS;
+    if (end && winRow(y) && Math.abs(b - B / 2 + .5) < 1) return GLASS;
     return pick(wallP, a + x0, y, b + z0);
   });
-  fill(7, 8, 7, 7, 0, 0, pick(STONE, x0, 1, z0));           // degrau
-  fill(7, 8, 6, 6, 1, 3, (a, b, y) => y === 2 && a === 8 ? pk(0xffc93c) : pick(DOOR, a, y, b));
-  fill(4, 5, 0, 0, 2, 2, (a, b, y) => FLOWB[(h3(a + x0, y, z0) * 4) | 0]); fill(10, 11, 0, 0, 2, 2, (a, b, y) => FLOWB[(h3(a + z0, y, x0) * 4) | 0]);
-  fill(4, 5, 7, 7, 2, 2, (a, b, y) => FLOWB[(h3(a, y, x0 + z0) * 4) | 0]); fill(10, 11, 7, 7, 2, 2, pk(0x3f7a2a));
-  for (let k = 0; k < 4; k++) {                               // telhado de duas águas, com beiral
-    fill(1, 14, k, 7 - k, 7 + k, 7 + k, (a, b, y) => b === k || b === 7 - k ? pick(k % 2 ? roofB : roofA, a, y, b + x0) : pick(wallP, a, y, b));
-  }
-  fill(1, 14, 3, 4, 11, 11, (a, b, y) => pick(roofB, a, y, b + z0));
-  fill(11, 12, 1, 2, 7, 12, (a, b, y) => y === 12 ? pick(STONED, a, y, b) : pick(STONE, a + x0, y, b + z0));  // chaminé
-  const ca = 12, cb = h.flip ? 6 : 2, cx = h.o ? x0 + ca : x0 + cb, cz = h.o ? z0 + cb : z0 + ca;
-  chimneys.push(V(cx / R - HALF, 13 / R + .05, cz / R - HALF));
+  if (small) fill(1, 1, 3, 4, 3, 4, GLASS);
+  fill(dm, dm + 1, B - 1, B - 1, 0, 0, pick(STONE, x0, 1, z0));                    // degrau
+  fill(dm, dm + 1, B - 2, B - 2, 1, large ? 4 : 3, (a, b, y) => y === 2 && a === dm + 1 ? pk(0xffc93c) : pick(DOOR, a, y, b));
+  for (let a = wa0; a <= wa1; a++) if (win(a)) { put(a, 0, 2, FLOWB[(h3(a + x0, 2, z0) * 4) | 0]); put(a, B - 1, 2, h3(a, z0, x0) < .5 ? pk(0x3f7a2a) : FLOWB[(h3(a, 3, x0 + z0) * 4) | 0]); }
+  const nr = B >> 1;
+  for (let k = 0; k < nr; k++) fill(wa0 - 1, wa1 + 1, k, B - 1 - k, Hw + 1 + k, Hw + 1 + k, (a, b, y) => b === k || b === B - 1 - k ? pick(k % 2 ? roofB : roofA, a, y, b + x0) : pick(wallP, a, y, b));
+  fill(wa0 - 1, wa1 + 1, nr - 1, nr, Hw + 1 + nr, Hw + 1 + nr, (a, b, y) => pick(roofB, a, y, b + z0));
+  const ca = wa1 - 2, ctop = Hw + nr + 3;
+  fill(ca, ca + 1, 1, 2, Hw + 1, ctop, (a, b, y) => y === ctop ? pick(STONED, a, y, b) : pick(STONE, a + x0, y, b + z0));  // chaminé
+  const cb = h.flip ? B - 2 : 2, cx = h.o ? x0 + ca + 1 : x0 + cb, cz = h.o ? z0 + cb : z0 + ca + 1;
+  chimneys.push(V(cx / 8 - HALF, (ctop + 1) / 8 + .05, cz / 8 - HALF));
 }
 
 // Portais: arcos de pedra em tijolinhos, com uma pedra roxa no topo
@@ -503,8 +564,8 @@ const portalFx = [];
 const portalMat = new THREE.MeshBasicMaterial({ color: 0x8b5cf6, transparent: true, opacity: .55, side: THREE.DoubleSide });
 const PURP = palX(0x8b5cf6, .12, 4);
 for (const [i, j, di, dj] of PORTALS) {
-  const c = i * R + 4, d = j * R + 4, along = dj !== 0;     // along: pilares espalhados no eixo x
-  const put = (s, w, y, col) => along ? vset(c + s, Y0 + y, d + w, col) : vset(c + w, Y0 + y, d + s, col);
+  const c = i * 8 + 4, d = j * 8 + 4, along = dj !== 0;     // along: pilares espalhados no eixo x
+  const put = (s, w, y, col) => along ? dset(c + s, 8 + y, d + w, col) : dset(c + w, 8 + y, d + s, col);
   const brick = (s, w, y) => { const row = y >> 1; return h3(s < 0 ? 1 : 2, row, ((s + w + (row & 1) * 2) >> 2)) < .5 ? pick(STONE, s, y, w) : pick(STONED, s, y, w); };
   for (const s0 of [-7, 4]) for (let s = s0; s < s0 + 3; s++) for (let w = -2; w <= 0; w++) for (let y = 0; y < 17; y++) put(s, w, y, y < 3 && h3(s, y, w + i) < .3 ? pick(MOSS, s, y, w) : brick(s, w, y));
   for (let s = -8; s <= 7; s++) for (let w = -2; w <= 0; w++) for (let y = 17; y <= 18; y++) put(s, w, y, pick(STONED, s, y, w + j));
@@ -518,9 +579,9 @@ for (const [i, j, di, dj] of PORTALS) {
 }
 
 // Castelo no centro: muralha de tijolos, 4 torres com telhado vermelho, torre principal, portões e bandeiras
-const CO = HALF * R, CB = [CO - 16, CO + 15];
+const CO = HALF * 8, CB = [(CO - 16) * Q, (CO + 16) * Q - 1];
 const RED = palX(0xd0453a, .07), REDD = palX(0xa8352c, .07), GOLD = palX(0xffc93c, .06, 3), DARK = pk(0x2a2a33), IRON = pk(0x4a525c);
-const cput = (u, y, w, c) => vset(CO + u, Y0 + y, CO + w, c);
+const cput = (u, y, w, c) => dset(CO + u, 8 + y, CO + w, c);
 const cfill = (u0, u1, y0, y1, w0, w1, f) => { for (let u = u0; u <= u1; u++) for (let w = w0; w <= w1; w++) for (let y = y0; y <= y1; y++) cput(u, y, w, typeof f === 'function' ? f(u, y, w) : f); };
 const cbrick = (pa, pb) => (u, y, w) => { const row = y >> 1; return h3(row, (u + w + (row & 1) * 2 + 64) >> 2, 5) < .55 ? pick(pa, u, y, w) : pick(pb, u, y, w); };
 const roofPyr = (u0, u1, w0, w1, y0, n) => { for (let L = 0; L < n; L++) cfill(u0 + L, u1 - L, y0 + L, y0 + L, w0 + L, w1 - L, (u, y, w) => pick(L % 2 ? REDD : RED, u, y, w)); };
@@ -543,19 +604,22 @@ for (const [nu, nw] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {           // portõ
   for (const b0 of [-9, 6]) for (let s = b0; s < b0 + 3; s++) for (let y = 4; y <= 9; y++) at2(s, y, y === 9 || y === 4 ? pick(GOLD, s, y, nu) : y === 7 && s === b0 + 1 ? pick(GOLD, s, y, 1) : pick(RED, s, y, nw), 1);
 }
 
+// Regiões de gramado liso (verde claro, sem tufos) e regiões de mato (com tufos e flores)
+const lawn = (x, z) => Math.sin(x * .19 + 1.3) + Math.cos(z * .23 + .4) + Math.sin((x - z) * .13 + 2) * .8;
 // Grama alta e flores (cubinhos soltos no chão)
 const FLOWERS = [0xfacc15, 0xffffff, 0xf472b6, 0xa78bfa, 0xef4444].map(pk), TUFT = PH(.27, .55, .34, .1, 6);
 for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
   const t = grid[i][j]; if (t !== GRASS && t !== TREE && t !== ROCK) continue;
   if (Math.max(Math.abs(i - C0), Math.abs(j - C0)) < 3.6) continue;
-  for (let k = 0; k < 3; k++) {
+  const L = lawn(i + .5, j + .5); if (L > .45) continue;
+  for (let k = 0, nk = (L < -.8 ? 5 : 3) * Q; k < nk; k++) {
     const x = i * R + Math.floor(rnd() * R), z = j * R + Math.floor(rnd() * R);
     if (vget(x, Y0, z)) continue;
-    vset(x, Y0, z, pick(TUFT, x, 0, z)); if (rnd() < .45) vset(x, Y0 + 1, z, pick(TUFT, x, 1, z));
+    const th = 1 + Math.floor(rnd() * (Q + 1.1)); for (let e = 0; e < th; e++) vset(x, Y0 + e, z, pick(TUFT, x, e, z));
   }
   if (rnd() < .06) {
-    const x = i * R + 2 + Math.floor(rnd() * 4), z = j * R + 2 + Math.floor(rnd() * 4), fc = FLOWERS[Math.floor(rnd() * 5)];
-    if (!vget(x, Y0, z)) { vset(x, Y0, z, pk(0x3f7a2a)); vset(x, Y0 + 1, z, pk(0xfde68a)); for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (!vget(x + a, Y0 + 1, z + b)) vset(x + a, Y0 + 1, z + b, fc); }
+    const x = i * 8 + 2 + Math.floor(rnd() * 4), z = j * 8 + 2 + Math.floor(rnd() * 4), fc = FLOWERS[Math.floor(rnd() * 5)];
+    if (!vget(x * Q, Y0, z * Q)) { dset(x, 8, z, pk(0x3f7a2a)); dset(x, 9, z, pk(0xfde68a)); for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (!vget((x + a) * Q, Y0 + Q, (z + b) * Q)) dset(x + a, 9, z + b, fc); }
   }
 }
 
@@ -615,7 +679,7 @@ function meshRegion(x0, x1, z0, z1, skip) {
   m.castShadow = m.receiveShadow = true; return m;
 }
 const inCastle = (x, z) => x >= CB[0] && x <= CB[1] && z >= CB[0] && z <= CB[1];
-const CHUNK = 64;
+const CHUNK = Q === 1 ? 64 : 96;
 for (let cx = 0; cx < VX; cx += CHUNK) for (let cz = 0; cz < VX; cz += CHUNK) { const m = meshRegion(cx, cx + CHUNK, cz, cz + CHUNK, inCastle); if (m) scene.add(m); }
 
 // Chão: uma placa só, com uma imagem de 8x8 pontinhos por casa (grama, areia, terra, calçada)
@@ -629,24 +693,26 @@ for (const [si, sj] of SPAWNS) {                     // trilhas de terra batida 
     const qx = wc(bi), qz = wc(bj);
     for (let s = 0; s <= 1; s += .08) {
       const x = ((px + (qx - px) * s) + HALF) * R, z = ((pz + (qz - pz) * s) + HALF) * R;
-      for (let a = -4; a <= 4; a++) for (let b = -4; b <= 4; b++) { const X = Math.floor(x + a), Z = Math.floor(z + b); if (X >= 0 && Z >= 0 && X < VX && Z < VX && Math.hypot(a, b) < 2.4 + (h3(X, 3, Z) - .5) * 1.8) dirt[X * VX + Z] = 1; }
+      for (let a = -4 * Q; a <= 4 * Q; a++) for (let b = -4 * Q; b <= 4 * Q; b++) { const X = Math.floor(x + a), Z = Math.floor(z + b); if (X >= 0 && Z >= 0 && X < VX && Z < VX && Math.hypot(a, b) < (2.4 + (h3(X, 3, Z) - .5) * 1.8) * Q) dirt[X * VX + Z] = 1; }
     }
     i = bi; j = bj; px = qx; pz = qz;
   }
 }
+const LAWN = palH(.26, .52, .45, .008, 2);
 const GT = [palH(.25, .5, .4, .035, 8), palH(.27, .5, .36, .035, 8), palH(.23, .55, .43, .03, 8)];
 const TSAND = [0, 1, 2, 3, 4].map(k => shade(0xe3cf98, .94 + k * .03)), TDIRT = [0x9a7148, 0x8e6740, 0xa47a50, 0x86603b, 0xb08a5c];
 const TSTONE = [0xc9c2b5, 0xbab3a6, 0xd2ccc0, 0xb1aa9d, 0xc3bcae], TPORT = [0x5b4a78, 0x4e4068, 0x67558a, 0x463a5e];
 const gdata = new Uint8Array(VX * VX * 4);
 for (let x = 0; x < VX; x++) for (let z = 0; z < VX; z++) {
-  const i = x >> 3, j = z >> 3, t = grid[i][j], o = ((VX - 1 - z) * VX + x) * 4, hh = h3(x, 7, z);
+  const i = x >> SH, j = z >> SH, t = grid[i][j], o = ((VX - 1 - z) * VX + x) * 4, hh = h3(x, 7, z);
   let c, a = 255;
   const cd = Math.max(Math.abs(i - C0), Math.abs(j - C0));
   if (t === WATER || t === BRIDGE) { c = 0; a = 0; }
-  else if (t === CASTLE || (cd < 3.6 && t !== PAD)) { const row = Math.floor(z / 3), col = Math.floor((x + (row & 1) * 2) / 4), edge = z % 3 === 2 || (x + (row & 1) * 2) % 4 === 3; c = shade(TSTONE[(h3(row, col, 1) * 5) | 0], edge ? .86 : 1 + (hh - .5) * .06); }
-  else if (t === PORTAL || PORTALS.some(([pi, pj]) => Math.hypot(i - pi, j - pj) < 1.6)) { const row = z >> 2, col = (x + (row & 1) * 2) >> 2; c = shade(TPORT[(h3(row, col, 2) * 4) | 0], z % 4 === 3 || (x + (row & 1) * 2) % 4 === 3 ? .8 : 1); }
+  else if (t === CASTLE || (cd < 3.6 && t !== PAD)) { const row = Math.floor(z / (3 * Q)), sx = x + (row & 1) * 2 * Q, col = Math.floor(sx / (4 * Q)), edge = z % (3 * Q) === 3 * Q - 1 || sx % (4 * Q) === 4 * Q - 1; c = shade(TSTONE[(h3(row, col, 1) * 5) | 0], edge ? .86 : 1 + (hh - .5) * .06); }
+  else if (t === PORTAL || PORTALS.some(([pi, pj]) => Math.hypot(i - pi, j - pj) < 1.6)) { const row = Math.floor(z / (4 * Q)), sx = x + (row & 1) * 2 * Q, col = Math.floor(sx / (4 * Q)); c = shade(TPORT[(h3(row, col, 2) * 4) | 0], z % (4 * Q) === 4 * Q - 1 || sx % (4 * Q) === 4 * Q - 1 ? .8 : 1); }
   else if (dirt[x * VX + z] && t !== PAD) c = hh < .06 ? 0x777066 : TDIRT[(h3(x, 1, z) * 5) | 0];
   else if (near(i, j, 1, q => q === WATER)) c = hh < .04 ? 0xa89c84 : TSAND[(h3(x, 2, z) * TSAND.length) | 0];
+  else if (lawn(x / R, z / R) + (h3(x >> 1, 6, z >> 1) - .5) * .3 > .6) c = LAWN[h3(x, 5, z) < .5 ? 0 : 1];
   else {
     const f = noise(x / R * .7, z / R * .7) + (h3(x >> 2, 4, z >> 2) - .5) * .9, p = f > .9 ? GT[1] : f < -.8 ? GT[2] : GT[0];
     c = hh < .004 ? 0xfacc15 : hh < .008 ? 0xffffff : hh < .014 ? 0x8a8a80 : p[(h3(x, 5, z) * 8) | 0];
@@ -671,9 +737,9 @@ const isWet = t => t === WATER || t === BRIDGE;
 const ground = new THREE.Mesh(cellQuads(t => !isWet(t)), new THREE.MeshLambertMaterial({ map: gtex }));
 ground.receiveShadow = true; scene.add(ground);
 // Água: placa logo abaixo do chão com pontinhos que correm devagar
-const WS = 64, wdata = new Uint8Array(WS * WS * 4);
+const WS = 64 * Q, wdata = new Uint8Array(WS * WS * 4);
 for (let x = 0; x < WS; x++) for (let z = 0; z < WS; z++) {
-  const o = (z * WS + x) * 4, r = h3(x, 11, z), wave = Math.sin((x + z * .5) * Math.PI * 2 / 16 + Math.sin(z * Math.PI * 2 / 32) * 2) > .82;
+  const o = (z * WS + x) * 4, r = h3(x, 11, z), wave = Math.sin((x + z * .5) * Math.PI * 2 / (16 * Q) + Math.sin(z * Math.PI * 2 / (32 * Q)) * 2) > .82;
   const c = r < .025 ? 0xe0f6ff : wave ? 0x7cc8ec : r < .5 ? 0x3f9fd6 : r < .8 ? 0x4aa8de : 0x3793cc;
   wdata[o] = c >> 16 & 255; wdata[o + 1] = c >> 8 & 255; wdata[o + 2] = c & 255; wdata[o + 3] = 255;
 }
@@ -713,7 +779,7 @@ function updateClouds3(rdt) {
 
 const castle = new THREE.Group(); scene.add(castle);
 castle.add(meshRegion(CB[0], CB[1] + 1, CB[0], CB[1] + 1));
-const flag = new THREE.Group(); flag.position.set(1 / R / 2, 37 / R, 1.5 / R); castle.add(flag); box(mat.red, .55, .32, .05, .3, 0, 0, flag); box(mat.gold, .12, .12, .06, .3, 0, 0, flag);
+const flag = new THREE.Group(); flag.position.set(1 / 16, 37 / 8, 1.5 / 8); castle.add(flag); box(mat.red, .55, .32, .05, .3, 0, 0, flag); box(mat.gold, .12, .12, .06, .3, 0, 0, flag);
 const voxStats = { faces: voxFaces };
 vox = null;                                           // libera a memória da grade
 let castleShake = 0;
@@ -1596,6 +1662,8 @@ $('shop').addEventListener('click', ev => {
   else return;
   bump('gold'); updateUI(); renderShop();
 });
+$('gfx').textContent = HD ? '🖥️ Gráfico detalhado (PC) · trocar para leve' : '📱 Gráfico leve (celular) · trocar para detalhado';
+$('gfx').onclick = () => { try { localStorage.setItem('vd-grafico', HD ? 'leve' : 'hd'); } catch (e) {} location.reload(); };
 $('play').onclick = () => { $('help').classList.remove('show'); S.started = true; };
 $('helpBtn').onclick = () => { $('help').classList.add('show'); S.started = false; };
 addEventListener('keydown', e => {
@@ -1753,7 +1821,7 @@ function loop(now) {
 }
 resize(); updateUI();
 requestAnimationFrame(loop);
-if (location.search.includes('teste')) window.__vd = { S, pads, placeTower, startWave, enemies, towers, hero, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, houses, trees, collide, hitsSolid, cellOf, HOUSE, TREE };
+if (location.search.includes('teste')) window.__vd = { S, pads, placeTower, startWave, enemies, towers, hero, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE };
 </script>
 </body>
 </html>
