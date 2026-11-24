@@ -321,6 +321,7 @@ const QS0 = new URLSearchParams(location.search), ROOM = QS0.get("sala");
 const MODE = ROOM ? (QS0.get("modo") === "pvp" ? "pvp" : "coop") : "solo", ROLE = ROOM ? (QS0.has("host") ? "host" : "guest") : "solo";
 const PVP = MODE === "pvp", ONLINE = MODE !== "solo", ME = ROLE === "guest" ? 1 : 0, GUEST = ROLE === "guest";
 // Castelos (centro em coordenadas de casa). No contra, cada jogador tem o seu: 0 a oeste, 1 a leste.
+const CASTLE_MAX = PVP ? 500 : 100;   // vida do castelo: 500 no um contra o outro
 const CASTLES = PVP ? [{ ci: 8.5, cj: 23.5 }, { ci: 38.5, cj: 23.5 }] : [{ ci: C0, cj: C0 }];
 // Portais: 0 norte, 1 sul, 2 oeste, 3 leste. No contra, os do jogador 0 são norte e oeste; os do jogador 1, sul e leste.
 const SIDE_TEAM = [0, 1, 0, 1];
@@ -1106,7 +1107,7 @@ function updateHearts(dt, rdt) {
       hh.g.position.set(c.pos.x, 2.25 + Math.sin(hh.t * 4) * .06, c.pos.z); hh.g.userData.glow.visible = false;
       const cs = PVP ? CASTLES[c.pl] : CASTLES[0];
       if (dt && Math.max(Math.abs(c.pos.x - cs.x), Math.abs(c.pos.z - cs.z)) < 3.9) {
-        const give = () => { const before = S.castle; S.castle = Math.min(100, S.castle + HEART_HEAL); toast(`❤️ Vida entregue! Castelo +${Math.round(S.castle - before)}`, 2600); bump('castle'); updateUI(); };
+        const give = () => { const before = S.castle; S.castle = Math.min(CASTLE_MAX, S.castle + HEART_HEAL * CASTLE_MAX / 100); toast(`❤️ Vida entregue! Castelo +${Math.round(S.castle - before)}`, 2600); bump('castle'); updateUI(); };
         if (PVP) withPlayer(c.pl, give); else give();
         burst(tmp.set(cs.x, 2.5, cs.z), 0xff4d6d, 24, 3, .14); burst(tmp, 0x4ade80, 14, 2.5, .1); sfx('heal');
         removeHeart(hh);
@@ -1515,6 +1516,7 @@ function updateTowers(dt, rdt, time) {
       if (d2 > r2 || (sh === 'mortar' && d2 < 4)) continue;
       if (!best || (sh === 'bolt' ? e.hp > best.hp : e.fd < best.fd)) best = e;
     }
+    if (PVP) { const fh = heroes[1 - t.owner]; if (fh && !fh.dead && (sh !== 'mortar' || Math.hypot(fh.pos.x - t.pos.x, fh.pos.z - t.pos.z) >= 2) && (fh.pos.x - t.pos.x) ** 2 + (fh.pos.z - t.pos.z) ** 2 <= r2 && (!best || (sh === 'bolt' ? fh.hp > best.hp : fh.fd < best.fd))) best = fh; }
     if (sh === 'laser') { updateLaser(t, best, st, dt); continue; }
     if (!best) continue;
     if (t.aim) t.aim.rotation.y = Math.atan2(best.pos.x - t.pos.x, best.pos.z - t.pos.z);
@@ -1540,7 +1542,7 @@ function zap(a, b, zm = zapMat) {
 function fire(t, e, st) {
   const o = V(t.pos.x, t.fireY, t.pos.z), sh = t.T.shot, pl = t.owner, n0 = shots.length;
   fireInner(t, e, st, o, sh, pl);
-  for (let k = n0; k < shots.length; k++) shots[k].pl = pl;
+  for (let k = n0; k < shots.length; k++) { shots[k].pl = pl; shots[k].heroHit = PVP; }
 }
 function fireInner(t, e, st, o, sh, pl) {
   sfx(sh === 'flame' ? 'fire' : sh === 'chain' ? 'zap' : 'tshot', o.x, o.z);
@@ -1565,6 +1567,8 @@ function fireInner(t, e, st, o, sh, pl) {
       if (dd > st.range + o2.r || (dx * d.x + dz * d.z) / dd < .78) continue;
       hurt(o2, st.dmg); o2.burnT = 3; o2.burnDps = st.burn;
     }
+    const fh = foeHero(pl);
+    if (fh && !fh.dead) { const dx = fh.pos.x - t.pos.x, dz = fh.pos.z - t.pos.z, dd = Math.hypot(dx, dz) || 1e-3; if (dd <= st.range + fh.r && (dx * d.x + dz * d.z) / dd >= .78) damageTarget(fh, st.dmg); }
   } else {
     const cfg = { arrow: [ARROW, mat.woodD, 13], ice: [SHARD, mat.ice, 10], bullet: [BULLET, bulletMat, 22], bolt: [BOLT, mat.woodD, 18] }[sh];
     const m = new THREE.Mesh(cfg[0], cfg[1]); m.position.copy(o); scene.add(m);
@@ -1581,7 +1585,7 @@ function updateLaser(t, e, st, dt) {
   t.heat = Math.min(2, t.heat + dt * .7);
   const a = V(t.pos.x, t.fireY, t.pos.z), b = V(e.pos.x, e.hitY + .1, e.pos.z), L = a.distanceTo(b);
   t.beam.visible = true; t.beam.scale.set(.05 + t.heat * .04, .05 + t.heat * .04, L); t.beam.position.lerpVectors(a, b, .5); t.beam.lookAt(b);
-  hurt(e, st.dmg * (1 + t.heat) * dt, false);
+  hitAny(e, st.dmg * (1 + t.heat) * dt, false);
   if (Math.random() < dt * 12) burst(b, 0xff6b6b, 1, .8, .06);
 }
 // Veneno: nuvem verde que dá dano por alguns segundos em todos que estão nela
@@ -1632,7 +1636,7 @@ function updateShots(dt) {
       s.t += dt; const p = Math.min(1, s.t / s.T);
       s.m.position.lerpVectors(s.from, s.to, p);
       s.m.position.y = s.from.y * (1 - p) + .2 * p + Math.sin(p * Math.PI) * s.h;
-      if (p >= 1) { if (s.poison) poisonArea(s.to, s.splash, s.dmg, s.poison, s.pl || 0); else explodeAt(s.to, s.splash, s.dmg, s.big, s.pl || 0, s.heroHit); s.done = true; }
+      if (p >= 1) { if (s.poison) { poisonArea(s.to, s.splash, s.dmg, s.poison, s.pl || 0); clouds[clouds.length - 1].hero = !!s.heroHit; } else explodeAt(s.to, s.splash, s.dmg, s.big, s.pl || 0, s.heroHit); s.done = true; }
       continue;
     }
     if (s.k === 'hb') {
@@ -1670,7 +1674,7 @@ function updateBolts(dt) { for (let k = bolts.length - 1; k >= 0; k--) { bolts[k
 const HERO_COL = [[0x2f6fd6, 0x1f4a91, 0x60a5fa], [0xe0482f, 0x9a2a1a, 0xfb923c]];
 const homeOf = pl => PVP ? V(CASTLES[pl].x, 0, CASTLES[pl].z + 3.6) : V(ONLINE ? (pl ? .9 : -.9) : 0, 0, 3.6);
 function makeHero(pl) {
-  const hh = { kind: 'hero', pl, home: homeOf(pl), life: 0, g: new THREE.Group(), r: .25, hp: 150, maxHp: 150, cd: 0, bombCd: 0, walk: 0, dead: false, respawnT: 0, hurtT: 0, recoil: 0, hitY: .6 };
+  const hh = { kind: 'hero', pl, home: homeOf(pl), life: 0, g: new THREE.Group(), r: .25, hp: 150, maxHp: 150, cd: 0, bombCd: 0, walk: 0, dead: false, respawnT: 0, hurtT: 0, recoil: 0, hitY: .6, vel: V(), fd: 1 };
   hh.pos = hh.g.position;
   const g = hh.g, [c1, c2, c3] = HERO_COL[pl], skin = M(0xf1c7a0), blue = M(c1), blueD = M(c2), steel = M(0xd5dde6);
   hh.legs = [box(blueD, .14, .26, .16, -.09, .13, 0, g), box(blueD, .14, .26, .16, .09, .13, 0, g)];
@@ -1905,7 +1909,7 @@ function updateHero(dt, rdt, time) {
 
 // ===== Estado e ondas =====
 const START_GOLD = 500, PVP_GOLD = 200;
-const freshPlayer = () => ({ gold: PVP ? PVP_GOLD : START_GOLD, castle: 100, power: 0, dmgMul: 1, hw: 'blaster', owned: new Set(['blaster']), unlocked: new Set() });
+const freshPlayer = () => ({ gold: PVP ? PVP_GOLD : START_GOLD, castle: CASTLE_MAX, power: 0, dmgMul: 1, hw: 'blaster', owned: new Set(['blaster']), unlocked: new Set() });
 const pickKeys = (o, ks) => Object.fromEntries(ks.map(k => [k, o[k]]));
 const loadBest = () => { try { return +localStorage.getItem('vd-best') || 0; } catch { return 0; } };
 const saveBest = () => { try { localStorage.setItem('vd-best', S.best); } catch {} };
@@ -1960,10 +1964,10 @@ function updateWave(dt) {
     if (S.spawnT <= 0) { spawnFrom(S.queue.shift()); S.spawnT = Math.max(.28, .85 - S.wave * .03); updateUI(); }
   } else if (!enemies.length) {
     S.waveActive = false; S.nextT = 20;
-    const bonus = 20 + S.wave * 4, give = () => { S.gold += bonus; S.castle = Math.min(100, S.castle + 10); };
+    const bonus = 20 + S.wave * 4, give = () => { S.gold += bonus; S.castle = Math.min(CASTLE_MAX, S.castle + CASTLE_MAX / 10); };
     if (PVP) { withPlayer(0, give); withPlayer(1, give); } else give();
     for (const t of towers) t.hp = Math.min(t.maxHp, t.hp + t.maxHp * .3);
-    toast(`Onda ${S.wave} vencida! +🪙 ${bonus} e +10 de vida no castelo e nas armas`, 2800); bump('gold'); updateUI();
+    toast(`Onda ${S.wave} vencida! +🪙 ${bonus} e +${CASTLE_MAX / 10} de vida no castelo e nas armas`, 2800); bump('gold'); updateUI();
   }
 }
 // Modo contra: ondas saem sozinhas, de tempos em tempos
@@ -2014,7 +2018,7 @@ function toast(msg, ms = 2500) {
 }
 function showToast(msg, ms = 2500) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms); }
 let shownCastle = -1;
-let foeCastleV = 100;
+let foeCastleV = CASTLE_MAX;
 function updateHUD() {
   const c = Math.max(0, Math.ceil(S.castle));
   if (PVP) $('foeCastle').textContent = Math.max(0, Math.ceil(GUEST ? foeCastleV : pget(1 - ME, 'castle')));
