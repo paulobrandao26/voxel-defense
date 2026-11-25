@@ -367,10 +367,11 @@ const PORTALS = [];
   const okCell = (i, j) => inMap(i, j) && grid[i][j] === GRASS && Math.abs(j - riverJ(i)) > 2 && LAKES.every(([a, b, r]) => Math.hypot(i - a, j - b) > r + 2) && !BRIDGES.some(b => Math.abs(b - i) < 3 && Math.abs(j - riverJ(b)) < 5);
   for (let s = 0; s < 4; s++) {
     const tc = targetCastle(s);
-    for (let tries = 0, minGap = 15; tries < 6000; tries++) {
-      if (tries % 1000 === 999) minGap -= 2;
+    for (let tries = 0, minGap = 15, far = PVP ? 30 : HALF - 12; tries < 6000; tries++) {
+      if (tries % 1000 === 999) { minGap -= 2; far -= 3; }
       const i = 6 + Math.floor(prnd() * (N - 12)), j = 6 + Math.floor(prnd() * (N - 12));
-      if (castleDist(i, j) < (PVP ? 10 : 13) || castleDist(i, j) > (PVP ? 24 : 30) || !okCell(i, j)) continue;
+      // longe, perto da borda do mapa: os monstros demoram para chegar ao castelo
+      if (castleDist(i, j) < (PVP ? 12 : far) || Math.max(Math.abs(i - tc.ci), Math.abs(j - tc.cj)) < far || !okCell(i, j)) continue;
       if (PVP && (SIDE_TEAM[s] === 0 ? i > HALF - 6 : i < HALF + 6)) continue;
       if (PORTALS.some(([a, b]) => Math.hypot(a - i, b - j) < minGap)) continue;
       const dx = tc.ci - i, dz = tc.cj - j, [di, dj] = Math.abs(dx) > Math.abs(dz) ? [Math.sign(dx), 0] : [0, Math.sign(dz)];
@@ -577,7 +578,7 @@ const PIX = { px: 3, F: 3, w: 1, h: 1, rt: null, quad: null, cam: null, scene: n
   PIX.rt = new THREE.WebGLRenderTarget(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, type: THREE.HalfFloatType, depthBuffer: true });
   PIX.rt.depthTexture = new THREE.DepthTexture(1, 1); PIX.rt.depthTexture.type = THREE.UnsignedIntType;
   PIX.mat = new THREE.ShaderMaterial({
-    uniforms: { tCol: { value: PIX.rt.texture }, tDep: { value: PIX.rt.depthTexture }, uSize: { value: new THREE.Vector2(1, 1) }, uF: { value: 3 }, uNear: { value: cam.near }, uFar: { value: cam.far }, uLine: { value: new THREE.Color(0x1d1a2b) }, uAmt: { value: PIXEL ? .5 : .6 }, uPost: { value: PIXEL ? 1 : 0 } },
+    uniforms: { tCol: { value: PIX.rt.texture }, tDep: { value: PIX.rt.depthTexture }, uSize: { value: new THREE.Vector2(1, 1) }, uF: { value: 3 }, uNear: { value: cam.near }, uFar: { value: cam.far }, uLine: { value: new THREE.Color(0x1d1a2b) }, uAmt: { value: PIXEL ? .8 : .85 }, uPost: { value: PIXEL ? 1 : 0 } },
     vertexShader: 'void main(){ gl_Position = vec4(position.xy, 0., 1.); }',
     fragmentShader: `
       uniform sampler2D tCol, tDep; uniform vec2 uSize; uniform float uF, uNear, uFar, uAmt, uPost; uniform vec3 uLine;
