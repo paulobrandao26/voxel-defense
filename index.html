@@ -572,20 +572,27 @@ scene.add(sun, sun.target);
 // sem borrar, com um contorno escuro só em volta de cada objeto (onde a distância muda de repente).
 // Parece pixel art de camadas empilhadas, sem mudar o jogo. Dá para voltar ao visual normal no menu.
 const PIXEL = (() => { const q = new URLSearchParams(location.search); if (q.has('pixel')) return true; if (q.has('normal')) return false; try { return localStorage.getItem('vd-visual') !== 'normal'; } catch (e) { return true; } })();
-const PIX = { px: 3, F: 3, w: 1, h: 1, rt: null, quad: null, cam: null, scene: null, mat: null };
+const PIX = { px: 3, F: 3, S: 1, w: 1, h: 1, d0: 20, rt: null, quad: null, cam: null, scene: null, mat: null };
+// Contra a tremedeira: cada pixel grande é a média de 2x2 pontos (menos chiado) e a câmera anda presa na grade dos pixels,
+// com o resto do passo feito deslizando a imagem pronta. Assim o cenário não pisca quando o herói anda.
 // Contorno suave em volta de cada coisa nos dois visuais; no pixel art ele é de 1 "pixel grande", no normal é bem fininho.
 {
   PIX.rt = new THREE.WebGLRenderTarget(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, type: THREE.HalfFloatType, depthBuffer: true });
   PIX.rt.depthTexture = new THREE.DepthTexture(1, 1); PIX.rt.depthTexture.type = THREE.UnsignedIntType;
   PIX.mat = new THREE.ShaderMaterial({
-    uniforms: { tCol: { value: PIX.rt.texture }, tDep: { value: PIX.rt.depthTexture }, uSize: { value: new THREE.Vector2(1, 1) }, uF: { value: 3 }, uNear: { value: cam.near }, uFar: { value: cam.far }, uLine: { value: new THREE.Color(0x1d1a2b) }, uAmt: { value: PIXEL ? .8 : .85 }, uPost: { value: PIXEL ? 1 : 0 } },
+    uniforms: { tCol: { value: PIX.rt.texture }, tDep: { value: PIX.rt.depthTexture }, uSize: { value: new THREE.Vector2(1, 1) }, uF: { value: 3 }, uNear: { value: cam.near }, uFar: { value: cam.far }, uLine: { value: new THREE.Color(0x1d1a2b) }, uAmt: { value: PIXEL ? .8 : .85 }, uPost: { value: PIXEL ? 1 : 0 }, uS: { value: 1 }, uOff: { value: new THREE.Vector2() } },
     vertexShader: 'void main(){ gl_Position = vec4(position.xy, 0., 1.); }',
     fragmentShader: `
-      uniform sampler2D tCol, tDep; uniform vec2 uSize; uniform float uF, uNear, uFar, uAmt, uPost; uniform vec3 uLine;
-      float lin(vec2 p){ float d = texture2D(tDep, (p + .5) / uSize).x; return uNear * uFar / (uFar - d * (uFar - uNear)); }
+      uniform sampler2D tCol, tDep; uniform vec2 uSize, uOff; uniform float uF, uNear, uFar, uAmt, uPost, uS; uniform vec3 uLine;
+      float lin(vec2 p){ float d = texture2D(tDep, (p * uS + floor(uS * .5) + .5) / uSize).x; return uNear * uFar / (uFar - d * (uFar - uNear)); }
       void main(){
-        vec2 p = floor(gl_FragCoord.xy / uF);
-        vec4 c = texture2D(tCol, (p + .5) / uSize);
+        vec2 p = floor(gl_FragCoord.xy / uF + uOff);
+        vec4 c = vec4(0.);
+        for (int i = 0; i < 2; i++) for (int j = 0; j < 2; j++) {
+          if (float(i) >= uS || float(j) >= uS) continue;
+          vec4 t = texture2D(tCol, (p * uS + vec2(i, j) + .5) / uSize); c += vec4(t.rgb * t.a, t.a);
+        }
+        c /= uS * uS; if (c.a > 0.) c.rgb /= c.a;
         float d = lin(p), m = min(min(lin(p + vec2(1., 0.)), lin(p - vec2(1., 0.))), min(lin(p + vec2(0., 1.)), lin(p - vec2(0., 1.))));
         // poucas cores: cada canal vira degraus (visual de paleta limitada, sem degradê)
         if (uPost > .5) c.rgb = floor(c.rgb * 15. + .5) / 15.;
@@ -600,12 +607,32 @@ const PIX = { px: 3, F: 3, w: 1, h: 1, rt: null, quad: null, cam: null, scene: n
 }
 function pixResize() {
   const dp = renderer.getPixelRatio();
-  PIX.px = PIXEL ? (TOUCH ? 2.5 : 3) : 1 / dp; PIX.F = Math.max(1, Math.round(PIX.px * dp));
-  PIX.w = Math.ceil(innerWidth * dp / PIX.F); PIX.h = Math.ceil(innerHeight * dp / PIX.F);
-  PIX.rt.setSize(PIX.w, PIX.h); PIX.mat.uniforms.uSize.value.set(PIX.w, PIX.h); PIX.mat.uniforms.uF.value = PIX.F;
+  PIX.F = pixF();
+  PIX.w = Math.ceil(innerWidth * dp / PIX.F) + 2; PIX.h = Math.ceil(innerHeight * dp / PIX.F) + 2;
+  // 2x2 pontos por pixel quando cabe (no celular de tela fina, no visual normal, já seria grande demais)
+  PIX.S = PIX.w * PIX.h * 4 <= 2.5e6 ? 2 : 1;
+  PIX.rt.setSize(PIX.w * PIX.S, PIX.h * PIX.S); PIX.mat.uniforms.uSize.value.set(PIX.w * PIX.S, PIX.h * PIX.S);
+  PIX.mat.uniforms.uF.value = PIX.F; PIX.mat.uniforms.uS.value = PIX.S;
+}
+// tamanho do pixel grande: com a câmera longe ele encolhe, para o cenário continuar com detalhe
+function pixF() {
+  const dp = renderer.getPixelRatio();
+  if (!PIXEL) return 1;
+  const base = TOUCH ? 2.5 : 3, k = clamp(PIX.d0 / Math.max(1, C.dist), .45, 1);
+  return Math.max(1, Math.round(base * k * dp));
 }
 function drawFrame() {
+  if (PIXEL && pixF() !== PIX.F) pixResize();
+  const U = PIX.mat.uniforms.uOff.value, tx = C.tx, tz = C.tz;
+  if (PIX.F > 1) {
+    // prende a câmera na grade dos pixels grandes e desliza a imagem pelo resto
+    const wpp = 2 * C.dist * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) / (PIX.h - 2), sp = Math.sin(C.pitch), wz = wpp / sp;
+    const sx = Math.round(tx / wpp) * wpp, sz = Math.round(tz / wz) * wz;
+    U.set((tx - sx) / wpp, -(tz - sz) / wz);
+    C.tx = sx; C.tz = sz; updateCam();
+  } else U.set(0, 0);
   renderer.setRenderTarget(PIX.rt); renderer.render(scene, cam);
+  if (PIX.F > 1) { C.tx = tx; C.tz = tz; updateCam(); }
   renderer.setRenderTarget(null); renderer.render(PIX.scene, PIX.cam);
 }
 
@@ -2559,10 +2586,15 @@ addEventListener('blur', () => keys.clear());
 // ===== Câmera e toque =====
 const C = { tx: 0, tz: 3, dist: 24, pitch: .95, goal: null, follow: true };
 const MIN = 8, MAX = 60;
+const SUNZ = new THREE.Vector3(-9, 18, 6).normalize(), SUNX = new THREE.Vector3(0, 1, 0).cross(SUNZ).normalize(), SUNY = SUNZ.clone().cross(SUNX);
 function updateCam() {
   cam.position.set(C.tx, Math.sin(C.pitch) * C.dist, C.tz + Math.cos(C.pitch) * C.dist);
   cam.lookAt(C.tx, 0, C.tz); cam.updateMatrixWorld();
-  sun.position.set(C.tx - 9, 18, C.tz + 6); sun.target.position.set(C.tx, 0, C.tz); sun.target.updateMatrixWorld();
+  // sombra presa na grade da própria sombra: não fica tremendo quando a câmera anda
+  const SC = sun.shadow.camera, tex = (SC.right - SC.left) / sun.shadow.mapSize.x;
+  const a = C.tx * SUNX.x + C.tz * SUNX.z, b = C.tx * SUNY.x + C.tz * SUNY.z, da = Math.round(a / tex) * tex - a, db = Math.round(b / tex) * tex - b;
+  const gx = C.tx + da * SUNX.x + db * SUNY.x, gy = da * SUNX.y + db * SUNY.y, gz = C.tz + da * SUNX.z + db * SUNY.z;
+  sun.position.set(gx - 9, gy + 18, gz + 6); sun.target.position.set(gx, gy, gz); sun.target.updateMatrixWorld();
 }
 function clampCam() { C.tx = clamp(C.tx, -HALF, HALF); C.tz = clamp(C.tz, -HALF, HALF + 4); }
 function fitDist() { const t = 2 * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)), a = innerWidth / innerHeight; return clamp(Math.max(14 / (t * a), 17 / t), MIN, MAX); }
@@ -2570,7 +2602,7 @@ function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
   pixResize();
   cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix();
-  C.dist = fitDist(); updateCam();
+  C.dist = PIX.d0 = fitDist(); updateCam(); pixResize();
 }
 addEventListener('resize', resize);
 function ensureVisible(p) {
