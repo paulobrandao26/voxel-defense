@@ -323,9 +323,10 @@ const N = 96, HALF = N / 2, C0 = HALF - .5, MS = N / 48;   // MS: quanto o mapa 
 // Modos: solo, online "juntos" (coop) e online "um contra o outro" (pvp). ?sala=CÓDIGO&modo=coop|pvp (&host=1 para quem criou)
 const QS0 = new URLSearchParams(location.search), ROOM = QS0.get("sala");
 const MODE = ROOM ? (QS0.get("modo") === "pvp" ? "pvp" : "coop") : "solo", ROLE = ROOM ? (QS0.has("host") ? "host" : "guest") : "solo";
-// Mapas: floresta (o de sempre), deserto e neve. O convidado online usa o mapa de quem criou a sala (vem no link).
-const BIOMAS = ['floresta', 'deserto', 'neve'], BIOMA_NOME = { floresta: '🌳 Floresta', deserto: '🏜️ Deserto', neve: '❄️ Neve' };
+// Mapas: floresta (o de sempre), deserto, neve e vulcão. O convidado online usa o mapa de quem criou a sala (vem no link).
+const BIOMAS = ['floresta', 'deserto', 'neve', 'vulcao'], BIOMA_NOME = { floresta: '🌳 Floresta', deserto: '🏜️ Deserto', neve: '❄️ Neve', vulcao: '🌋 Vulcão' };
 const BIOMA = (() => { const b = QS0.get('bioma'); if (BIOMAS.includes(b)) return b; if (ROLE !== 'guest') try { const v = localStorage.getItem('vd-bioma'); if (BIOMAS.includes(v)) return v; } catch (e) {} return 'floresta'; })();
+const VUL = BIOMA === 'vulcao';
 const PVP = MODE === "pvp", ONLINE = MODE !== "solo", ME = ROLE === "guest" ? 1 : 0, GUEST = ROLE === "guest";
 // Castelos (centro em coordenadas de casa). No contra, cada jogador tem o seu: 0 a oeste, 1 a leste.
 const CASTLE_MAX = 500;   // vida do castelo (todos os modos)
@@ -557,11 +558,11 @@ renderer.setPixelRatio(dpr);
 renderer.shadowMap.enabled = true;
 const scene = new THREE.Scene();
 const cam = new THREE.PerspectiveCamera(45, 1, .5, 220);
-const SKY = { floresta: [0xcfe6f5, 0x5a6b3a, '#7ec4ee', '#d6eefc'], deserto: [0xf4e2bb, 0x9a7a45, '#f2c27a', '#fbe9c6'], neve: [0xe6eef6, 0x8796a8, '#a9c3dc', '#eef4fa'] }[BIOMA];
-scene.fog = new THREE.Fog(SKY[0], 60, 130);
-scene.add(new THREE.HemisphereLight(0xe2f2ff, SKY[1], 1.7));
+const SKY = { floresta: [0xcfe6f5, 0x5a6b3a, '#7ec4ee', '#d6eefc'], deserto: [0xf4e2bb, 0x9a7a45, '#f2c27a', '#fbe9c6'], neve: [0xe6eef6, 0x8796a8, '#a9c3dc', '#eef4fa'], vulcao: [0x6b3a2c, 0x4a2418, '#3b1a16', '#a5492a'] }[BIOMA];
+scene.fog = new THREE.Fog(SKY[0], VUL ? 50 : 60, VUL ? 115 : 130);
+scene.add(new THREE.HemisphereLight(VUL ? 0xffd2b8 : 0xe2f2ff, SKY[1], 1.7));
 document.documentElement.style.background = document.body.style.background = `linear-gradient(${SKY[2]},${SKY[3]} 70%)`;
-const sun = new THREE.DirectionalLight(0xfff1d6, 2.3);
+const sun = new THREE.DirectionalLight(VUL ? 0xffbf8f : 0xfff1d6, 2.3);
 sun.castShadow = true; sun.shadow.mapSize.set(TOUCH ? 1024 : 2048, TOUCH ? 1024 : 2048);
 Object.assign(sun.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20, near: 1, far: 60 });
 sun.shadow.bias = -.0008; sun.shadow.normalBias = .03;
@@ -683,6 +684,11 @@ function bio(hex, ground) {
   if (BIOMA === 'deserto') {
     if (green) out = ground ? hsl(.105 + (l - .4) * .06, .5 + (r - .5) * .1, .7 + (l - .4) * .7) : hsl(.13 + r * .04, s * .55, Math.min(.62, l * 1.05 + .03));
     else if (dirt) out = hsl(.085, s * .8, l + .1);
+  } else if (VUL) {
+    // vulcão: chão de cinza e rocha escura com brasas; folhas queimadas, algumas vermelhas e laranja
+    if (green) out = ground ? (r < .035 ? hsl(.05 + r, .95, .55) : hsl(.02 + r * .04, .07 + r * .05, .13 + (l - .4) * .35 + r * .05)) : r < .3 ? hsl(.02 + r * .12, .75, .38 + r * .2) : hsl(.07, .08, l * .45 + .04);
+    else if (dirt) out = hsl(.03, .45, l * .75);
+    else if (sand) out = hsl(.05, .12, .3 + r * .06);
   } else {
     if (green) out = ground || l > .42 || r < .4 ? hsl(.58, .3, .88 + r * .08) : hsl(h + .04, s * .45, l * .8);
     else if (dirt) out = hsl(.07, .12, l + .12);
@@ -1074,13 +1080,13 @@ ground.receiveShadow = true; scene.add(ground);
 const WS = 64 * Q, wdata = new Uint8Array(WS * WS * 4);
 for (let x = 0; x < WS; x++) for (let z = 0; z < WS; z++) {
   const o = (z * WS + x) * 4, r = h3(x, 11, z), wave = Math.sin((x + z * .5) * Math.PI * 2 / (16 * Q) + Math.sin(z * Math.PI * 2 / (32 * Q)) * 2) > .82;
-  const c = BIOMA === 'neve' ? (r < .03 ? 0xffffff : wave ? 0xd6f0fb : r < .5 ? 0xa9d8ee : r < .8 ? 0xb6def1 : 0x9fd0e8) : r < .025 ? 0xe0f6ff : wave ? 0x7cc8ec : r < .5 ? 0x3f9fd6 : r < .8 ? 0x4aa8de : 0x3793cc;
+  const c = VUL ? (r < .04 ? 0xfff1a0 : wave ? 0xffb020 : r < .5 ? 0xf05a14 : r < .8 ? 0xff7417 : 0xd63c10) : BIOMA === 'neve' ? (r < .03 ? 0xffffff : wave ? 0xd6f0fb : r < .5 ? 0xa9d8ee : r < .8 ? 0xb6def1 : 0x9fd0e8) : r < .025 ? 0xe0f6ff : wave ? 0x7cc8ec : r < .5 ? 0x3f9fd6 : r < .8 ? 0x4aa8de : 0x3793cc;
   wdata[o] = c >> 16 & 255; wdata[o + 1] = c >> 8 & 255; wdata[o + 2] = c & 255; wdata[o + 3] = 255;
 }
 const wtex = new THREE.DataTexture(wdata, WS, WS, THREE.RGBAFormat);
 Object.assign(wtex, { colorSpace: THREE.SRGBColorSpace, magFilter: THREE.NearestFilter, minFilter: THREE.LinearMipmapLinearFilter, generateMipmaps: true, wrapS: THREE.RepeatWrapping, wrapT: THREE.RepeatWrapping, needsUpdate: true });
 wtex.repeat.set(N * R / WS, N * R / WS);
-const waterMesh = new THREE.Mesh(cellQuads(isWet), new THREE.MeshLambertMaterial({ map: wtex, emissive: BIOMA === 'neve' ? 0x22384a : 0x0b3550 }));
+const waterMesh = new THREE.Mesh(cellQuads(isWet), new THREE.MeshLambertMaterial({ map: wtex, emissive: VUL ? 0xb03200 : BIOMA === 'neve' ? 0x22384a : 0x0b3550 }));
 waterMesh.position.y = -.22; waterMesh.receiveShadow = true; scene.add(waterMesh);
 box(mat.soil, N, 1.2, N, 0, -1.6, 0, scene);
 box(mat.soilD, N - .4, .8, N - .4, 0, -2.6, 0, scene);
@@ -1216,13 +1222,15 @@ function updatePfx(dt) {
   }
 }
 // Neve caindo (mapa de neve) e poeira voando (deserto). Ficam fora do contorno do visual pixel (não marcam profundidade).
-const FLK = 260, flakes = [], flakeMesh = new THREE.InstancedMesh(BOX, new THREE.MeshBasicMaterial({ color: BIOMA === 'deserto' ? 0xead7a8 : 0xffffff, transparent: true, opacity: BIOMA === 'deserto' ? .55 : .9, depthWrite: false, fog: false }), FLK);
+const FLK = 260, flakes = [], flakeMesh = new THREE.InstancedMesh(BOX, new THREE.MeshBasicMaterial({ color: BIOMA === 'deserto' ? 0xead7a8 : VUL ? 0xff8a2a : 0xffffff, transparent: true, opacity: BIOMA === 'deserto' ? .55 : .9, depthWrite: false, fog: false }), FLK);
 flakeMesh.frustumCulled = false; flakeMesh.renderOrder = 6; if (BIOMA !== 'floresta') scene.add(flakeMesh);
 for (let k = 0; k < FLK; k++) setInst(flakeMesh, k, 0, -9, 0, 0, 0, 0);
 function bioTick(dt) {
   if (BIOMA === 'floresta' || !dt) return;
   const snow = BIOMA === 'neve';
-  if (flakes.length < (snow ? FLK : 60) && Math.random() < dt * (snow ? 40 : 8)) flakes.push({ p: V(C.tx + (Math.random() - .5) * 34, snow ? 8 + Math.random() * 3 : .3 + Math.random() * .8, C.tz + (Math.random() - .5) * 26), v: snow ? V((Math.random() - .5) * .5, -1 - Math.random() * .6, (Math.random() - .5) * .5) : V(2 + Math.random() * 1.5, (Math.random() - .5) * .3, (Math.random() - .5) * .8), life: snow ? 12 : 3, s: snow ? .05 + Math.random() * .05 : .08 });
+  // vulcão: brasas subindo do chão
+  if (VUL) { if (flakes.length < 120 && Math.random() < dt * 22) flakes.push({ p: V(C.tx + (Math.random() - .5) * 34, .1, C.tz + (Math.random() - .5) * 26), v: V((Math.random() - .5) * .4, .8 + Math.random() * 1.2, (Math.random() - .5) * .4), life: 2.5 + Math.random() * 2.5, s: .05 + Math.random() * .05 }); }
+  else if (flakes.length < (snow ? FLK : 60) && Math.random() < dt * (snow ? 40 : 8)) flakes.push({ p: V(C.tx + (Math.random() - .5) * 34, snow ? 8 + Math.random() * 3 : .3 + Math.random() * .8, C.tz + (Math.random() - .5) * 26), v: snow ? V((Math.random() - .5) * .5, -1 - Math.random() * .6, (Math.random() - .5) * .5) : V(2 + Math.random() * 1.5, (Math.random() - .5) * .3, (Math.random() - .5) * .8), life: snow ? 12 : 3, s: snow ? .05 + Math.random() * .05 : .08 });
   for (let k = flakes.length - 1; k >= 0; k--) { const f = flakes[k]; f.life -= dt; f.p.addScaledVector(f.v, dt); if (f.life <= 0 || f.p.y < 0) { flakes.splice(k, 1); } }
   for (let k = 0; k < FLK; k++) { const f = flakes[k]; if (f) setInst(flakeMesh, k, f.p.x, f.p.y, f.p.z, f.s, f.s, f.s); else setInst(flakeMesh, k, 0, -9, 0, 0, 0, 0); }
   flakeMesh.instanceMatrix.needsUpdate = true;
@@ -2716,7 +2724,8 @@ function loop(now) {
     if (c.t > .5) c.m.scale.setScalar(Math.max(0, 1 - (c.t - .5) / .35));
     if (c.t > .85) { scene.remove(c.m); coins.splice(k, 1); }
   }
-  if (BIOMA !== 'neve') { wtex.offset.x = (time * .035) % 1; wtex.offset.y = (time * .012) % 1; }
+  if (VUL) { wtex.offset.x = (time * .012) % 1; wtex.offset.y = (time * .006) % 1; waterMesh.material.emissive.setHex(0xb03200).multiplyScalar(.85 + Math.sin(time * 1.7) * .15); }
+  else if (BIOMA !== 'neve') { wtex.offset.x = (time * .035) % 1; wtex.offset.y = (time * .012) % 1; }
   bioTick(rdt);
   for (const pf of portalFx) { pf.ring.rotation.z += rdt * 2; }
   portalMat.opacity = .45 + Math.sin(time * 3) * .15;
