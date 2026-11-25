@@ -55,6 +55,10 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
 .price{color:var(--gold)}
 .card:disabled .price{color:#ff8a80}
 .row{display:flex;gap:8px;margin-top:10px}
+.ov{z-index:20}.maps{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.maps[hidden]{display:none}.mapsT{grid-column:1/-1;margin:0;font-weight:700;color:var(--muted);text-align:left}
+.mapc{display:flex;flex-direction:column;align-items:flex-start;gap:2px;border:2px solid transparent;border-radius:14px;padding:8px 10px;text-align:left;min-height:62px}.mapc span{font-weight:800;font-size:15px}.mapc small{font-size:11.5px;color:var(--muted);line-height:1.25}.mapc.on{border-color:var(--pri);background:#3d5170}
+#menuBtn .lbl{margin-left:6px}@media (max-width:420px){#menuBtn .lbl{display:none}}
+.btag{position:fixed;left:0;top:0;z-index:2;pointer-events:none;transform:translate(-50%,-100%);font-weight:800;font-size:13px;color:#fff;background:#7f1d1de6;border:2px solid #fca5a5;padding:2px 9px;border-radius:999px;white-space:nowrap;box-shadow:0 2px 8px #0006}
 .row button{flex:1;padding:0 8px;font-size:15px}
 .stats{color:var(--muted);font-weight:500;font-size:14px}
 .hpline{margin:2px 0 6px}
@@ -118,6 +122,7 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
 </div>
 <canvas id="c"></canvas>
 <div id="hud">
+  <button id="menuBtn" class="pill" aria-label="Voltar ao menu">☰<span class="lbl">Menu</span></button>
   <div class="pill" title="Ouro">🪙 <b id="gold">0</b></div>
   <div class="pill" title="Vida do seu castelo">🏰 <b id="castle">500</b></div>
   <div class="pill" id="foePill" title="Vida do castelo inimigo" hidden>🎯 <b id="foeCastle">500</b></div>
@@ -151,12 +156,20 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
   <div class="box">
     <h1>Defenda o castelo!</h1>
     <ul id="helpList"></ul>
+    <div id="maps" class="maps" role="radiogroup" aria-label="Escolha o mapa"></div>
     <button id="play" class="pri">Jogar</button>
     <button id="online" class="sec wide">🌐 Jogar online com um amigo</button>
     <div class="row"><button id="musBtn" class="sec"></button><button id="sfxBtn" class="sec"></button></div>
     <button id="gfx" class="sec wide"></button>
-    <button id="mapBtn" class="sec wide"></button>
     <button id="visBtn" class="sec wide"></button>
+  </div>
+</div>
+<div id="quit" class="ov">
+  <div class="box" role="dialog" aria-label="Voltar ao menu">
+    <h1>Voltar ao menu?</h1>
+    <p>A partida atual termina. No menu você escolhe o mapa e começa de novo.</p>
+    <button id="quitYes" class="pri">Sair para o menu</button>
+    <button id="quitNo" class="sec wide">Continuar jogando</button>
   </div>
 </div>
 <div id="onl" class="ov">
@@ -284,6 +297,7 @@ function sfx(name, x, z) {
     case 'heart': [659, 784, 988].forEach((fq, k) => tone('triangle', fq, fq, .12, .2, now + k * .08)); break;
     case 'heal': [523, 659, 784, 1047, 1319].forEach((fq, k) => tone('triangle', fq, fq, .14, .22, now + k * .08)); break;
     case 'over': [392, 370, 349, 330, 262].forEach((fq, k) => tone('square', fq, fq * .98, k === 4 ? .7 : .22, .1, now + k * .22)); break;
+    case 'alarm': [0, .3].forEach(d => { tone('sawtooth', 220, 330, .2, .1, now + d); tone('sawtooth', 330, 220, .2, .1, now + d + .15); }); break;
     case 'win': [523, 659, 784, 1047, 784, 1047].forEach((fq, k) => tone('square', fq, fq, k === 5 ? .6 : .12, .1, now + k * .12)); break;
   }
 }
@@ -299,6 +313,7 @@ function musicTick() {
   if (SND.nextT < ac.currentTime) SND.nextT = ac.currentTime + .05;
   while (SND.nextT < ac.currentTime + .2) {
     const s = SND.step % 64, t = SND.nextT, bar = (s >> 3) % 4, m = MEL[s];
+    if (SND.tense) { tenseStep(s, t, SND.tense, e8); SND.step++; SND.nextT += e8 * (SND.tense > 1 ? .82 : 1); continue; }
     if (m) tone('square', mtof(m), mtof(m), e8 * .9, .16, t, SND.music);
     if (m && s % 2 === 0) tone('square', mtof(m + 12), mtof(m + 12), e8 * .4, .04, t + e8 * .5, SND.music);   // ecozinho
     const b = BASS[bar] + (s % 2 ? 12 : 0); tone('triangle', mtof(b), mtof(b), e8 * .95, .3, t, SND.music);
@@ -307,6 +322,17 @@ function musicTick() {
     if (s % 8 === 4) hiss(.12, .14, 1800, .8, t, SND.music);
     SND.step++; SND.nextT += e8;
   }
+}
+// Música de perigo: quando um chefão aparece (1) e mais forte quando ele chega perto do castelo (2).
+// Baixo grave pulsando como coração, notas que escorregam meio tom e um chiado tremendo no nível 2.
+const TMEL = [69, 0, 0, 70, 0, 0, 69, 0, 68, 0, 0, 69, 0, 0, 0, 0];
+function tenseStep(s, t, tn, e8) {
+  const k = s % 16, bar = (s >> 4) % 4, root = [33, 33, 34, 32][bar];
+  if (k % 2 === 0) tone('sawtooth', mtof(root), mtof(root), e8 * .9, .12, t, SND.music);
+  if (k === 0 || k === 3) tone('sine', 70, 38, .22, .55, t, SND.music);
+  const m = TMEL[k]; if (m) tone('triangle', mtof(m - 12 + (bar === 3 ? 1 : 0)), mtof(m - 13), e8 * 2.6, .14, t, SND.music);
+  if (k % 4 === 2) tone('square', mtof(93 + (bar & 1)), mtof(93 + (bar & 1)), .05, .025, t, SND.music);
+  if (tn > 1) { hiss(e8 * .9, .05, 2200 + k * 90, 6, t, SND.music); if (k % 2) tone('sine', 55, 35, .15, .4, t, SND.music); }
 }
 function setMusic(on) { SND.musicOn = on; lsSet('vd-musica', on); if (SND.music) SND.music.gain.value = on ? .2 : 0; soundUI(); }
 function setSfx(on) { SND.sfxOn = on; lsSet('vd-sons', on); if (SND.sfx) SND.sfx.gain.value = on ? .55 : 0; soundUI(); }
@@ -327,6 +353,7 @@ const MODE = ROOM ? (QS0.get("modo") === "pvp" ? "pvp" : "coop") : "solo", ROLE 
 const BIOMAS = ['floresta', 'deserto', 'neve', 'vulcao'], BIOMA_NOME = { floresta: '🌳 Floresta', deserto: '🏜️ Deserto', neve: '❄️ Neve', vulcao: '🌋 Vulcão' };
 const BIOMA = (() => { const b = QS0.get('bioma'); if (BIOMAS.includes(b)) return b; if (ROLE !== 'guest') try { const v = localStorage.getItem('vd-bioma'); if (BIOMAS.includes(v)) return v; } catch (e) {} return 'floresta'; })();
 const VUL = BIOMA === 'vulcao';
+const BICHOS_TXT = { floresta: '🐄 Bois, bodes e coelhos', deserto: '🐪 Camelos e coelhos', neve: '🐻‍❄️ Ursos polares, renas e coelhos', vulcao: '🐐 Bodes e coelhos' }[BIOMA];
 const PVP = MODE === "pvp", ONLINE = MODE !== "solo", ME = ROLE === "guest" ? 1 : 0, GUEST = ROLE === "guest";
 // Castelos (centro em coordenadas de casa). No contra, cada jogador tem o seu: 0 a oeste, 1 a leste.
 const CASTLE_MAX = 500;   // vida do castelo (todos os modos)
@@ -353,11 +380,44 @@ const noise = (i, j) => Math.sin(i * .45 + 1) + Math.cos(j * .38) + Math.sin((i 
 
 for (const c of CASTLES) for (let i = c.ci - 1.5; i <= c.ci + 1.5; i++) for (let j = c.cj - 1.5; j <= c.cj + 1.5; j++) grid[i][j] = CASTLE;
 const riverJ = i => Math.round(10 * MS + Math.sin(i * .27) * 1.8 + Math.sin(i * .07) * 4);
-for (let i = 0; i < N; i++) { const j = riverJ(i); grid[i][j] = grid[i][j + 1] = WATER; }
-const BRIDGES = Array.from({ length: Math.round(3 * MS) }, (_, k) => Math.round(7 + k * (N - 14) / (3 * MS - 1)));
+if (BIOMA !== 'deserto') for (let i = 0; i < N; i++) { const j = riverJ(i); grid[i][j] = grid[i][j + 1] = WATER; }
+const BRIDGES = BIOMA === 'deserto' ? [] : Array.from({ length: Math.round(3 * MS) }, (_, k) => Math.round(7 + k * (N - 14) / (3 * MS - 1)));
 for (const i of BRIDGES) { const j = riverJ(i); grid[i][j] = grid[i][j + 1] = BRIDGE; }
-const LAKES = [[38 * MS, 37 * MS, 2.6], [20 * MS, 36 * MS, 3.4], [37 * MS, 21 * MS, 2.2], [9 * MS, 26 * MS, 2.8]];
+const LAKES = BIOMA === 'deserto' ? CASTLES.map(c => [c.ci + 9, c.cj - 7, 1.9]) : [[38 * MS, 37 * MS, 2.6], [20 * MS, 36 * MS, 3.4], [37 * MS, 21 * MS, 2.2], [9 * MS, 26 * MS, 2.8]];
 for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) if (LAKES.some(([a, b, r]) => Math.hypot(i - a, j - b) < r + (noise(i, j) * .25))) grid[i][j] = WATER;
+
+// ===== Relevo: dunas no deserto, morros de pedra no vulcão e de neve na neve =====
+// Tudo sobe e desce junto (chão, árvores, monstros, herói), menos perto do castelo e da água.
+// A conta roda na placa de vídeo (vdH) e aqui (Hjs) para cliques e efeitos.
+const HAMP = { floresta: 0, deserto: 2.4, neve: 1.4, vulcao: 1.8 }[BIOMA];
+const HC = CASTLES.map(c => [wc(c.ci), wc(c.cj)]), HL = LAKES.map(([a, b, r]) => [wc(a), wc(b), r]), HRIV = BIOMA !== 'deserto';
+const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+function Hjs(x, z) {
+  if (!HAMP) return 0;
+  let m = sstep(0, 5, HALF - Math.max(Math.abs(x), Math.abs(z)));   // borda do mapa fica reta (a base de terra é uma caixa só)
+  for (const [cx, cz] of HC) m *= sstep(6.5, 12, Math.max(Math.abs(x - cx), Math.abs(z - cz)));
+  for (const [lx, lz, r] of HL) m *= sstep(r + 1.5, r + 4.5, Math.hypot(x - lx, z - lz));
+  if (HRIV) { const i = x + HALF - .5; m *= sstep(2.5, 5.5, Math.abs(z - (10 * MS + Math.sin(i * .27) * 1.8 + Math.sin(i * .07) * 4 - HALF + 1))); }
+  if (m <= 0) return 0;
+  const a = .5 + .5 * Math.sin(x * .19 + Math.sin(z * .11) * 2), b = .5 + .5 * Math.sin(z * .23 + x * .07 + 1.3);
+  return HAMP * m * a * (.35 + .65 * b);
+}
+if (HAMP) {
+  const f = v => v.toFixed(3);
+  let g = `float vdH(vec2 p){ float m = smoothstep(0., 5., ${f(HALF)} - max(abs(p.x), abs(p.y)));`;
+  for (const [cx, cz] of HC) g += `m *= smoothstep(6.5, 12., max(abs(p.x - (${f(cx)})), abs(p.y - (${f(cz)}))));`;
+  for (const [lx, lz, r] of HL) g += `m *= smoothstep(${f(r + 1.5)}, ${f(r + 4.5)}, length(p - vec2(${f(lx)}, ${f(lz)})));`;
+  if (HRIV) g += `{ float i = p.x + ${f(HALF - .5)}; m *= smoothstep(2.5, 5.5, abs(p.y - (${f(10 * MS)} + sin(i * .27) * 1.8 + sin(i * .07) * 4. - ${f(HALF - 1)}))); }`;
+  g += `float a = .5 + .5 * sin(p.x * .19 + sin(p.y * .11) * 2.), b = .5 + .5 * sin(p.y * .23 + p.x * .07 + 1.3); return ${f(HAMP)} * m * a * (.35 + .65 * b); }\n`;
+  const SC = THREE.ShaderChunk, pv = 'mvPosition = modelViewMatrix * mvPosition;', wv = 'worldPosition = modelMatrix * worldPosition;';
+  if (SC.project_vertex.includes(pv) && SC.worldpos_vertex.includes(wv)) {
+    SC.common += '\n' + g;
+    SC.project_vertex = SC.project_vertex.replace(pv, '{ vec4 hw = modelMatrix * mvPosition; hw.y += vdH(hw.xz); mvPosition = viewMatrix * hw; }');
+    SC.worldpos_vertex = SC.worldpos_vertex.replace(wv, wv + ' worldPosition.y += vdH(worldPosition.xz);');
+    // luz acompanha a inclinação do morro
+    SC.defaultnormal_vertex += '\n{ vec4 hw = vec4(position, 1.);\n#ifdef USE_INSTANCING\nhw = instanceMatrix * hw;\n#endif\nhw = modelMatrix * hw; vec2 hg = vec2(vdH(hw.xz + vec2(.25, 0.)) - vdH(hw.xz - vec2(.25, 0.)), vdH(hw.xz + vec2(0., .25)) - vdH(hw.xz - vec2(0., .25))) * 2.;\nvec3 nw = (vec4(transformedNormal, 0.) * viewMatrix).xyz; nw -= vec3(hg.x, 0., hg.y) * nw.y; transformedNormal = normalize((viewMatrix * vec4(nw, 0.)).xyz); }\n';
+  } else console.warn('relevo desligado: three mudou');
+}
 
 // Portais de onde os monstros saem: em lugares sorteados, dentro da mata [i, j, direção para dentro].
 // Online usa o código da sala como semente, para os dois aparelhos terem o mesmo mapa. ?mapa=N fixa a semente.
@@ -429,7 +489,8 @@ for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
   // mata fechada nas áreas de floresta e em volta de cada portal
   const pd = Math.min(...PORTALS.map(([a, b]) => Math.hypot(i - a, j - b))), zone = noise(i * .42 + 3, j * .37 - 2) + noise(i * .13, j * .16) * .6;
   const d = pd < 6.5 || zone > 1.3 ? .62 : noise(i, j) > 1.1 ? .5 : zone > .2 ? .22 : zone > -.9 ? .1 : .025, r = rnd();
-  if (r < d) grid[i][j] = TREE; else if (r < d + .03) grid[i][j] = ROCK;
+  const cdd = castleDist(i, j), dd = BIOMA === 'deserto' ? (cdd < 11 ? .3 : d * .16) : VUL ? d * .45 : d, rk = BIOMA === 'deserto' ? .05 : VUL ? .07 : .03;
+  if (r < dd) grid[i][j] = TREE; else if (r < dd + rk) grid[i][j] = ROCK;
 }
 // Abre uma trilha torta e estreita do portal até o castelo, por dentro da mata, para nenhum portal ficar preso
 const trail = new Set();
@@ -467,6 +528,8 @@ for (let k = 0; k < 6000 && giants.length < 3 * MS * MS; k++) {
   for (let a = -2; a <= 3; a++) for (let b = -2; b <= 3; b++) { const t = at(i + a, j + b); if (t === TREE || t === ROCK) grid[i + a][j + b] = GRASS; }
   for (const [a, b] of cells) grid[a][b] = GIANT;
   giants.push({ i, j });
+  const gn = giants.length - 1;
+  if (BIOMA === 'deserto' && gn % 3 === 0) for (let a = -2; a <= 3; a++) for (const b of [0, 1]) { const [x, z] = gn % 2 ? [i + b, j + a] : [i + a, j + b]; if (at(x, z) === GRASS && !trail.has(K(x, z)) && !reserved.has(K(x, z))) grid[x][z] = GIANT; }
 }
 const trees = [], rocks = [], mounts = [];
 for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
@@ -810,8 +873,109 @@ function birch(c, d, s) {
   vfill(c - Q, c + Q - 1, Y0, Math.floor(cy), d - Q, d + Q - 1, (x, y, z) => h3(x, y, z) < .18 ? pk(0x2a2a2a) : pick(BIRCHB, x, y, z));
   blob([[c, cy, d, rc, ry], [c + (rnd() - .5) * rc * .6, cy + ry * .5, d + (rnd() - .5) * rc * .6, rc * .7, ry * .6]], BIRCHL);
 }
+// ===== Coisas de cada mapa (cores próprias, sem a troca de cores do mapa) =====
+const pkR = hex => 0x8000 | (hex >> 19 & 31) << 10 | (hex >> 11 & 31) << 5 | (hex >> 3 & 31);
+const rawP = (hex, dv = .08, n = 5) => Array.from({ length: n }, (_, k) => pkR(shade(hex, 1 + (k / (n - 1) - .5) * 2 * dv)));
+const CACT = rawP(0x4f8a3c), CACTD = rawP(0x3b6e2e), PALMT = rawP(0x8a6a44, .1), FROND = rawP(0x4e9a3a, .12), DRY = rawP(0x8a6a48, .12), CHAR = rawP(0x2b2522, .15);
+const EMBER = [pkR(0xff6a1a), pkR(0xffa024)], SNOWR = rawP(0xf4f8ff, .03), COAL = pkR(0x1a1a1a), CARROT = pkR(0xf08a24), FLOWER = pkR(0xf472b6), ICE = rawP(0xa8dcf0, .1);
+const METAL = rawP(0xc9cfd4, .08), METALD = rawP(0x8d959c, .1), RUST = rawP(0x9a5a32, .15), STRIPE = pkR(0xb3412f), WIN = pkR(0x27455c), SANDR = rawP(0xe2c48e, .05);
+const STRATA = [0xc98b56, 0xb8743f, 0xd9a066, 0xa8653a, 0xc47f4c].map(pkR), BASALT = rawP(0x3a3330, .18, 6), LAVA = [0xff5a14, 0xff7a1a, 0xffa024, 0xffd050].map(pkR);
+const RK = BIOMA === 'deserto' ? rawP(0xc07a46, .12, 6) : VUL ? rawP(0x3b3431, .15, 6) : ROCKP;
+const rockTop = (x, y, z) => BIOMA === 'neve' ? pick(SNOW, x, y, z) : VUL ? (h3(x, y + 1, z) < .1 ? EMBER[0] : pick(RK, x, y, z)) : BIOMA === 'deserto' ? pick(RK, x, y, z) : pick(MOSS, x, y, z);
+const volcs = [];
+function ball(cx, cy, cz, r, P) { const ri = Math.ceil(r); for (let a = -ri; a <= ri; a++) for (let b = -ri; b <= ri; b++) for (let y = -ri; y <= ri; y++) if (Math.hypot(a, b, y) <= r) vset(cx + a, cy + y, cz + b, pick(P, cx + a, cy + y, cz + b)); }
+function line3(x0, y0, z0, x1, y1, z1, P) { const n = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), Math.abs(z1 - z0))) + 1; for (let k = 0; k <= n; k++) { const t = k / n, x = Math.round(x0 + (x1 - x0) * t), y = Math.round(y0 + (y1 - y0) * t), z = Math.round(z0 + (z1 - z0) * t); vset(x, y, z, Array.isArray(P) ? pick(P, x, y, z) : P); } }
+function cactus(c, d, s) {
+  const h = Math.round(R * (1 + rnd() * .7) * s);
+  vfill(c - 1, c, Y0, Y0 + h, d - 1, d, (x, y, z) => (x + z) % 2 ? pick(CACTD, x, y, z) : pick(CACT, x, y, z));
+  for (const sd of rnd() < .5 ? [-1, 1] : [rnd() < .5 ? -1 : 1]) {
+    const ay = Y0 + Math.round(h * (.35 + rnd() * .25)), len = 2 + Math.floor(rnd() * 2), up = Math.round(h * (.25 + rnd() * .2));
+    if (rnd() < .5) { const x0 = sd > 0 ? c + 1 : c - 1 - len, x1 = sd > 0 ? c + len : c - 2, ox = sd > 0 ? x1 : x0; vfill(x0, x1, ay, ay + 1, d - 1, d, CACT); vfill(Math.min(ox, ox - sd), Math.max(ox, ox - sd), ay, ay + up, d - 1, d, CACT); }
+    else { const z0 = sd > 0 ? d + 1 : d - 1 - len, z1 = sd > 0 ? d + len : d - 2, oz = sd > 0 ? z1 : z0; vfill(c - 1, c, ay, ay + 1, z0, z1, CACT); vfill(c - 1, c, ay, ay + up, Math.min(oz, oz - sd), Math.max(oz, oz - sd), CACT); }
+  }
+  if (rnd() < .35) vset(c, Y0 + h + 1, d, FLOWER);
+}
+function palm(c, d, s) {
+  const h = Math.round(R * (1.5 + rnd() * .6) * s), lx = (rnd() - .5) * 6, lz = (rnd() - .5) * 6;
+  let tx = c, tz = d;
+  for (let y = 0; y <= h; y++) { const t = y / h; tx = Math.round(c + lx * t * t); tz = Math.round(d + lz * t * t); const w = y > h * .6 ? 0 : 1; vfill(tx - w, tx, Y0 + y, Y0 + y, tz - w, tz, y % 3 ? pick(PALMT, tx, y, tz) : PALMT[0]); }
+  const top = Y0 + h + 1;
+  for (let k = 0; k < 7; k++) {
+    const a = k / 7 * 6.28 + rnd() * .4, L = R * (.55 + rnd() * .25), side = Math.abs(Math.sin(a)) > .7;
+    for (let q = 0; q <= L; q++) { const x = Math.round(tx + Math.cos(a) * q), z = Math.round(tz + Math.sin(a) * q), y = Math.round(top + q * .5 - q * q * .09); vset(x, y, z, pick(FROND, x, y, z)); if (q > 1 && q < L - 1) vset(x + (side ? 1 : 0), y, z + (side ? 0 : 1), pick(FROND, x, y + 1, z)); }
+  }
+  vset(tx, top, tz, FROND[2]); vset(tx, top - 1, tz + 1, pkR(0x6b4a2a)); vset(tx + 1, top - 1, tz, pkR(0x6b4a2a));
+}
+function bush(c, d, P) { for (let k = 0; k < 6; k++) { const a = rnd() * 6.28, L = 2 + rnd() * 2.5; line3(c, Y0, d, c + Math.cos(a) * L, Y0 + 1 + rnd() * 3, d + Math.sin(a) * L, P); } }
+function burnt(c, d, s) {
+  const h = Math.round(R * (1 + rnd() * .6) * s);
+  vfill(c - 1, c, Y0, Y0 + h, d - 1, d, CHAR);
+  for (let k = 0; k < 4; k++) { const a = rnd() * 6.28, y0 = Y0 + Math.round(h * (.45 + rnd() * .45)), L = R * (.3 + rnd() * .3); line3(c, y0, d, c + Math.cos(a) * L, y0 + L * (.6 + rnd() * .5), d + Math.sin(a) * L, CHAR); }
+  for (let k = 0; k < 3; k++) vset(c - (rnd() < .5 ? 1 : 0), Y0 + Math.floor(rnd() * h), d - (rnd() < .5 ? 1 : 0), EMBER[k & 1]);
+}
+function snowman(c, d) {
+  ball(c, Y0 + 2, d, 2.6, SNOWR); ball(c, Y0 + 6, d, 1.9, SNOWR); ball(c, Y0 + 9, d, 1.4, SNOWR);
+  vset(c, Y0 + 9, d + 2, CARROT); vset(c, Y0 + 9, d + 3, CARROT); vset(c - 1, Y0 + 10, d + 1, COAL); vset(c + 1, Y0 + 10, d + 1, COAL);
+  for (const y of [5, 7]) vset(c, Y0 + y, d + 2, COAL);
+  line3(c - 2, Y0 + 6, d, c - 5, Y0 + 8, d, WOODD); line3(c + 2, Y0 + 6, d, c + 5, Y0 + 8, d, WOODD);
+  vfill(c - 1, c + 1, Y0 + 11, Y0 + 11, d - 1, d + 1, COAL); vfill(c, c, Y0 + 12, Y0 + 13, d, d, COAL);
+}
+// devolve true quando a árvore já foi feita do jeito do mapa
+function bioTree(i, j, c, d) {
+  const r = rnd(), s = .8 + rnd() * .5;
+  if (BIOMA === 'deserto') { if (castleDist(i, j) < 11 || near(i, j, 2, t => t === WATER)) palm(c, d, s); else if (r < .62) cactus(c, d, s); else bush(c, d, DRY); return true; }
+  if (VUL) { if (r < .75) burnt(c, d, s); else bush(c, d, CHAR); return true; }
+  if (r < .07) { snowman(c, d); return true; }
+  if (r < .8) { pine(c, d, s * (rnd() < .2 ? 1.5 : 1), false, true); return true; }
+  return false;
+}
+// avião caído no meio do deserto
+function wreck(c, d, n) {
+  const P = (u, y, v, col) => n % 2 ? vset(c + v, y, d + u, col) : vset(c + u, y, d + v, col);
+  for (let u = -16; u <= 14; u++) {
+    const r = u > 10 ? 4 - (u - 10) * .5 : u < -10 ? 4 - (-10 - u) * .35 : 4, cy = Y0 + 2;
+    for (let a = -5; a <= 5; a++) for (let y = -5; y <= 5; y++) {
+      const q = Math.hypot(a, y); if (q > r || q < r - 1.2 || cy + y < Y0) continue;
+      if (u > 3 && u < 8 && y > 1 && h3(u, y, a) < .7) continue;   // buraco no teto
+      P(u, cy + y, a, y === 0 && Math.abs(a) >= r - 1.2 ? STRIPE : u > 9 && y > 0 && Math.abs(a) < 2 ? WIN : h3(u, y, a) < .12 ? pick(RUST, u, y, a) : pick(y > 1 ? METAL : METALD, u, y, a));
+    }
+  }
+  for (let v = 5; v <= 15; v++) for (let u = -2; u <= 3 - (v >> 2); u++) P(u, Y0 + 1, v, h3(u, 1, v) < .15 ? pick(RUST, u, 1, v) : pick(METAL, u, 1, v));   // asa
+  for (let v = -9; v <= -5; v++) for (let u = -1; u <= 2; u++) P(u, Y0, v, pick(METALD, u, 0, v));                                          // asa quebrada
+  for (let y = 0; y <= 8; y++) for (let u = -16; u <= -13 + (y >> 2); u++) P(u, Y0 + 5 + y, 0, y > 6 ? STRIPE : pick(METAL, u, y, 0));     // cauda
+  for (let k = 0; k < 40; k++) { const u = Math.round((rnd() - .5) * 34), v = Math.round((rnd() - .5) * 18); P(u, Y0, v, pick(SANDR, u, 0, v)); }
+  for (let k = 0; k < 6; k++) { const u = Math.round((rnd() - .5) * 30), v = Math.round((rnd() - .5) * 22); P(u, Y0, v, pick(METALD, u, 9, v)); }
+}
+// rocha alta em camadas (mesa do deserto)
+function mesa(c, d) {
+  const H = 14 + Math.floor(rnd() * 14), r0 = 6.5 + rnd() * 2;
+  for (let y = 0; y < H; y++) { const r = r0 - (y > H - 3 ? 1 : 0) + Math.sin(y * .7) * .5;
+    for (let a = -10; a <= 10; a++) for (let b = -10; b <= 10; b++) if (Math.hypot(a, b) <= r + (h3(a + c, y, b + d) - .5) * 1.6) vset(c + a, Y0 + y, d + b, STRATA[((y + (h3(a, 0, b) < .2 ? 1 : 0)) >> 1) % STRATA.length]); }
+  for (let k = 0; k < 10; k++) { const a = rnd() * 6.28, q = r0 + 1 + rnd() * 3, x = Math.round(c + Math.cos(a) * q), z = Math.round(d + Math.sin(a) * q), w = rnd() < .5 ? 1 : 0; vfill(x - w, x, Y0, Y0 + w, z - w, z, STRATA[k % 5]); }
+}
+// vulcãozinho com lava na boca e descendo pelo lado (solta fumaça)
+function volcano(c, d, n) {
+  const H = 22 + (n % 3) * 6, rb = 11, rt = 4;
+  for (let y = 0; y < H; y++) { const r = rb + (rt - rb) * y / H;
+    for (let a = -12; a <= 12; a++) for (let b = -12; b <= 12; b++) {
+      const q = Math.hypot(a, b) + (h3(a + c, y, b + d) - .5) * 1.4; if (q > r || (y > H - 4 && q < rt - 1.2)) continue;
+      const stream = Math.abs(Math.sin(Math.atan2(b, a) * 1.5 + n)) > .97 && q > r - 1.5;
+      vset(c + a, Y0 + y, d + b, stream ? pick(LAVA, a, y, b) : pick(BASALT, a + c, y, b + d));
+    } }
+  for (let a = -3; a <= 3; a++) for (let b = -3; b <= 3; b++) if (Math.hypot(a, b) < rt - 1.2) vset(c + a, Y0 + H - 4, d + b, pick(LAVA, a, H, b));
+  volcs.push([c / R - HALF, H / R, d / R - HALF]);
+}
+function ice(c, d) { for (let k = 0; k < 7; k++) { const a = rnd() * 6.28, q = rnd() * 5, x = Math.round(c + Math.cos(a) * q), z = Math.round(d + Math.sin(a) * q), h = 6 + Math.floor(rnd() * 16), w = 1 + (rnd() * 2 | 0); for (let y = 0; y < h; y++) { const ww = y > h * .7 ? 0 : w; vfill(x - ww, x + ww, Y0 + y, Y0 + y, z - ww, z + ww, ICE); } } }
+function bioGiant(g, n) {
+  const c = (g.i + 1) * 8, d = (g.j + 1) * 8;
+  if (BIOMA === 'deserto') return n % 3 === 0 ? wreck(c, d, n) : mesa(c, d);
+  if (VUL) return volcano(c, d, n);
+  if (n % 2) return pine(c, d, 3.2, true, true, 3, 14);
+  ice(c, d);
+}
 for (const [i, j] of trees) {
   const c = i * R + (3 + Math.floor(rnd() * 3)) * Q, d = j * R + (3 + Math.floor(rnd() * 3)) * Q, forest = noise(i, j) > 1.1;
+  if (BIOMA !== 'floresta' && bioTree(i, j, c, d)) continue;
   const roomy = !near(i, j, 2, t => t === PAD || t === HOUSE || t === PORTAL || t === CASTLE);
   const r = rnd(), big = roomy && r < (forest ? .35 : .22), small = !big && r > .78;
   const s = big ? 1.55 + rnd() * .6 : small ? .55 + rnd() * .2 : .85 + rnd() * .35, kind = rnd();
@@ -822,6 +986,7 @@ for (const [i, j] of trees) {
 
 // As gigantes: tronco grosso com raízes, galhos e copa enorme (mais altas que o castelo)
 giants.forEach((g, n) => {
+  if (BIOMA !== 'floresta') return bioGiant(g, n);
   const c = (g.i + 1) * 8, d = (g.j + 1) * 8;
   if (n === 2) { pine(c * Q, d * Q, 3.7, true, false, 3 * Q, 16 * Q); for (const [a, b] of [[-5, -1], [4, 0], [-1, -5], [0, 4]]) dfill(c + a, c + a + (a < 0 ? 1 : 0), 8, 8 + 1, d + b, d + b + (b < 0 ? 1 : 0), BARK); return; }
   const top = 30;
@@ -845,10 +1010,10 @@ giants.forEach((g, n) => {
 
 // Pedras em vários cubinhos, algumas com musgo
 for (const [i, j] of rocks) {
-  const c = i * 8 + 4, d = j * 8 + 4, big = rnd() < .2, n = big ? 6 : 3 + Math.floor(rnd() * 3);
+  const c = i * 8 + 4, d = j * 8 + 4, big = rnd() < (VUL ? .45 : .2), n = big ? 6 : 3 + Math.floor(rnd() * 3);
   for (let k = 0; k < n; k++) {
     const w = (big ? 2 : 1) + Math.floor(rnd() * (big ? 3 : 2)), x = c + Math.round((rnd() - .5) * 4) - w, z = d + Math.round((rnd() - .5) * 4) - w, h = Math.max(1, Math.round(w * (.6 + rnd() * .5))), y = k > 2 ? 8 + 1 : 8;
-    dfill(x, x + w * 2 - 1, y, y + h, z, z + w * 2 - 1, (xx, yy, zz) => yy === y + h && h3(xx, yy, zz) < .35 ? pick(MOSS, xx, yy, zz) : pick(ROCKP, xx, yy, zz));
+    dfill(x, x + w * 2 - 1, y, y + h, z, z + w * 2 - 1, (xx, yy, zz) => yy === y + h && h3(xx, yy, zz) < .35 ? rockTop(xx, yy, zz) : pick(RK, xx, yy, zz));
   }
 }
 
@@ -1056,7 +1221,7 @@ for (let x = 0; x < VX; x++) for (let z = 0; z < VX; z++) {
     const f = noise(x / R * .7, z / R * .7) + (h3(x >> 2, 4, z >> 2) - .5) * .9, p = f > .9 ? GT[1] : f < -.8 ? GT[2] : GT[0];
     c = hh < .004 ? 0xfacc15 : hh < .008 ? 0xffffff : hh < .014 ? 0x8a8a80 : p[(h3(x, 5, z) * 8) | 0];
   }
-  if (a) c = bio(c, true);
+  if (a && !(BIOMA === 'deserto' && castleDist(x / R - .5, z / R - .5) < 9.5 + (h3(x >> 2, 9, z >> 2) - .5) * 2.5)) c = bio(c, true);
   gdata[o] = c >> 16 & 255; gdata[o + 1] = c >> 8 & 255; gdata[o + 2] = c & 255; gdata[o + 3] = a;
 }
 const gtex = new THREE.DataTexture(gdata, VX, VX, THREE.RGBAFormat);
@@ -1201,6 +1366,7 @@ fetch('fx/fx.json').then(r => r.json()).then(m => {
 function pfx(k, x, y, z, s = 1, life, gap) {
   if (gap) { const key = k + Math.round(x) + ',' + Math.round(z); if (pfxT[key] > time) return null; pfxT[key] = time + gap; }
   fxRec(['p', k, r2(x), r2(y), r2(z), s, life ? r2(life) : 0]);
+  y += Hjs(x, z);
   const m = FXM[k], base = FXT[k]; if (!m || !base || !base.image) return null;
   if (pfxList.length >= 60) pfxEnd(pfxList.shift());
   const tex = base.clone(); tex.needsUpdate = true;
@@ -1227,6 +1393,7 @@ flakeMesh.frustumCulled = false; flakeMesh.renderOrder = 6; if (BIOMA !== 'flore
 for (let k = 0; k < FLK; k++) setInst(flakeMesh, k, 0, -9, 0, 0, 0, 0);
 function bioTick(dt) {
   if (BIOMA === 'floresta' || !dt) return;
+  for (const [x, y, z] of volcs) if (Math.random() < dt * 4 && Math.hypot(x - C.tx, z - C.tz) < 40) { emit(tmp.set(x + (Math.random() - .5) * .6, y, z + (Math.random() - .5) * .6), Math.random() < .2 ? 0xff7a1a : 0x4a4440, .22 + Math.random() * .15, (Math.random() - .5) * .3, 1 + Math.random() * .6, (Math.random() - .5) * .3, 3, -.15); pm.instanceColor.needsUpdate = true; }
   const snow = BIOMA === 'neve';
   // vulcão: brasas subindo do chão
   if (VUL) { if (flakes.length < 120 && Math.random() < dt * 22) flakes.push({ p: V(C.tx + (Math.random() - .5) * 34, .1, C.tz + (Math.random() - .5) * 26), v: V((Math.random() - .5) * .4, .8 + Math.random() * 1.2, (Math.random() - .5) * .4), life: 2.5 + Math.random() * 2.5, s: .05 + Math.random() * .05 }); }
@@ -1974,16 +2141,19 @@ const ANIMAL_T = {
   boi: { name: 'Boi', s: .9, r: .42, sp: .45, stride: 5 },
   bode: { name: 'Bode', s: .62, r: .28, sp: .8, stride: 7 },
   coelho: { name: 'Coelho', s: .36, r: .16, sp: 1.7, stride: 9, hop: true },
+  camelo: { name: 'Camelo', s: 1, r: .45, sp: .4, stride: 4 },
+  urso: { name: 'Urso polar', s: .9, r: .45, sp: .35, stride: 4 },
+  rena: { name: 'Rena', s: .7, r: .3, sp: .7, stride: 6 },
 };
 const animals = [];
 {
   const arnd = (() => { let s2 = (PSEED ^ 0x5bd1e995) | 0; return () => { s2 = s2 + 0x6D2B79F5 | 0; let t = Math.imul(s2 ^ s2 >>> 15, 1 | s2); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; })();
   const cow = M(0xf4f1ea), cowS = M(0x2b2b2b), cowD = M(0x3a3330), goat = M(BIOMA === 'neve' ? 0xe9e4da : 0x9c8a74), goatD = M(0x5b4c3d), bun = M(BIOMA === 'neve' ? 0xffffff : BIOMA === 'deserto' ? 0xc8a37a : 0xa8896a), bunD = M(0x7a6046), pink = M(0xf4a3b4), horn = M(0xe8dcc0);
-  const total = Math.round(7 * MS * MS);
+  const total = Math.round(7 * MS * MS * (VUL ? .6 : 1));
   for (let k = 0, tries = 0; animals.length < total && tries < 4000; tries++) {
     const i = 2 + Math.floor(arnd() * (N - 4)), j = 2 + Math.floor(arnd() * (N - 4));
     if (!free(i, j) || castleDist(i, j) < 7 || at(i, j) === PAD) continue;
-    const r = arnd(), type = r < .35 ? 'boi' : r < .65 ? 'bode' : 'coelho', A = ANIMAL_T[type], s = A.s;
+    const r = arnd(), type = BIOMA === 'deserto' ? (r < .6 ? 'camelo' : 'coelho') : BIOMA === 'neve' ? (r < .3 ? 'urso' : r < .7 ? 'rena' : 'coelho') : VUL ? (r < .75 ? 'bode' : 'coelho') : r < .35 ? 'boi' : r < .65 ? 'bode' : 'coelho', A = ANIMAL_T[type], s = A.s;
     const g = new THREE.Group(), inner = new THREE.Group(); g.add(inner);
     let q;
     if (type === 'boi') {
@@ -1991,6 +2161,21 @@ const animals = [];
       box(cowS, s * .3, s * .2, s * .3, s * .18, q.legH + q.bh * .7, -s * .1, inner); box(cowS, s * .22, s * .18, s * .25, -s * .2, q.legH + q.bh * .5, s * .25, inner);
       for (const sx of [-1, 1]) box(horn, s * .18, .05, .05, sx * s * .2, q.hy + q.hs * .55, q.bl / 2 + q.hs * .3, inner);
       box(pink, q.hs * .7, q.hs * .35, .04, 0, q.hy - q.hs * .25, q.bl / 2 + q.hs * .92, inner);
+    } else if (type === 'camelo') {
+      const cm = M(0xc9a26b), cmD = M(0x8f6e44);
+      q = quad(inner, s, cm, cmD, { l: 1.1, w: .5, h: .42, hs: .28, legH: .8, hup: 2.2 });
+      for (const b of [-1, 1]) box(cm, s * .3, s * .24, s * .3, 0, q.legH + q.bh + s * .1, b * s * .18, inner);
+      box(cm, s * .16, s * .5, s * .16, 0, q.legH + q.bh * 1.5, q.bl / 2 + s * .05, inner);
+    } else if (type === 'urso') {
+      const ur = M(0xf3f1ea), urD = M(0xd8d4c8);
+      q = quad(inner, s, ur, urD, { l: 1.1, w: .6, h: .55, hs: .38, legH: .32 });
+      for (const sx of [-1, 1]) box(ur, s * .1, s * .1, s * .06, sx * s * .13, q.hy + q.hs * .55, q.bl / 2 + q.hs * .2, inner);
+      box(mat.black, s * .1, s * .07, .03, 0, q.hy - q.hs * .1, q.bl / 2 + q.hs * .93, inner);
+    } else if (type === 'rena') {
+      const rn = M(0x8a6a4a), rnD = M(0x5a4330), ant = M(0xd9c9a3);
+      q = quad(inner, s, rn, rnD, { l: .95, w: .42, h: .42, hs: .3, legH: .55 });
+      for (const sx of [-1, 1]) { box(ant, .05, s * .4, .05, sx * s * .12, q.hy + q.hs * .8, q.bl / 2 + q.hs * .1, inner); box(ant, s * .2, .05, .05, sx * s * .2, q.hy + q.hs * 1.1, q.bl / 2 + q.hs * .1, inner); box(ant, .05, s * .16, .05, sx * s * .28, q.hy + q.hs * 1.25, q.bl / 2 + q.hs * .1, inner); }
+      box(M(0xdc2626), s * .08, s * .08, .04, 0, q.hy - q.hs * .15, q.bl / 2 + q.hs * .92, inner);
     } else if (type === 'bode') {
       q = quad(inner, s, goat, goatD, { l: .9, w: .42, h: .4, hs: .32, legH: .46 });
       for (const sx of [-1, 1]) { box(horn, .05, s * .22, .05, sx * s * .08, q.hy + q.hs * .65, q.bl / 2 + q.hs * .1, inner); box(horn, .05, .05, s * .14, sx * s * .08, q.hy + q.hs * .78, q.bl / 2 + q.hs * .0, inner); }
@@ -2513,8 +2698,8 @@ $('runBtn').onclick = toggleSprint;
 $('speed').onclick = () => { S.speed = S.speed === 1 ? 2 : 1; $('speed').textContent = S.speed + 'x'; };
 $('again').onclick = () => act({ c: 'again' });
 $('helpList').innerHTML = TOUCH
-  ? '<li>🧟 A partir da onda 5 aparecem os zumbis <b>Chipados</b>. Derrube um e ele solta uma ❤️: pegue e leve até o castelo para ganhar vida.</li><li>🛡️ Onda 10: o <b>Ogro</b> solta um escudo (1 minuto sem levar dano). ⚡ Onda 15: o <b>Mutante</b> solta fôlego para correr mais rápido. 🦖 Onda 20: chega o <b>Rei Rex</b>!</li><li>🐄 Bois, bodes e coelhos andam pelo mapa e atrapalham os monstros.</li><li>Ande com o controle redondo à esquerda.</li><li>O herói atira sozinho no monstro mais perto.</li><li>💣 joga uma bomba. 🛒 abre a loja de armas.</li><li>Toque nas placas de pedra para pôr armas.</li><li>Os monstros vêm de todos os lados e atacam suas armas.</li>'
-  : '<li>🧟 A partir da onda 5 aparecem os zumbis <b>Chipados</b>. Derrube um e ele solta uma ❤️: pegue e leve até o castelo para ganhar vida.</li><li>🛡️ Onda 10: o <b>Ogro</b> solta um escudo (1 minuto sem levar dano). ⚡ Onda 15: o <b>Mutante</b> solta fôlego para correr mais rápido. 🦖 Onda 20: chega o <b>Rei Rex</b>!</li><li>🐄 Bois, bodes e coelhos andam pelo mapa e atrapalham os monstros.</li><li><b>WASD</b> ou setas: anda com o herói.</li><li>O herói atira sozinho quando um monstro chega perto. <b>O mouse escolhe a direção</b>. Clique para atirar também.</li><li><b>Q</b> ou <b>espaço</b>: joga bomba onde o mouse aponta.</li><li>Clique nas placas de pedra para pôr armas.</li><li><b>B</b> ou 🛒: loja com armas novas.</li><li><b>Enter</b> começa a onda. Arraste para mover a câmera, roda do mouse para zoom.</li>';
+  ? '<li>🧟 A partir da onda 5 aparecem os zumbis <b>Chipados</b>. Derrube um e ele solta uma ❤️: pegue e leve até o castelo para ganhar vida.</li><li>🛡️ Onda 10: o <b>Ogro</b> solta um escudo (1 minuto sem levar dano). ⚡ Onda 15: o <b>Mutante</b> solta fôlego para correr mais rápido. 🦖 Onda 20: chega o <b>Rei Rex</b>!</li><li>' + BICHOS_TXT + ' andam pelo mapa e atrapalham os monstros.</li><li>Ande com o controle redondo à esquerda.</li><li>O herói atira sozinho no monstro mais perto.</li><li>💣 joga uma bomba. 🛒 abre a loja de armas.</li><li>Toque nas placas de pedra para pôr armas.</li><li>Os monstros vêm de todos os lados e atacam suas armas.</li>'
+  : '<li>🧟 A partir da onda 5 aparecem os zumbis <b>Chipados</b>. Derrube um e ele solta uma ❤️: pegue e leve até o castelo para ganhar vida.</li><li>🛡️ Onda 10: o <b>Ogro</b> solta um escudo (1 minuto sem levar dano). ⚡ Onda 15: o <b>Mutante</b> solta fôlego para correr mais rápido. 🦖 Onda 20: chega o <b>Rei Rex</b>!</li><li>' + BICHOS_TXT + ' andam pelo mapa e atrapalham os monstros.</li><li><b>WASD</b> ou setas: anda com o herói.</li><li>O herói atira sozinho quando um monstro chega perto. <b>O mouse escolhe a direção</b>. Clique para atirar também.</li><li><b>Q</b> ou <b>espaço</b>: joga bomba onde o mouse aponta.</li><li>Clique nas placas de pedra para pôr armas.</li><li><b>B</b> ou 🛒: loja com armas novas.</li><li><b>Enter</b> começa a onda. Arraste para mover a câmera, roda do mouse para zoom.</li>';
 $('bombKey').hidden = TOUCH;
 function addPower(p) { S.power = Math.round((S.power + p) * 100) / 100; S.dmgMul = 1 + S.power * .5; }
 let shopSig = '';
@@ -2556,14 +2741,21 @@ $('gfx').textContent = HD ? '🖥️ Gráfico detalhado (PC) · trocar para leve
 $('gfx').onclick = () => { try { localStorage.setItem('vd-grafico', HD ? 'leve' : 'hd'); } catch (e) {} location.reload(); };
 $('visBtn').textContent = PIXEL ? '🎨 Visual pixel art · trocar para normal' : '🎨 Visual normal · trocar para pixel art';
 $('visBtn').onclick = () => { try { localStorage.setItem('vd-visual', PIXEL ? 'normal' : 'pixel'); } catch (e) {} location.reload(); };
-$('mapBtn').textContent = `🗺️ Mapa: ${BIOMA_NOME[BIOMA]} · trocar`;
-$('mapBtn').onclick = () => { const nx = BIOMAS[(BIOMAS.indexOf(BIOMA) + 1) % BIOMAS.length]; try { localStorage.setItem('vd-bioma', nx); } catch (e) {} const q = new URLSearchParams(location.search); q.delete('bioma'); location.href = location.pathname + (q.toString() ? '?' + q : ''); };
+const MAPDESC = { floresta: 'Rio, vilas e muita mata', deserto: 'Dunas, oásis, camelos e um avião caído', neve: 'Pinheiros, gelo, ursos e bonecos de neve', vulcao: 'Rocha, lava e árvores queimadas' };
+$('maps').innerHTML = '<p class="mapsT">Escolha o mapa</p>' + BIOMAS.map(b => `<button class="mapc${b === BIOMA ? ' on' : ''}" role="radio" aria-checked="${b === BIOMA}" data-b="${b}"><span>${BIOMA_NOME[b]}</span><small>${MAPDESC[b]}</small></button>`).join('');
+$('maps').hidden = ONLINE;
+$('maps').onclick = e => { const b = e.target.closest('.mapc'); if (!b || b.dataset.b === BIOMA) return; try { localStorage.setItem('vd-bioma', b.dataset.b); } catch (er) {} b.querySelector('small').textContent = 'Carregando o mapa...'; const q = new URLSearchParams(location.search); q.delete('bioma'); location.href = location.pathname + (q.toString() ? '?' + q : ''); };
+// botão ☰ Menu: pergunta antes, e volta para o menu (lá dá para trocar o mapa)
+let quitWas = false;
+$('menuBtn').onclick = () => { quitWas = S.started; if (!ONLINE) S.started = false; $('quit').classList.add('show'); };
+$('quitNo').onclick = () => { $('quit').classList.remove('show'); if (!ONLINE) S.started = quitWas; };
+$('quitYes').onclick = () => { const q = new URLSearchParams(location.search); for (const k of ['sala', 'host', 'modo', 'bioma']) q.delete(k); location.href = location.pathname + (q.toString() ? '?' + q : ''); };
 soundUI();
 $('musBtn').onclick = () => { audioInit(); setMusic(!SND.musicOn); };
 $('sfxBtn').onclick = () => { audioInit(); setSfx(!SND.sfxOn); };
 $('musPill').onclick = () => { audioInit(); setMusic(!SND.musicOn); };
 $('play').onclick = () => { $('help').classList.remove('show'); S.started = true; };
-$('helpBtn').onclick = () => { $('help').classList.add('show'); S.started = false; };
+$('helpBtn').onclick = () => { $('help').classList.add('show'); $('maps').hidden = true; S.started = false; };
 addEventListener('keydown', e => {
   if (e.target.closest && e.target.closest('button') && (e.code === 'Space' || e.code === 'Enter')) e.preventDefault();
   keys.add(e.code);
@@ -2622,7 +2814,8 @@ function ensureVisible(p) {
 }
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.Plane(V(0, 1, 0), 0), va = V(), vb = V();
 function setRay(x, y) { ndc.set(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1); ray.setFromCamera(ndc, cam); }
-function groundAt(x, y, out) { setRay(x, y); return ray.ray.intersectPlane(plane, out); }
+const plane2 = new THREE.Plane(V(0, 1, 0), 0);
+function groundAt(x, y, out) { setRay(x, y); const r = ray.ray.intersectPlane(plane, out); if (!r || !HAMP) return r; for (let k = 0; k < 4; k++) { plane2.constant = -Hjs(out.x, out.z); if (!ray.ray.intersectPlane(plane2, out)) break; } return out; }
 const ptrs = new Map(); let drag = null;
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 canvas.addEventListener('pointerdown', e => {
@@ -2675,6 +2868,25 @@ function onTap(x, y, isMouse) {
   if (!hinted) { hinted = true; toast('Toque nas placas de pedra para pôr armas. Ande com o controle à esquerda.'); }
 }
 
+// Nome do chefão em cima da cabeça
+const btags = new Map(), bv = V();
+function updateBossTags() {
+  for (const e of enemies) if (e.T.boss && !e.dead && !btags.has(e)) { const d = document.createElement('div'); d.className = 'btag'; d.textContent = '👑 ' + e.T.name; document.body.appendChild(d); btags.set(e, d); }
+  for (const [e, d] of btags) {
+    if (e.dead || !enemies.includes(e)) { d.remove(); btags.delete(e); continue; }
+    bv.set(e.pos.x, e.T.size * 1.05 + 1.3 + Hjs(e.pos.x, e.pos.z), e.pos.z).project(cam);
+    const on = bv.z < 1 && Math.abs(bv.x) < 1.05 && Math.abs(bv.y) < 1.05; d.style.display = on ? '' : 'none';
+    if (on) { d.style.left = (bv.x + 1) / 2 * innerWidth + 'px'; d.style.top = (1 - bv.y) / 2 * innerHeight + 'px'; }
+  }
+}
+// Chefão vivo: música de perigo. Perto do castelo (16 casas): perigo maior, com aviso.
+function updateTension() {
+  let tn = 0;
+  for (const e of enemies) if (e.T.boss && !e.dead) { const c = e.tc || CASTLES[0]; tn = Math.max(tn, Math.max(Math.abs(e.pos.x - wc(c.ci)), Math.abs(e.pos.z - wc(c.cj))) < 16 ? 2 : 1); }
+  const was = SND.tense | 0; if (tn === was) return;
+  if (tn > was) { sfx('alarm'); if (tn === 2) toast('⚠️ O chefão está chegando perto do castelo!', 2600); }
+  SND.tense = tn; SND.step = 0;
+}
 // Setas na borda da tela mostram monstros fora de vista
 const IND = 10, inds = [];
 for (let k = 0; k < IND; k++) { const d = document.createElement('div'); d.className = 'ind'; d.textContent = '➤'; $('inds').appendChild(d); inds.push(d); }
@@ -2709,7 +2921,7 @@ function loop(now) {
     if (ONLINE) for (const hh of heroes) withPlayer(hh.pl, () => updateHero(dt, rdt, time)); else updateHero(dt, rdt, time);
     updateShots(dt); updateClouds(dt); updateRads(dt, rdt); updateHearts(dt, rdt); updateAnimals(dt); updateDrops(dt, rdt);
   }
-  updateParticles(rdt); updatePfx(rdt);
+  updateParticles(rdt); updatePfx(rdt); updateBossTags(); updateTension();
   for (const hh of heroes) heroExtras(hh, GUEST ? 0 : dt, time);
   if (SND.ac && SND.sfxOn && dt && (stepT -= rdt) <= 0) {
     stepT = .26;
@@ -2998,7 +3210,7 @@ C.tx = hero.home.x; C.tz = hero.home.z; clampCam(); updateCam();
 if (ONLINE) startNet();
 setTimeout(() => $('load').classList.add('hide'), Math.max(0, 5000 - performance.now()));
 requestAnimationFrame(loop);
-if (location.search.includes('teste')) window.__vd = { SND, sfx, setMusic, setSfx, S, pads, hearts, dropHeart, PORTALS, PSEED, ET, spawnEnemy, waveList, bossWave, trail, placeTower, startWave, enemies, towers, hero, heroes, NET, MODE, ROLE, ME, CASTLES, act, pget, PS, gE, roomLink, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, heroShootAt, rads, renderShop: () => renderShop(), giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE, pfx, pfxList, FXM, PIXEL, explodeAt, BIOMA, animals, drops, dropItem, hurt, buildEnemy };
+if (location.search.includes('teste')) window.__vd = { SND, sfx, setMusic, setSfx, S, pads, hearts, dropHeart, PORTALS, PSEED, ET, spawnEnemy, waveList, bossWave, trail, placeTower, startWave, enemies, towers, hero, heroes, NET, MODE, ROLE, ME, CASTLES, act, pget, PS, gE, roomLink, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, heroShootAt, rads, renderShop: () => renderShop(), giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE, pfx, pfxList, FXM, PIXEL, explodeAt, BIOMA, Hjs, HAMP, giants, volcs, SND, animals, drops, dropItem, hurt, buildEnemy };
 </script>
 </body>
 </html>
