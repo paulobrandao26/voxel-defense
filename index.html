@@ -615,7 +615,7 @@ function hitsSolid(x, z) {
 
 // ===== Cena =====
 const canvas = $('c');
-const dpr = Math.min(devicePixelRatio || 1, 2);
+const dpr = Math.min(devicePixelRatio || 1, 3);
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: dpr < 1.5, alpha: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(dpr);
 renderer.shadowMap.enabled = true;
@@ -626,7 +626,7 @@ scene.fog = new THREE.Fog(SKY[0], VUL ? 50 : 60, VUL ? 115 : 130);
 scene.add(new THREE.HemisphereLight(VUL ? 0xffd2b8 : 0xe2f2ff, SKY[1], 1.7));
 document.documentElement.style.background = document.body.style.background = `linear-gradient(${SKY[2]},${SKY[3]} 70%)`;
 const sun = new THREE.DirectionalLight(VUL ? 0xffbf8f : 0xfff1d6, 2.3);
-sun.castShadow = true; sun.shadow.mapSize.set(TOUCH ? 1024 : 2048, TOUCH ? 1024 : 2048);
+sun.castShadow = true; const SHM = Math.min(2048, renderer.capabilities.maxTextureSize); sun.shadow.mapSize.set(SHM, SHM);   // mesma sombra no PC e no celular (4096 deixava lento)
 Object.assign(sun.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20, near: 1, far: 60 });
 sun.shadow.bias = -.0008; sun.shadow.normalBias = .03;
 scene.add(sun, sun.target);
@@ -637,7 +637,7 @@ scene.add(sun, sun.target);
 // Parece pixel art de camadas empilhadas, sem mudar o jogo. Dá para voltar ao visual normal no menu.
 const PIXEL = (() => { const q = new URLSearchParams(location.search); if (q.has('pixel')) return true; if (q.has('normal')) return false; try { return localStorage.getItem('vd-visual') !== 'normal'; } catch (e) { return true; } })();
 const PIX = { px: 3, F: 3, S: 1, w: 1, h: 1, d0: 20, rt: null, quad: null, cam: null, scene: null, mat: null };
-// Contra a tremedeira: cada pixel grande é a média de 2x2 pontos (menos chiado) e a câmera anda presa na grade dos pixels,
+// Contra a tremedeira: cada pixel grande é a média de até 3x3 pontos (menos chiado) e a câmera anda presa na grade dos pixels,
 // com o resto do passo feito deslizando a imagem pronta. Assim o cenário não pisca quando o herói anda.
 // Contorno suave em volta de cada coisa nos dois visuais; no pixel art ele é de 1 "pixel grande", no normal é bem fininho.
 {
@@ -647,12 +647,13 @@ const PIX = { px: 3, F: 3, S: 1, w: 1, h: 1, d0: 20, rt: null, quad: null, cam: 
     uniforms: { tCol: { value: PIX.rt.texture }, tDep: { value: PIX.rt.depthTexture }, uSize: { value: new THREE.Vector2(1, 1) }, uF: { value: 3 }, uNear: { value: cam.near }, uFar: { value: cam.far }, uLine: { value: new THREE.Color(0x1d1a2b) }, uAmt: { value: PIXEL ? .8 : .85 }, uPost: { value: PIXEL ? 1 : 0 }, uS: { value: 1 }, uOff: { value: new THREE.Vector2() } },
     vertexShader: 'void main(){ gl_Position = vec4(position.xy, 0., 1.); }',
     fragmentShader: `
+      precision highp float; precision highp sampler2D;   // celular: sem isso a profundidade perde precisão e aparecem linhas pretas
       uniform sampler2D tCol, tDep; uniform vec2 uSize, uOff; uniform float uF, uNear, uFar, uAmt, uPost, uS; uniform vec3 uLine;
       float lin(vec2 p){ float d = texture2D(tDep, (p * uS + floor(uS * .5) + .5) / uSize).x; return uNear * uFar / (uFar - d * (uFar - uNear)); }
       void main(){
         vec2 p = floor(gl_FragCoord.xy / uF + uOff);
         vec4 c = vec4(0.);
-        for (int i = 0; i < 2; i++) for (int j = 0; j < 2; j++) {
+        for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) {
           if (float(i) >= uS || float(j) >= uS) continue;
           vec4 t = texture2D(tCol, (p * uS + vec2(i, j) + .5) / uSize); c += vec4(t.rgb * t.a, t.a);
         }
@@ -673,8 +674,8 @@ function pixResize() {
   const dp = renderer.getPixelRatio();
   PIX.F = pixF();
   PIX.w = Math.ceil(innerWidth * dp / PIX.F) + 2; PIX.h = Math.ceil(innerHeight * dp / PIX.F) + 2;
-  // 2x2 pontos por pixel quando cabe (no celular de tela fina, no visual normal, já seria grande demais)
-  PIX.S = PIX.w * PIX.h * 4 <= 2.5e6 ? 2 : 1;
+  // até 3x3 pontos por pixel quando cabe (no visual normal em tela fina já seria grande demais)
+  PIX.S = PIX.w * PIX.h * 9 <= 2.5e6 ? 3 : PIX.w * PIX.h * 4 <= 2.5e6 ? 2 : 1;
   PIX.rt.setSize(PIX.w * PIX.S, PIX.h * PIX.S); PIX.mat.uniforms.uSize.value.set(PIX.w * PIX.S, PIX.h * PIX.S);
   PIX.mat.uniforms.uF.value = PIX.F; PIX.mat.uniforms.uS.value = PIX.S;
 }
@@ -2788,6 +2789,8 @@ const C = { tx: 0, tz: 3, dist: 24, pitch: .95, goal: null, follow: true };
 const MIN = 8, MAX = 60;
 const SUNZ = new THREE.Vector3(-9, 18, 6).normalize(), SUNX = new THREE.Vector3(0, 1, 0).cross(SUNZ).normalize(), SUNY = SUNZ.clone().cross(SUNX);
 function updateCam() {
+  // plano de perto acompanha o zoom: com a câmera longe a profundidade fica precisa (sem linhas pretas no chão)
+  const nr = clamp(C.dist * .1, .5, 6); if (Math.abs(cam.near - nr) > .01) { cam.near = nr; cam.updateProjectionMatrix(); PIX.mat.uniforms.uNear.value = nr; }
   cam.position.set(C.tx, Math.sin(C.pitch) * C.dist, C.tz + Math.cos(C.pitch) * C.dist);
   cam.lookAt(C.tx, 0, C.tz); cam.updateMatrixWorld();
   // sombra presa na grade da própria sombra: não fica tremendo quando a câmera anda
