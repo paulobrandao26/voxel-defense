@@ -153,6 +153,7 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
     <button id="online" class="sec wide">🌐 Jogar online com um amigo</button>
     <div class="row"><button id="musBtn" class="sec"></button><button id="sfxBtn" class="sec"></button></div>
     <button id="gfx" class="sec wide"></button>
+    <button id="visBtn" class="sec wide"></button>
   </div>
 </div>
 <div id="onl" class="ov">
@@ -551,6 +552,49 @@ sun.castShadow = true; sun.shadow.mapSize.set(TOUCH ? 1024 : 2048, TOUCH ? 1024 
 Object.assign(sun.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20, near: 1, far: 60 });
 sun.shadow.bias = -.0008; sun.shadow.normalBias = .03;
 scene.add(sun, sun.target);
+
+// ===== Visual pixel art =====
+// A cena é desenhada numa imagem pequena (cada "pixel" vale 3 pontos da tela) e depois ampliada
+// sem borrar, com um contorno escuro só em volta de cada objeto (onde a distância muda de repente).
+// Parece pixel art de camadas empilhadas, sem mudar o jogo. Dá para voltar ao visual normal no menu.
+const PIXEL = (() => { const q = new URLSearchParams(location.search); if (q.has('pixel')) return true; if (q.has('normal')) return false; try { return localStorage.getItem('vd-visual') !== 'normal'; } catch (e) { return true; } })();
+const PIX = { px: 3, F: 3, w: 1, h: 1, rt: null, quad: null, cam: null, scene: null, mat: null };
+if (PIXEL) {
+  PIX.rt = new THREE.WebGLRenderTarget(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, type: THREE.HalfFloatType, depthBuffer: true });
+  PIX.rt.depthTexture = new THREE.DepthTexture(1, 1); PIX.rt.depthTexture.type = THREE.UnsignedIntType;
+  PIX.mat = new THREE.ShaderMaterial({
+    uniforms: { tCol: { value: PIX.rt.texture }, tDep: { value: PIX.rt.depthTexture }, uSize: { value: new THREE.Vector2(1, 1) }, uF: { value: 3 }, uNear: { value: cam.near }, uFar: { value: cam.far }, uLine: { value: new THREE.Color(0x1d1a2b) } },
+    vertexShader: 'void main(){ gl_Position = vec4(position.xy, 0., 1.); }',
+    fragmentShader: `
+      uniform sampler2D tCol, tDep; uniform vec2 uSize; uniform float uF, uNear, uFar; uniform vec3 uLine;
+      float lin(vec2 p){ float d = texture2D(tDep, (p + .5) / uSize).x; return uNear * uFar / (uFar - d * (uFar - uNear)); }
+      void main(){
+        vec2 p = floor(gl_FragCoord.xy / uF);
+        vec4 c = texture2D(tCol, (p + .5) / uSize);
+        float d = lin(p), m = min(min(lin(p + vec2(1., 0.)), lin(p - vec2(1., 0.))), min(lin(p + vec2(0., 1.)), lin(p - vec2(0., 1.))));
+        // poucas cores: cada canal vira degraus (visual de paleta limitada, sem degradê)
+        c.rgb = floor(c.rgb * 15. + .5) / 15.;
+        if (d - m > max(.55, m * .045)) c = vec4(uLine, 1.);
+        gl_FragColor = c;
+        #include <colorspace_fragment>
+      }`,
+    depthTest: false, depthWrite: false, transparent: true
+  });
+  PIX.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), PIX.mat); PIX.quad.frustumCulled = false;
+  PIX.scene = new THREE.Scene(); PIX.scene.add(PIX.quad); PIX.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+}
+function pixResize() {
+  if (!PIXEL) return;
+  const dp = renderer.getPixelRatio();
+  PIX.px = TOUCH ? 2.5 : 3; PIX.F = Math.max(1, Math.round(PIX.px * dp));
+  PIX.w = Math.ceil(innerWidth * dp / PIX.F); PIX.h = Math.ceil(innerHeight * dp / PIX.F);
+  PIX.rt.setSize(PIX.w, PIX.h); PIX.mat.uniforms.uSize.value.set(PIX.w, PIX.h); PIX.mat.uniforms.uF.value = PIX.F;
+}
+function drawFrame() {
+  if (!PIXEL) { renderer.render(scene, cam); return; }
+  renderer.setRenderTarget(PIX.rt); renderer.render(scene, cam);
+  renderer.setRenderTarget(null); renderer.render(PIX.scene, PIX.cam);
+}
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
 const M = (c, e) => new THREE.MeshLambertMaterial(e ? { color: c, emissive: e } : { color: c });
@@ -1063,6 +1107,43 @@ function burstDir(pos, d, color, n, spd, size) {
   for (let k = 0; k < n; k++) { const s = spd * (.7 + Math.random() * .5); emit(pos, color, size * (.6 + Math.random() * .6), d.x * s + (Math.random() - .5) * 1.5, 1 + Math.random(), d.z * s + (Math.random() - .5) * 1.5, .35 + Math.random() * .2); }
   pm.instanceColor.needsUpdate = true;
 }
+// ===== Efeitos em pixel art =====
+// Folhas de animação geradas do pixelfx (licença MIT, github.com/patch-gg/pixelfx): explosões, fumaça,
+// faíscas, gelo, raio, veneno, cura, portal e outros. Cada efeito é uma figura que sempre olha para a câmera.
+const FXM = {}, FXT = {}, pfxList = [], pfxT = {};
+// largura de cada efeito no mundo (1 = uma casa)
+const FXW = { boom: 3.2, bigboom: 6, poof: 1.5, portal: 3, herodie: 2.2, soul: 1.3, spark: 1.4, impact: 1.1, frost: 2.6, zap: 1.5, poison: 3.4, heal: 1, healbig: 5, coin: 1.8, build: 2.2, levelup: 2.4, confetti: 6, warp: 2.4 };
+fetch('fx/fx.json').then(r => r.json()).then(m => {
+  const L = new THREE.TextureLoader();
+  for (const k in m) {
+    if (!FXW[k]) continue;
+    const t = L.load('fx/' + k + '.png'); t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.colorSpace = THREE.SRGBColorSpace;
+    t.repeat.set(1 / m[k].cols, 1 / Math.ceil(m[k].n / m[k].cols)); FXT[k] = t; FXM[k] = m[k];
+  }
+}).catch(() => {});
+function pfx(k, x, y, z, s = 1, life, gap) {
+  if (gap) { const key = k + Math.round(x) + ',' + Math.round(z); if (pfxT[key] > time) return null; pfxT[key] = time + gap; }
+  fxRec(['p', k, r2(x), r2(y), r2(z), s, life ? r2(life) : 0]);
+  const m = FXM[k], base = FXT[k]; if (!m || !base || !base.image) return null;
+  if (pfxList.length >= 60) pfxEnd(pfxList.shift());
+  const tex = base.clone(); tex.needsUpdate = true;
+  const mt = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false, fog: false });
+  const sp = new THREE.Sprite(mt), u = FXW[k] / m.w * s;
+  sp.center.set(m.px / m.w, 1 - m.py / m.h); sp.scale.set(m.w * u, m.h * u, 1); sp.position.set(x, y, z); sp.renderOrder = 10; scene.add(sp);
+  const o = { sp, tex, mt, m, t: 0, life: life || m.n / m.fps };
+  pfxFrame(o, 0); pfxList.push(o); return o;
+}
+function pfxFrame(o, f) { const m = o.m, rows = Math.ceil(m.n / m.cols); o.tex.offset.set((f % m.cols) / m.cols, 1 - (Math.floor(f / m.cols) + 1) / rows); }
+function pfxEnd(o) { scene.remove(o.sp); o.mt.dispose(); o.tex.dispose(); }
+function updatePfx(dt) {
+  for (let i = pfxList.length - 1; i >= 0; i--) {
+    const o = pfxList[i]; o.t += dt;
+    if (o.t >= o.life) { pfxEnd(o); pfxList.splice(i, 1); continue; }
+    const f = Math.floor(o.t * o.m.fps);
+    pfxFrame(o, o.m.loop ? f % o.m.n : Math.min(o.m.n - 1, f));
+    o.mt.opacity = Math.min(1, (o.life - o.t) / Math.min(.35, o.life * .3));
+  }
+}
 function updateParticles(dt) {
   for (let n = 0; n < PMAX; n++) {
     const q = P[n]; if (q.life <= 0) continue;
@@ -1109,7 +1190,7 @@ function updateHearts(dt, rdt) {
       if (dt && Math.max(Math.abs(c.pos.x - cs.x), Math.abs(c.pos.z - cs.z)) < 3.9) {
         const give = () => { const before = S.castle; S.castle = Math.min(CASTLE_MAX, S.castle + HEART_HEAL * CASTLE_MAX / 100); toast(`❤️ Vida entregue! Castelo +${Math.round(S.castle - before)}`, 2600); bump('castle'); updateUI(); };
         if (PVP) withPlayer(c.pl, give); else give();
-        burst(tmp.set(cs.x, 2.5, cs.z), 0xff4d6d, 24, 3, .14); burst(tmp, 0x4ade80, 14, 2.5, .1); sfx('heal');
+        burst(tmp.set(cs.x, 2.5, cs.z), 0xff4d6d, 24, 3, .14); burst(tmp, 0x4ade80, 14, 2.5, .1); sfx('heal'); pfx('healbig', cs.x, .2, cs.z + 1);
         removeHeart(hh);
       }
       continue;
@@ -1312,7 +1393,7 @@ function towerHeal(t, f) {
   if (!t || t.dead || t.kind !== 'tower') return;
   const before = t.hp; t.hp = Math.min(t.maxHp, t.hp + t.maxHp * f);
   if (t.hp <= before) return;
-  t.bar.g.visible = true; t.healT = .6;
+  t.bar.g.visible = true; t.healT = .6; pfx('heal', t.pos.x, .3, t.pos.z, f > .5 ? 1.8 : 1);
   burst(tmp.set(t.pos.x, 1.6, t.pos.z), 0x4ade80, f > .5 ? 22 : 9, f > .5 ? 2.2 : 1.3, .09);
 }
 function hurt(e, dmg, flash = true) {
@@ -1322,6 +1403,7 @@ function hurt(e, dmg, flash = true) {
   removeEnemy(e);
   if (KILLER) towerHeal(KILLER, e.T.boss ? .8 : .25);
   sfx(e.T.boss ? 'bossdie' : 'die', e.pos.x, e.pos.z);
+  if (e.T.boss) { pfx('bigboom', e.pos.x, 0, e.pos.z, .8); pfx('soul', e.pos.x, .2, e.pos.z, 1.6); } else pfx('poof', e.pos.x, .1, e.pos.z, .7 + e.T.size * .6);
   tmp.set(e.pos.x, e.hitY, e.pos.z);
   burst(tmp, e.T.color, 10 + e.T.size * 14, 3, .14 + e.T.size * .08);
   burst(tmp, 0x222222, 4, 2.5, .1);
@@ -1348,7 +1430,7 @@ function areaDamage(p, radius, dmg, castleDmg, team = -1) {
 function explodeBomber(e) {
   removeEnemy(e);
   tmp.set(e.pos.x, .4, e.pos.z);
-  burst(tmp, 0xffa53a, 22, 4, .16); burst(tmp, 0x444444, 10, 3, .14);
+  burst(tmp, 0xffa53a, 22, 4, .16); burst(tmp, 0x444444, 10, 3, .14); pfx('boom', e.pos.x, 0, e.pos.z);
   areaDamage(e.pos, e.T.radius, e.T.dmg * S.hpMul ** .5 * S.dmgMul, 8, e.team);
 }
 function slam(e) {
@@ -1360,7 +1442,7 @@ function damageTarget(tg, amt) {
   if (tg.kind === 'hero') { tg.hp -= amt; tg.hurtT = .12; if (tg.pl === ME) sfx('hurt'); }
   else if (tg.kind === 'tower') { tg.hp -= amt; tg.shake = .15; tg.bar.g.visible = true; if (tg.hp <= 0) destroyTower(tg); }
   else {
-    sfx('hit', tg.cs.x, tg.cs.z);
+    sfx('hit', tg.cs.x, tg.cs.z); pfx('spark', tg.cs.x + (Math.random() - .5) * 3, 1 + Math.random(), tg.cs.z + 1.6, 1, 0, .3);
     const f = () => { S.castle -= amt; tg.cs.shake = .3; if (S.castle <= 0) { if (PVP) pvpEnd(1 - tg.pl); else gameOver(); } };
     if (PVP) withPlayer(tg.pl, f); else f();
   }
@@ -1473,7 +1555,7 @@ function placeTower(type, pad) {
   if (S.gold < T.cost || pad.t || (T.unlock && !S.unlocked.has(T))) return;
   if (PVP && pad.owner !== (CTX ?? 0)) return toast('Essa placa é do outro jogador.');
   S.gold -= T.cost;
-  const t = makeTower(type, pad, CTX ?? 0); if (isLocal()) sfx('build');
+  const t = makeTower(type, pad, CTX ?? 0); if (isLocal()) sfx('build'); pfx('build', t.pos.x, 0, t.pos.z);
   burst(tmp.set(t.pos.x, .1, t.pos.z), 0xc9a46a, 10, 1.5, .1);
   if (isLocal()) closeSheet(); updateUI();
   if (S.wave === 0 && towers.length === 1) toast('Boa! Agora toque em ▶ Onda 1', 3500);
@@ -1481,7 +1563,7 @@ function placeTower(type, pad) {
 function upgradeTower(t) {
   const c = t.T.up[t.lv];
   if (t.lv >= 2 || S.gold < c) return;
-  S.gold -= c; t.inv += c; t.lv++; t.pop = 0; if (isLocal()) sfx('up');
+  S.gold -= c; t.inv += c; t.lv++; t.pop = 0; if (isLocal()) sfx('up'); pfx('levelup', t.pos.x, .3, t.pos.z);
   t.maxHp = t.T.hp[t.lv]; t.hp = t.maxHp;
   buildTowerMesh(t);
   burst(tmp.set(t.pos.x, 1, t.pos.z), 0xffc93c, 14, 2, .1);
@@ -1602,7 +1684,7 @@ function updateLaser(t, e, st, dt) {
 const CIRCLE = new THREE.CircleGeometry(1, 32).rotateX(-Math.PI / 2), clouds = [];
 function poisonArea(p, r, dmg, dps, pl = 0) {
   const m = new THREE.Mesh(CIRCLE, basic(0x84cc16, .45)); m.scale.setScalar(r); m.position.set(p.x, .07, p.z); scene.add(m);
-  clouds.push({ m, x: p.x, z: p.z, r, dps, life: 2.5, tick: 0, pl, tw: KILLER });
+  clouds.push({ m, x: p.x, z: p.z, r, dps, life: 2.5, tick: 0, pl, tw: KILLER }); pfx('poison', p.x, 0, p.z, r / 1.7, 2.5);
   burst(tmp.set(p.x, .3, p.z), 0x84cc16, 12, 2, .12);
   if (dmg) for (const e of [...enemies]) if (!e.dead && !(PVP && e.team === pl) && Math.hypot(e.pos.x - p.x, e.pos.z - p.z) <= r + e.r) hurt(e, dmg);
 }
@@ -1623,7 +1705,7 @@ function chainFrom(from, first, n, dmg, pl = 0) {
   let cur = first; const done = new Set();
   for (let k = 0; k < n && cur; k++) {
     const to = V(cur.pos.x, (cur.hitY || .6) + .1, cur.pos.z);
-    zap(from, to); done.add(cur); hitAny(cur, dmg * (1 - k * .12)); burst(to, 0xfff3a0, 3, 1, .06);
+    zap(from, to); pfx('zap', to.x, to.y - .3, to.z, .8); done.add(cur); hitAny(cur, dmg * (1 - k * .12)); burst(to, 0xfff3a0, 3, 1, .06);
     from = to; let nx = null, nd = 2.8;
     for (const o2 of enemies) { if (o2.dead || done.has(o2) || (PVP && o2.team === pl)) continue; const d = Math.hypot(o2.pos.x - to.x, o2.pos.z - to.z); if (d < nd) { nd = d; nx = o2; } }
     cur = nx;
@@ -1635,7 +1717,7 @@ function enemyShoot(e, tg) {
   shots.push({ k: 'e', m, tg, dmg: e.T.dmg * (1 + .04 * (S.wave - 1)) * S.dmgMul * (tg.kind === 'castle' ? .2 : 1), sp: boss ? 7 : 10, last: aimPoint(tg, e.pos, V()), boss });
 }
 function explodeAt(p, radius, dmg, big, pl = 0, heroHit = false) {
-  p.y = .2; sfx('boom', p.x, p.z);
+  p.y = .2; sfx('boom', p.x, p.z); pfx(big ? 'bigboom' : 'boom', p.x, 0, p.z, big ? 1 : .75);
   burst(p, 0xffa53a, big ? 18 : 10, big ? 4 : 3, big ? .17 : .14); burst(p, 0x777777, big ? 9 : 6, 2, .12);
   for (const e of [...enemies]) if (!e.dead && !(PVP && e.team === pl) && Math.hypot(e.pos.x - p.x, e.pos.z - p.z) <= radius + e.r) hurt(e, dmg);
   if (heroHit) hitFoeHero(pl, p.x, p.z, radius, dmg * .5);
@@ -1671,8 +1753,8 @@ function updateShots(dt) {
     if (s.ice && s.e.kind !== 'hero') {
       s.e.slowF = s.e.slowT > 0 ? Math.min(s.e.slowF, s.ice.slow) : s.ice.slow;
       s.e.slowT = Math.max(s.e.slowT, s.ice.slowT);
-      burst(s.last, 0x9fe6ff, 5, 1.2, .08);
-    }
+      burst(s.last, 0x9fe6ff, 5, 1.2, .08); pfx('frost', s.last.x, 0, s.last.z, .45);
+    } else pfx('impact', s.last.x, Math.max(0, s.last.y - .2), s.last.z, .8);
   }
   for (let k = shots.length - 1; k >= 0; k--) if (shots[k].done) { scene.remove(shots[k].m); shots.splice(k, 1); }
   updateBolts(dt);
@@ -1863,7 +1945,7 @@ function animHero(hh, moving) {
 function updateHero(dt, rdt, time) {
   if (hero.dead) {
     hero.respawnT -= dt;
-    if (hero.respawnT <= 0) { resetHero(); toast('O herói voltou!'); }
+    if (hero.respawnT <= 0) { resetHero(); pfx('warp', hero.pos.x, 0, hero.pos.z); toast('O herói voltou!'); }
     return;
   }
   hero.cd -= dt; hero.bombCd -= dt; hero.hurtT -= rdt; hero.recoil = Math.max(0, hero.recoil - rdt * 8);
@@ -1909,7 +1991,7 @@ function updateHero(dt, rdt, time) {
     const back = PVP ? 6 : 8;
     if (hero.pl === ME) sfx('herodie');
     hero.dead = true; hero.respawnT = back; hero.g.visible = hero.bar.g.visible = false;
-    burst(tmp.set(hero.pos.x, .5, hero.pos.z), HERO_COL[hero.pl][0], 16, 2.5, .12);
+    burst(tmp.set(hero.pos.x, .5, hero.pos.z), HERO_COL[hero.pl][0], 16, 2.5, .12); pfx('herodie', hero.pos.x, 0, hero.pos.z);
     toast(`O herói caiu! Volta em ${back} segundos.`, 3000);
     if (PVP) withPlayer(1 - hero.pl, () => { S.gold += 200; toast('Você derrubou o herói inimigo! +🪙 200', 3000); bump('gold'); updateUI(); });
     return;
@@ -1948,7 +2030,7 @@ function waveList(n, team = -1) {
 const TEAM_SIDES = [[0, 2], [1, 3]];
 function spawnFrom(item) {
   const [i, j] = SPAWNS[item.side], team = PVP ? item.team : 0;
-  burst(tmp.set(wc(i), 1, wc(j)), 0x8b5cf6, 6, 1.5, .1); sfx('spawn', wc(i), wc(j));
+  burst(tmp.set(wc(i), 1, wc(j)), 0x8b5cf6, 6, 1.5, .1); sfx('spawn', wc(i), wc(j)); pfx('portal', wc(i), .1, wc(j), .8, 0, 2.2);
   const n = item.type === 'aranha' ? 3 : 1;
   // no contra, a força dos monstros é a do jogador que vai ser atacado
   const go = () => { for (let k = 0; k < n; k++) spawnEnemy(item.type, wc(i) + (Math.random() - .5) * 1.1, wc(j) + (Math.random() - .5) * 1.1, team); };
@@ -1977,6 +2059,7 @@ function updateWave(dt) {
     const bonus = 20 + S.wave * 4, give = () => { S.gold += bonus; S.castle = Math.min(CASTLE_MAX, S.castle + CASTLE_MAX / 10); };
     if (PVP) { withPlayer(0, give); withPlayer(1, give); } else give();
     for (const t of towers) t.hp = Math.min(t.maxHp, t.hp + t.maxHp * .3);
+    for (const cs of CASTLES) { pfx('confetti', cs.x, 2.5, cs.z); pfx('coin', cs.x, 1, cs.z + 2.2); }
     toast(`Onda ${S.wave} vencida! +🪙 ${bonus} e +${CASTLE_MAX / 10} de vida no castelo e nas armas`, 2800); bump('gold'); updateUI();
   }
 }
@@ -2170,6 +2253,8 @@ function shopAct(d) {
 }
 $('gfx').textContent = HD ? '🖥️ Gráfico detalhado (PC) · trocar para leve' : '📱 Gráfico leve (celular) · trocar para detalhado';
 $('gfx').onclick = () => { try { localStorage.setItem('vd-grafico', HD ? 'leve' : 'hd'); } catch (e) {} location.reload(); };
+$('visBtn').textContent = PIXEL ? '🎨 Visual pixel art · trocar para normal' : '🎨 Visual normal · trocar para pixel art';
+$('visBtn').onclick = () => { try { localStorage.setItem('vd-visual', PIXEL ? 'normal' : 'pixel'); } catch (e) {} location.reload(); };
 soundUI();
 $('musBtn').onclick = () => { audioInit(); setMusic(!SND.musicOn); };
 $('sfxBtn').onclick = () => { audioInit(); setSfx(!SND.sfxOn); };
@@ -2214,6 +2299,7 @@ function clampCam() { C.tx = clamp(C.tx, -HALF, HALF); C.tz = clamp(C.tz, -HALF,
 function fitDist() { const t = 2 * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)), a = innerWidth / innerHeight; return clamp(Math.max(14 / (t * a), 17 / t), MIN, MAX); }
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
+  pixResize();
   cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix();
   C.dist = fitDist(); updateCam();
 }
@@ -2314,7 +2400,7 @@ function loop(now) {
     if (ONLINE) for (const hh of heroes) withPlayer(hh.pl, () => updateHero(dt, rdt, time)); else updateHero(dt, rdt, time);
     updateShots(dt); updateClouds(dt); updateRads(dt, rdt); updateHearts(dt, rdt);
   }
-  updateParticles(rdt);
+  updateParticles(rdt); updatePfx(rdt);
   if (SND.ac && SND.sfxOn && dt && (stepT -= rdt) <= 0) {
     stepT = .26;
     let n = 0; for (const e of enemies) if (!e.dead && Math.hypot(e.pos.x - C.tx, e.pos.z - C.tz) < 13) n++;
@@ -2345,7 +2431,7 @@ function loop(now) {
   if (!TOUCH && mouse.ok && groundAt(mouse.sx, mouse.sy, mouse.p)) { aimMark.visible = !hero.dead; aimMark.position.set(mouse.p.x, .06, mouse.p.z); } else aimMark.visible = false;
   updateHUD();
   if ((slowTick += rdt) > .2) { slowTick = 0; refreshSheet(); updateIndicators(); waveText(); if (ONLINE) { updateUI(); if (S.shop) renderShop(); } }
-  renderer.render(scene, cam);
+  drawFrame();
 }
 // ===== Online: o que o host manda e o convidado desenha =====
 const ETK = Object.keys(ET), TTK = Object.keys(TT);
@@ -2438,6 +2524,7 @@ function applySnap(m) {
     else if (a[0] === 'd') burstDir(V(a[1], a[2], a[3]), V(a[4], 0, a[5]), a[6], a[7], a[8], a[9]);
     else if (a[0] === 'z') zap(V(a[1], a[2], a[3]), V(a[4], a[5], a[6]), a[7] ? radZapMat : zapMat);
     else if (a[0] === 'c') dropCoin(V(a[1], 0, a[2]));
+    else if (a[0] === 'p') pfx(a[1], a[2], a[3], a[4], a[5], a[6] || undefined);
   }
 }
 let inT = 0;
@@ -2591,7 +2678,7 @@ C.tx = hero.home.x; C.tz = hero.home.z; clampCam(); updateCam();
 if (ONLINE) startNet();
 setTimeout(() => $('load').classList.add('hide'), Math.max(0, 5000 - performance.now()));
 requestAnimationFrame(loop);
-if (location.search.includes('teste')) window.__vd = { SND, sfx, setMusic, setSfx, S, pads, hearts, dropHeart, PORTALS, PSEED, ET, spawnEnemy, waveList, bossWave, trail, placeTower, startWave, enemies, towers, hero, heroes, NET, MODE, ROLE, ME, CASTLES, act, pget, PS, gE, roomLink, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, heroShootAt, rads, renderShop: () => renderShop(), giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE };
+if (location.search.includes('teste')) window.__vd = { SND, sfx, setMusic, setSfx, S, pads, hearts, dropHeart, PORTALS, PSEED, ET, spawnEnemy, waveList, bossWave, trail, placeTower, startWave, enemies, towers, hero, heroes, NET, MODE, ROLE, ME, CASTLES, act, pget, PS, gE, roomLink, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, heroShootAt, rads, renderShop: () => renderShop(), giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE, pfx, pfxList, FXM, PIXEL, explodeAt };
 </script>
 </body>
 </html>
