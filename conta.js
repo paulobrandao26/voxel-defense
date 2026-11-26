@@ -141,5 +141,14 @@ $('accNova').onsubmit = async e => {
   if (!(await carregarPerfil())) abrir('meu'); toastConta('Senha nova salva!');
 };
 carregarPerfil().catch(() => { $('accBtn').hidden = true; });
+
+// Voto no TopIdle: o link já leva o nick, e cada voto vira ouro na próxima partida.
+const TOPIDLE_JOGO = 'https://topidle.com/jogo/brand-defense-acca3c';
+export const linkVoto = nick => TOPIDLE_JOGO + '?votar=1' + (nick ? '&playerIdentifier=' + encodeURIComponent(nick) : '');
+$('voteBtn').onclick = () => window.open(linkVoto(perfil?.nick), '_blank', 'noopener');
+addEventListener('vd-jogar', async () => {
+  if (!perfil) return;
+  try { const { data } = await sb.rpc('resgatar_bonus'); if (data > 0) dispatchEvent(new CustomEvent('vd-bonus', { detail: data })); } catch {}
+});
 window.__pedirConta = d => { depois = d; abrir('novo'); msg($('accErr'), 'Para jogar, crie a sua conta grátis ou toque em "Entrar" se já tiver.', true); };
 window.__conta = { sb, idade, validarCadastro, abrir, get perfil() { return perfil; } };

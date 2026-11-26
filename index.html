@@ -68,6 +68,7 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
 #toast.show{opacity:1}
 .ov{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#0009;padding:20px}
 .ov.show{display:flex}
+.box .vote{background:linear-gradient(#ffb627,#e08a1e);color:#2a1a00;font-weight:900}
 #cross{position:fixed;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;pointer-events:none;display:none;z-index:5}
 #cross::before,#cross::after{content:"";position:absolute;background:#fff;box-shadow:0 0 0 1.5px #000b;border-radius:1px}
 #cross::before{left:12px;top:0;width:2px;height:26px}#cross::after{top:12px;left:0;height:2px;width:26px}
@@ -214,6 +215,7 @@ body.touch #viewBtn{width:60px;height:60px;border-radius:50%;padding:0;flex-dire
     <div id="maps" class="maps" role="radiogroup" aria-label="Escolha o mapa"></div>
     <button id="play" class="pri">Jogar</button>
     <button id="online" class="sec wide"><span class="hi" data-i="globe"></span>Jogar online com um amigo</button>
+    <button id="voteBtn" class="sec wide vote"><span class="hi" data-i="trophy"></span>Votar no TopIdle · +300 de ouro</button>
     <button id="accBtn" class="sec wide" hidden><span class="hi" data-i="user"></span><span class="t">Criar conta / Entrar</span></button>
     <div class="row"><button id="musBtn" class="sec"></button><button id="sfxBtn" class="sec"></button></div>
     <button id="gfx" class="sec wide"></button>
@@ -3029,7 +3031,9 @@ const contaOk = () => window.__contaOk === true;
 function pedirConta(depois) {
   if (window.__pedirConta) window.__pedirConta(depois); else toast('Para jogar, entre na sua conta. Confira a internet e recarregue a página.', 3500);
 }
-$('play').onclick = () => { if (!contaOk()) return pedirConta('play'); $('help').classList.remove('show'); S.started = true; };
+$('play').onclick = () => { if (!contaOk()) return pedirConta('play'); $('help').classList.remove('show'); S.started = true; if (!ONLINE) dispatchEvent(new Event('vd-jogar')); };
+// Ouro dos votos no TopIdle (conta.js busca no banco quando a partida começa)
+addEventListener('vd-bonus', e => { if (ONLINE || !(e.detail > 0)) return; S.gold += e.detail; bump('gold'); updateUI(); toast(`Obrigado pelo voto no TopIdle! +🪙 ${e.detail}`, 3500); });
 $('helpBtn').onclick = () => { $('help').classList.add('show'); $('maps').hidden = true; S.started = false; };
 addEventListener('keydown', e => {
   if (e.target.closest && e.target.closest('input,textarea,select')) return; // digitando no cadastro: não mexe no jogo
