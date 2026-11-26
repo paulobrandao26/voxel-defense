@@ -232,7 +232,7 @@ await new Promise(r => requestAnimationFrame(() => setTimeout(r, 60)));
 const $ = id => document.getElementById(id);
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const rnd = (() => { let s = 7; return () => { s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; })();
+const rnd = (() => { let s = (q => q.get('sala') ? 7 : (+q.get('mapa') || 7))(new URLSearchParams(location.search)); return () => { s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; })();
 const lerpAng = (a, b, t) => { const d = ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return a + d * t; };
 const TOUCH = matchMedia('(pointer: coarse)').matches;
 document.body.classList.toggle('touch', TOUCH);
@@ -273,7 +273,7 @@ function hiss(dur, vol, freq, q = 1, t = 0, dest = SND.sfx, type = 'bandpass', f
 function sndNear(x, z) { try { return clamp(1.15 - Math.hypot(x - C.tx, z - C.tz) / 20, .12, 1); } catch (e) { return 1; } }
 function sfx(name, x, z) {
   if (!SND.ac || !SND.sfxOn) return;
-  const now = SND.ac.currentTime, gap = { shot: .07, tshot: .09, die: .05, hit: .25, coin: .06, spawn: .12, zap: .08, boom: .08, hurt: .35 }[name] || 0;
+  const now = SND.ac.currentTime, gap = { laser: .1, shot: .07, tshot: .09, die: .05, hit: .25, coin: .06, spawn: .12, zap: .08, boom: .08, hurt: .35 }[name] || 0;
   if (gap && now - (SND.last[name] || 0) < gap) return; SND.last[name] = now;
   const v = x === undefined ? 1 : sndNear(x, z), r = .92 + Math.random() * .16;
   switch (name) {
@@ -297,6 +297,7 @@ function sfx(name, x, z) {
     case 'heart': [659, 784, 988].forEach((fq, k) => tone('triangle', fq, fq, .12, .2, now + k * .08)); break;
     case 'heal': [523, 659, 784, 1047, 1319].forEach((fq, k) => tone('triangle', fq, fq, .14, .22, now + k * .08)); break;
     case 'over': [392, 370, 349, 330, 262].forEach((fq, k) => tone('square', fq, fq * .98, k === 4 ? .7 : .22, .1, now + k * .22)); break;
+    case 'laser': tone('sawtooth', 1900 * r, 240, .16, .09 * v); tone('sine', 900, 1800, .1, .05 * v); break;
     case 'alarm': [0, .3].forEach(d => { tone('sawtooth', 220, 330, .2, .1, now + d); tone('sawtooth', 330, 220, .2, .1, now + d + .15); }); break;
     case 'win': [523, 659, 784, 1047, 784, 1047].forEach((fq, k) => tone('square', fq, fq, k === 5 ? .6 : .12, .1, now + k * .12)); break;
   }
@@ -389,7 +390,7 @@ for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) if (LAKES.some(([a, b, r
 // ===== Relevo: dunas no deserto, morros de pedra no vulcão e de neve na neve =====
 // Tudo sobe e desce junto (chão, árvores, monstros, herói), menos perto do castelo e da água.
 // A conta roda na placa de vídeo (vdH) e aqui (Hjs) para cliques e efeitos.
-const HAMP = { floresta: 0, deserto: 2.4, neve: 1.4, vulcao: 1.8 }[BIOMA];
+const HAMP = { floresta: 1.3, deserto: 2.4, neve: 1.6, vulcao: 1.9 }[BIOMA];
 const HC = CASTLES.map(c => [wc(c.ci), wc(c.cj)]), HL = LAKES.map(([a, b, r]) => [wc(a), wc(b), r]), HRIV = BIOMA !== 'deserto';
 const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 function Hjs(x, z) {
@@ -400,7 +401,8 @@ function Hjs(x, z) {
   if (HRIV) { const i = x + HALF - .5; m *= sstep(2.5, 5.5, Math.abs(z - (10 * MS + Math.sin(i * .27) * 1.8 + Math.sin(i * .07) * 4 - HALF + 1))); }
   if (m <= 0) return 0;
   const a = .5 + .5 * Math.sin(x * .19 + Math.sin(z * .11) * 2), b = .5 + .5 * Math.sin(z * .23 + x * .07 + 1.3);
-  return HAMP * m * a * (.35 + .65 * b);
+  const far = .55 + .9 * sstep(12, 34, Math.hypot(x - HC[0][0], z - HC[0][1]));   // morros maiores longe do castelo, onde ficam os portais
+  return HAMP * m * a * (.35 + .65 * b) * far;
 }
 if (HAMP) {
   const f = v => v.toFixed(3);
@@ -408,7 +410,7 @@ if (HAMP) {
   for (const [cx, cz] of HC) g += `m *= smoothstep(6.5, 12., max(abs(p.x - (${f(cx)})), abs(p.y - (${f(cz)}))));`;
   for (const [lx, lz, r] of HL) g += `m *= smoothstep(${f(r + 1.5)}, ${f(r + 4.5)}, length(p - vec2(${f(lx)}, ${f(lz)})));`;
   if (HRIV) g += `{ float i = p.x + ${f(HALF - .5)}; m *= smoothstep(2.5, 5.5, abs(p.y - (${f(10 * MS)} + sin(i * .27) * 1.8 + sin(i * .07) * 4. - ${f(HALF - 1)}))); }`;
-  g += `float a = .5 + .5 * sin(p.x * .19 + sin(p.y * .11) * 2.), b = .5 + .5 * sin(p.y * .23 + p.x * .07 + 1.3); return ${f(HAMP)} * m * a * (.35 + .65 * b); }\n`;
+  g += `float a = .5 + .5 * sin(p.x * .19 + sin(p.y * .11) * 2.), b = .5 + .5 * sin(p.y * .23 + p.x * .07 + 1.3); return ${f(HAMP)} * m * a * (.35 + .65 * b) * (.55 + .9 * smoothstep(12., 34., length(p - vec2(${f(HC[0][0])}, ${f(HC[0][1])})))); }\n`;
   const SC = THREE.ShaderChunk, pv = 'mvPosition = modelViewMatrix * mvPosition;', wv = 'worldPosition = modelMatrix * worldPosition;';
   if (SC.project_vertex.includes(pv) && SC.worldpos_vertex.includes(wv)) {
     SC.common += '\n' + g;
@@ -568,7 +570,13 @@ const SIDE_NAME = SPAWNS.map(([i, j], s) => { const c = targetCastle(s), a = Mat
 const hash3 = (a, b, c) => { let x = Math.imul(a, 374761393) + Math.imul(b, 668265263) + Math.imul(c, 2147483647); x = Math.imul(x ^ x >>> 13, 1274126177); return ((x ^ x >>> 16) >>> 0) / 4294967296; };
 function flowDir(p, out, flow = flows[0], cx = 0, cz = 0, seed = 0) {
   const i = cellOf(p.x), j = cellOf(p.z), f = inMap(i, j) ? flow[K(i, j)] : Infinity;
-  if (!(f > 0 && f < Infinity)) return out.set(cx - p.x, 0, cz - p.z).normalize();
+  if (!(f < Infinity)) {
+    let bk = -1, bv = Infinity;
+    for (let r = 1; r <= 3 && bk < 0; r++) for (let a = -r; a <= r; a++) for (let b = -r; b <= r; b++) { const ni = i + a, nj = j + b; if (!inMap(ni, nj)) continue; const v = flow[K(ni, nj)] + Math.hypot(a, b); if (v < bv) { bv = v; bk = K(ni, nj); } }
+    if (bk >= 0 && bv < Infinity) return out.set(wc((bk / N) | 0) - p.x, 0, wc(bk % N) - p.z).normalize();
+    return out.set(cx - p.x, 0, cz - p.z).normalize();
+  }
+  if (!(f > 0)) return out.set(cx - p.x, 0, cz - p.z).normalize();
   let bi = -1, bj = -1, bf = f, tot = 0;
   const cand = [];
   for (const [a, b] of D8) {
@@ -1430,10 +1438,10 @@ function heartMesh() {
   const glow = new THREE.Mesh(CIRCLE, basic(0xff4d6d, .35)); glow.scale.setScalar(.55); glow.position.y = -.42; g.add(glow); g.userData.glow = glow;
   scene.add(g); return g;
 }
-function dropHeart(x, z, id) {
+function dropHeart(x, z, id, who) {
   const hh = { id: id ?? ++hid, g: heartMesh(), x, z, life: HEART_LIFE, by: null, t: Math.random() * 6 };
   hh.g.position.set(x, .55, z); hearts.push(hh);
-  if (id === undefined) toast('❤️ O Chipado soltou uma vida! Pegue e leve até o castelo.', 3200);
+  if (id === undefined) toast(`❤️ O ${who || 'Chipado'} soltou uma vida! Pegue e leve até o castelo.`, 3200);
   return hh;
 }
 function removeHeart(hh) { scene.remove(hh.g); if (hh.by) hh.by.carry = null; hearts.splice(hearts.indexOf(hh), 1); }
@@ -1539,6 +1547,29 @@ function buildEnemy(type, T, s, inner, body, band) {
     for (const l of L) { l.o.children[0].position.set(Math.sign(l.o.position.x) * s * .3, 0, 0); l.o.children[0].rotation.z = Math.sign(l.o.position.x) * -.5; }
     return { L, top: s * .8 };
   }
+  if (type === 'dragao') {
+    // Dragão: 4 patas, asas grandes que batem, pescoço comprido, chifres e rabo com ponta
+    const L = [], legH = s * .38, dk = M(0x6e1410), bel = M(0xe8b04a), horn = M(0xf1e3c6);
+    for (const [a, b, ph] of [[-1, 1, 0], [1, 1, Math.PI], [-1, -1, Math.PI], [1, -1, 0]]) L.push(limb(dk, s * .16, legH, s * .18, a * s * .22, legH, b * s * .3, inner, ph, .5));
+    box(body, s * .55, s * .42, s * 1, 0, legH + s * .2, 0, inner); box(bel, s * .42, s * .1, s * .8, 0, legH + s * .02, 0, inner);
+    if (PVP) box(band, s * .57, s * .1, s * .5, 0, legH + s * .42, -s * .1, inner);
+    for (let k = 0; k < 6; k++) box(dk, s * .08, s * .12, s * .1, 0, legH + s * .46, s * (.4 - k * .17), inner);
+    const neck = new THREE.Group(); neck.position.set(0, legH + s * .35, s * .45); inner.add(neck);
+    box(body, s * .24, s * .5, s * .24, 0, s * .2, s * .1, neck);
+    const head = new THREE.Group(); head.position.set(0, s * .5, s * .22); neck.add(head);
+    box(body, s * .32, s * .26, s * .42, 0, 0, s * .12, head); box(dk, s * .28, s * .1, s * .3, 0, -s * .14, s * .2, head);
+    for (const sx of [-1, 1]) { box(horn, s * .05, s * .22, s * .05, sx * s * .1, s * .2, -s * .02, head); box(mat.gold, s * .06, s * .05, .03, sx * s * .13, s * .05, s * .33, head); }
+    L.push({ o: neck, ph: .5, amp: .12, bx: -.1, ax: 'x' });
+    for (const sx of [-1, 1]) {
+      const w = new THREE.Group(); w.position.set(sx * s * .26, legH + s * .4, s * .05); inner.add(w);
+      box(dk, s * .9, s * .04, s * .1, sx * s * .45, 0, s * .2, w); box(body, s * .85, s * .03, s * .55, sx * s * .45, -s * .02, -s * .08, w);
+      L.push({ o: w, ph: sx > 0 ? 0 : Math.PI, amp: .45, bx: sx * -.25, ax: 'z' });
+    }
+    const tail = new THREE.Group(); tail.position.set(0, legH + s * .2, -s * .5); inner.add(tail);
+    box(body, s * .26, s * .22, s * .55, 0, 0, -s * .25, tail); box(body, s * .16, s * .14, s * .5, 0, -s * .05, -s * .7, tail); box(dk, s * .2, s * .04, s * .2, 0, -s * .05, -s * 1, tail);
+    L.push({ o: tail, ph: 0, amp: .35, bx: 0, ax: 'y' });
+    return { L, top: legH + s * 1.35, head };
+  }
   if (type === 'rex') {
     // Rei Rex: tiranossauro gigante de duas pernas, rabo comprido, braço curtinho e bocão com dentes
     const L = [], legH = s * .5, rex = mat.rex, rexD = mat.rexD;
@@ -1598,15 +1629,16 @@ function buildEnemy(type, T, s, inner, body, band) {
 const ET = {
   rapido: { name: 'Corredor', hp: 30, sp: 1.8, size: .42, color: 0xe8553d, reward: 5, kind: 'melee', atk: 8 },
   aranha: { name: 'Aranha', hp: 16, sp: 2.5, size: .34, color: 0x6b4a2b, reward: 3, kind: 'melee', atk: 5 },
-  tanque: { name: 'Tanque', hp: 150, sp: .8, size: .72, color: 0x7d5ba6, reward: 12, kind: 'melee', atk: 18 },
+  tanque: { name: 'Tanque', hp: 150, sp: .8, size: .72, color: 0x7d5ba6, reward: 12, kind: 'melee', atk: 18, gun: { range: 3.6, dmg: 7, rate: 1.8 } },
   arqueiro: { name: 'Arqueiro', hp: 45, sp: 1.2, size: .48, color: 0x3f8f4a, reward: 8, kind: 'ranged', range: 3.8, dmg: 6, rate: 1.6 },
   bomba: { name: 'Homem-bomba', hp: 50, sp: 1.6, size: .5, color: 0x33333a, reward: 9, kind: 'bomber', dmg: 45, radius: 1.8 },
   zumbi: { name: 'Chipado', hp: 70, sp: .75, size: .58, color: 0x7fb069, reward: 8, kind: 'melee', atk: 10, heart: true },
   cura: { name: 'Curandeiro', hp: 60, sp: 1, size: .5, color: 0xeeeeee, reward: 10, kind: 'healer' },
-  golem: { name: 'Golem', hp: 1000, sp: .55, size: 1.15, color: 0x7b7f88, reward: 90, kind: 'melee', atk: 28, boss: true, slam: true },
-  ogro: { name: 'Ogro', hp: 420, sp: .62, size: .95, color: 0x8a9a5b, reward: 30, kind: 'melee', atk: 30, drop: 'escudo' },
-  mutante: { name: 'Mutante', hp: 700, sp: .9, size: .9, color: 0xc2552d, reward: 45, kind: 'melee', atk: 34, drop: 'raio' },
+  golem: { name: 'Golem', hp: 1000, sp: .55, size: 1.15, color: 0x7b7f88, reward: 90, kind: 'melee', atk: 28, boss: true, slam: true, gun: { range: 5, dmg: 18, rate: 1.6 } },
+  ogro: { name: 'Ogro', hp: 420, sp: .62, size: .95, color: 0x8a9a5b, reward: 30, kind: 'melee', atk: 30, drop: 'escudo', gun: { range: 4, dmg: 12, rate: 2 } },
+  mutante: { name: 'Mutante', hp: 700, sp: .9, size: .9, color: 0xc2552d, reward: 45, kind: 'melee', atk: 34, drop: 'raio', gun: { range: 4.5, dmg: 14, rate: 1.4 } },
   rex: { name: 'Rei Rex', hp: 9000, sp: .5, size: 2.1, color: 0x5f7d3a, reward: 400, kind: 'melee', atk: 75, boss: true, slam: true, stride: 4 },
+  dragao: { name: 'Dragão', hp: 16000, sp: .55, size: 2.2, color: 0xb3261e, reward: 700, kind: 'ranged', range: 5.5, dmg: 0, rate: .12, boss: true, breath: 26 },
   bruxo: { name: 'Bruxo', hp: 750, sp: .7, size: 1, color: 0x5b2a86, reward: 90, kind: 'ranged', range: 4.2, dmg: 14, rate: 1.2, boss: true, summon: true },
 };
 for (const T of Object.values(ET)) T.dmat = M(new THREE.Color(T.color).multiplyScalar(.55).getHex());
@@ -1621,7 +1653,7 @@ function spawnEnemy(type, x, z, team = 0) {
   const body = M(T.color, 0x000000);
   let f1 = null, f2 = null;
   const built = buildEnemy(type, T, s, inner, body, band);
-  if (T.boss && type !== 'rex') { const ty = built.top; box(mat.gold, s * .5, .1, s * .5, 0, ty + .05, 0, inner); for (const a of [-1, 1]) for (const b of [-1, 1]) box(mat.gold, .1, .18, .1, a * s * .2, ty + .18, b * s * .2, inner); }
+  if (T.boss && type !== 'rex' && type !== 'dragao') { const ty = built.top; box(mat.gold, s * .5, .1, s * .5, 0, ty + .05, 0, inner); for (const a of [-1, 1]) for (const b of [-1, 1]) box(mat.gold, .1, .18, .1, a * s * .2, ty + .18, b * s * .2, inner); }
   const bar = makeBar(Math.max(.5, s * 1.1));
   scene.add(g);
   const hp = Math.round(T.hp * S.hpMul * (1 + S.power) * (MODE === 'coop' ? 1.3 : 1));
@@ -1644,7 +1676,7 @@ function aimPoint(tg, from, out) {
 }
 function pickTarget(e) {
   const T = e.T; if (T.kind === 'healer') return null;
-  let best = null, bd = T.kind === 'ranged' ? T.range : T.kind === 'bomber' ? 3.5 : 2.2;
+  let best = null, bd = T.kind === 'ranged' ? T.range : T.gun ? T.gun.range : T.kind === 'bomber' ? 3.5 : 2.2;
   const foe = foeOf(e), cd = edgeDist(e, e.tc.T); if (cd < bd) { best = e.tc.T; bd = cd; }
   for (const hh of heroes) if (!hh.dead && (!PVP || hh.pl === foe)) { const d = edgeDist(e, hh); if (d < bd) { best = hh; bd = d; } }
   for (const t of towers) if (!PVP || t.owner === foe) { const d = edgeDist(e, t); if (d < bd) { best = t; bd = d; } }
@@ -1683,16 +1715,20 @@ function stepEnemy(e, dt, time) {
     if (mode === 'boom') { explodeBomber(e); return; }
     e.px = e.pos.x; e.pz = e.pos.z;
     if (mode === 'walk') {
-      if (tg && tg.kind !== 'castle') desired.set(tg.pos.x - e.pos.x, 0, tg.pos.z - e.pos.z).normalize();
+      if (tg && tg.kind !== 'castle' && !(e.unstuck > 0) && edgeDist(e, tg) < 1.6) desired.set(tg.pos.x - e.pos.x, 0, tg.pos.z - e.pos.z).normalize();
       else {
-        flowDir(e.pos, desired, e.flowF, e.tc.x, e.tc.z, e.id);
-        if (e.fd > 2.5) { const w = Math.sin(time * e.wf + e.ph) * e.wob, c = Math.cos(w), s = Math.sin(w); desired.set(desired.x * c - desired.z * s, 0, desired.x * s + desired.z * c); }
+        flowDir(e.pos, desired, e.flowF, e.tc.x, e.tc.z, e.unstuck > 0 ? 0 : e.id);
+        if (e.fd > 2.5 && !(e.unstuck > 0)) { const w = Math.sin(time * e.wf + e.ph) * e.wob, c = Math.cos(w), s = Math.sin(w); desired.set(desired.x * c - desired.z * s, 0, desired.x * s + desired.z * c); }
       }
       e.dir.lerp(desired, Math.min(1, dt * 8));
       const L = e.dir.length() || 1;
       e.pos.x += e.dir.x / L * sp * dt; e.pos.z += e.dir.z / L * sp * dt; e.walk += sp * dt;
       e.g.rotation.y = lerpAng(e.g.rotation.y, Math.atan2(e.dir.x, e.dir.z), Math.min(1, dt * 10));
       e.inner.position.z = 0;
+      // anda pouco por muito tempo = preso: segue o caminho mais curto (sem desvios) por alguns segundos
+      e.unstuck = (e.unstuck || 0) - dt; e.stT = (e.stT || 0) + dt;
+      if (e.stT > 1.5) { if (Math.hypot(e.pos.x - (e.stX ?? 1e9), e.pos.z - (e.stZ ?? 1e9)) < .35 * sp) { e.unstuck = 3; e.target = null; e.think = 3; } e.stT = 0; e.stX = e.pos.x; e.stZ = e.pos.z; }
+      if (T.gun && tg && (e.atkCd -= dt) <= 0 && edgeDist(e, tg) <= T.gun.range) { e.atkCd = T.gun.rate; enemyShoot(e, tg, T.gun.dmg); }
     } else {
       aimPoint(tg, e.pos, tmp2);
       e.g.rotation.y = lerpAng(e.g.rotation.y, Math.atan2(tmp2.x - e.pos.x, tmp2.z - e.pos.z), Math.min(1, dt * 10));
@@ -1701,7 +1737,7 @@ function stepEnemy(e, dt, time) {
         damageTarget(tg, T.atk * dt * S.dmgMul * (tg.kind === 'castle' ? .15 : 1));
         e.inner.position.z = Math.max(0, Math.sin(time * 12 + e.ph)) * .12;
         if (T.slam) { e.slamCd -= dt; if (e.slamCd <= 0) { e.slamCd = 2.5; slam(e); } }
-      } else if (e.atkCd <= 0) { e.atkCd = T.rate; enemyShoot(e, tg); }
+      } else if (e.atkCd <= 0) { e.atkCd = T.rate; if (T.breath) breathFire(e, tg); else enemyShoot(e, tg); }
     }
   }
 }
@@ -1755,7 +1791,10 @@ function hurt(e, dmg, flash = true) {
   burst(tmp, 0x222222, 4, 2.5, .1);
   dropCoin(e.pos);
   if (e.T.heart) dropHeart(e.pos.x, e.pos.z);
-  if (e.T.drop) dropItem(e.T.drop, e.pos.x, e.pos.z);
+  if (e.T.boss || e.T.drop) {
+    const P = BOSS_POWERS[((S.bossKills = (S.bossKills || 0) + 1) - 1) % BOSS_POWERS.length];
+    if (P === 'vida') dropHeart(e.pos.x, e.pos.z, undefined, e.T.name); else dropItem(P, e.pos.x, e.pos.z, undefined, e.T.name);
+  }
   const pay = () => {
     S.gold += Math.round(e.T.reward * (1 + .05 * (S.wave - 1)) * (1 + S.power * .6));
     if (e.T.boss) toast(`Você derrotou o ${e.T.name}! 👑`);
@@ -1786,7 +1825,7 @@ function slam(e) {
 }
 function damageTarget(tg, amt) {
   if (tg.dead || S.over) return;
-  if (tg.kind === 'hero' && tg.shieldT > 0) { if (Math.random() < .3) burst(tmp.set(tg.pos.x, .8, tg.pos.z), 0x7dd3fc, 2, 1, .06); return; }
+  if (tg.kind === 'hero' && (tg.shieldT > 0 || tg.starT > 0)) { if (Math.random() < .3) burst(tmp.set(tg.pos.x, .8, tg.pos.z), 0x7dd3fc, 2, 1, .06); return; }
   if (tg.kind === 'hero') { tg.hp -= amt; tg.hurtT = .12; if (tg.pl === ME) sfx('hurt'); }
   else if (tg.kind === 'tower') { tg.hp -= amt; tg.shake = .15; tg.bar.g.visible = true; if (tg.hp <= 0) destroyTower(tg); }
   else {
@@ -1819,6 +1858,8 @@ const TT = {
   morteiro: { name: 'Morteiro', desc: 'Bomba de longe', color: '#57534e', cost: 130, up: [100, 150], hp: [160, 210, 280], shot: 'mortar',
     lv: [{ dmg: 55, range: 8, rate: 3, splash: 2 }, { dmg: 90, range: 9, rate: 2.7, splash: 2.3 }, { dmg: 140, range: 10, rate: 2.4, splash: 2.6 }] },
 };
+// Alcance: todas as armas do campo alcançam mais longe, e quanto mais cara, mais longe (lança-chamas ganha mais)
+for (const T of Object.values(TT)) { const k = (T.shot === 'flame' ? 1.45 : 1.12) + clamp((T.cost - 50) / 110, 0, 1) * .2; for (const L of T.lv) { L.range = Math.round(L.range * k * 10) / 10; if (L.splash) L.splash = Math.round(L.splash * (T.shot === 'mortar' ? 1.3 : 1.15) * 10) / 10; } }
 const CYL = new THREE.CylinderGeometry(.11, .13, .6, 8).rotateX(Math.PI / 2);
 const CYLB = new THREE.CylinderGeometry(.2, .24, .6, 10).rotateX(Math.PI / 2);
 const OCTA = new THREE.OctahedronGeometry(.25);
@@ -2059,10 +2100,19 @@ function chainFrom(from, first, n, dmg, pl = 0) {
     cur = nx;
   }
 }
-function enemyShoot(e, tg) {
+function breathFire(e, tg) {
+  const a = e.g.rotation.y, d = V(Math.sin(a), 0, Math.cos(a)), o = V(e.pos.x + d.x * e.T.size * .9, e.T.size * .95, e.pos.z + d.z * e.T.size * .9);
+  burstDir(o, d, 0xff7a18, 4, 9, .2); burstDir(o, d, 0xffd54a, 2, 8, .14); sfx('fire', e.pos.x, e.pos.z);
+  const amt = e.T.breath * (1 + .04 * (S.wave - 1)) * S.dmgMul;
+  damageTarget(tg, amt * (tg.kind === 'castle' ? .25 : 1));
+  const tp = aimPoint(tg, e.pos, V());
+  for (const t of towers) if (t !== tg && (!PVP || t.owner === foeOf(e)) && Math.hypot(t.pos.x - tp.x, t.pos.z - tp.z) < 1.6) damageTarget(t, amt * .5);
+  for (const hh of heroes) if (hh !== tg && !hh.dead && (!PVP || hh.pl === foeOf(e)) && Math.hypot(hh.pos.x - tp.x, hh.pos.z - tp.z) < 1.6) damageTarget(hh, amt * .5);
+}
+function enemyShoot(e, tg, gdmg) {
   const boss = e.T.boss, o = V(e.pos.x, e.T.size * (boss ? 1.3 : .8), e.pos.z);
   const m = new THREE.Mesh(boss ? BALL : ARROW, boss ? mat.purple : mat.green); m.position.copy(o); scene.add(m);
-  shots.push({ k: 'e', m, tg, dmg: e.T.dmg * (1 + .04 * (S.wave - 1)) * S.dmgMul * (tg.kind === 'castle' ? .2 : 1), sp: boss ? 7 : 10, last: aimPoint(tg, e.pos, V()), boss });
+  shots.push({ k: 'e', m, tg, dmg: (gdmg || e.T.dmg) * (1 + .04 * (S.wave - 1)) * S.dmgMul * (tg.kind === 'castle' ? .2 : 1), sp: boss ? 7 : 10, last: aimPoint(tg, e.pos, V()), boss });
 }
 function explodeAt(p, radius, dmg, big, pl = 0, heroHit = false) {
   p.y = .2; sfx('boom', p.x, p.z); pfx(big ? 'bigboom' : 'boom', p.x, 0, p.z, big ? 1 : .75);
@@ -2225,22 +2275,25 @@ function pushOffAnimals(p, r) {
 // ===== Prêmios que os monstros fortes soltam =====
 // Ogro (onda 10+) solta um escudo: o herói que pegar fica 1 minuto sem levar dano.
 // Mutante (onda 15+) solta um raio: o herói ganha fôlego para correr mais rápido (aperta ⚡ ou Shift).
+const BOSS_POWERS = ['vida', 'escudo', 'raio', 'escudo', 'estrela'], STAR_TIME = 20, DROP_KINDS = ['escudo', 'raio', 'estrela'];
 const SHIELD_TIME = 60, BOOST_GAIN = 25, BOOST_MAX = 50, BOOST_MUL = 1.9, DROP_LIFE = 25;
 const drops = [];
 let dropId = 0;
 const shieldMat = new THREE.MeshBasicMaterial({ color: 0x7dd3fc, transparent: true, opacity: .28, depthWrite: false });
-function dropItem(kind, x, z, id) {
+function dropItem(kind, x, z, id, who) {
   const g = new THREE.Group(), it = new THREE.Group(); g.add(it);
   if (kind === 'escudo') {
     box(mat.glow, .34, .42, .07, 0, 0, 0, it); box(mat.gold, .4, .06, .09, 0, .21, 0, it); box(mat.gold, .06, .42, .09, 0, 0, .01, it); box(mat.gold, .3, .06, .09, 0, -.18, 0, it);
+  } else if (kind === 'estrela') {
+    const sm = M(0xfde047, 0xf59e0b); for (let k = 0; k < 5; k++) { const a = k / 5 * 6.28; box(sm, .1, .26, .08, Math.sin(a) * .13, Math.cos(a) * .13, 0, it).rotation.z = -a; } box(sm, .16, .16, .1, 0, 0, 0, it);
   } else {
     box(mat.zap, .1, .26, .08, .05, .12, 0, it).rotation.z = -.5; box(mat.zap, .22, .07, .08, 0, 0, 0, it); box(mat.zap, .1, .26, .08, -.05, -.12, 0, it).rotation.z = -.5;
   }
-  const ring = new THREE.Mesh(new THREE.RingGeometry(.3, .4, 24).rotateX(-Math.PI / 2), basic(kind === 'escudo' ? 0x60a5fa : 0xfacc15, .8)); ring.position.y = -.5; g.add(ring);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(.3, .4, 24).rotateX(-Math.PI / 2), basic(kind === 'escudo' ? 0x60a5fa : kind === 'estrela' ? 0xf59e0b : 0xfacc15, .8)); ring.position.y = -.5; g.add(ring);
   g.position.set(x, .6, z); scene.add(g);
   const d = { id: id ?? ++dropId, kind, x, z, g, it, life: DROP_LIFE, t: 0 };
   drops.push(d);
-  if (id === undefined) toast(kind === 'escudo' ? '🛡️ O Ogro soltou um escudo! Pegue: 1 minuto sem levar dano.' : '⚡ O Mutante soltou um raio! Pegue para correr mais rápido.', 3200);
+  if (id === undefined) toast(kind === 'escudo' ? `🛡️ O ${who || 'Ogro'} soltou um escudo! Pegue: 1 minuto sem levar dano.` : kind === 'estrela' ? `⭐ O ${who} soltou uma ESTRELA! Pegue: 20 segundos invencível, atirando rápido e soltando ondas de choque.` : `⚡ O ${who || 'Mutante'} soltou um raio! Pegue para correr mais rápido.`, 3600);
   return d;
 }
 function removeDrop(d) { scene.remove(d.g); const k = drops.indexOf(d); if (k >= 0) drops.splice(k, 1); }
@@ -2251,7 +2304,8 @@ function updateDrops(dt, rdt) {
     if (!dt) continue;
     if ((d.life -= dt) <= 0) { removeDrop(d); continue; }
     for (const p of heroes) if (!p.dead && Math.hypot(p.pos.x - d.x, p.pos.z - d.z) < .8) {
-      if (d.kind === 'escudo') { p.shieldT = SHIELD_TIME; withPlayer(p.pl, () => toast('🛡️ Escudo ligado! 1 minuto sem levar dano.', 2800)); }
+      if (d.kind === 'estrela') { p.starT = STAR_TIME; p.waveCd = 0; withPlayer(p.pl, () => toast('⭐ Estrela! 20 segundos invencível, rápido e com ondas de choque.', 3000)); }
+      else if (d.kind === 'escudo') { p.shieldT = SHIELD_TIME; withPlayer(p.pl, () => toast('🛡️ Escudo ligado! 1 minuto sem levar dano.', 2800)); }
       else { p.boost = Math.min(BOOST_MAX, (p.boost || 0) + BOOST_GAIN); withPlayer(p.pl, () => toast(TOUCH ? '⚡ Fôlego extra! Toque em ⚡ para correr mais rápido.' : '⚡ Fôlego extra! Aperte Shift ou ⚡ para correr mais rápido.', 3200)); }
       pfx('levelup', d.x, .2, d.z, .8); if (p.pl === ME) sfx('heart');
       removeDrop(d); break;
@@ -2261,7 +2315,14 @@ function updateDrops(dt, rdt) {
 function heroExtras(hh, dt, time) {
   if (!hh.bubble) { hh.bubble = new THREE.Mesh(SPHERE, shieldMat); hh.bubble.scale.setScalar(.62); hh.bubble.position.y = .55; hh.g.add(hh.bubble); }
   if (dt) hh.shieldT = Math.max(0, (hh.shieldT || 0) - dt);
-  hh.bubble.visible = !hh.dead && hh.shieldT > 0 && (hh.shieldT > 5 || Math.sin(time * 20) > 0);
+  if (dt && hh.starT > 0) {
+    hh.starT -= dt; if (Math.random() < dt * 20) emit(tmp.set(hh.pos.x + (Math.random() - .5) * .6, .3 + Math.random() * .9, hh.pos.z + (Math.random() - .5) * .6), Math.random() < .5 ? 0xfde047 : 0xffffff, .08, 0, 1.2, 0, .6, -.5);
+    if ((hh.waveCd = (hh.waveCd || 0) - dt) <= 0 && !hh.dead) {
+      hh.waveCd = 1.5; pfx('levelup', hh.pos.x, .2, hh.pos.z, 1.6); burst(tmp.set(hh.pos.x, .4, hh.pos.z), 0xfde047, 14, 4, .1);
+      for (const e of enemies) if (!e.dead && !(PVP && e.team === hh.pl) && Math.hypot(e.pos.x - hh.pos.x, e.pos.z - hh.pos.z) < 3.5 + e.r) hurt(e, e.T.boss ? e.maxHp * .02 + 40 : 90 + S.wave * 12);
+    }
+  }
+  hh.bubble.visible = !hh.dead && (hh.shieldT > 0 || hh.starT > 0) && (hh.shieldT > 5 || hh.starT > 3 || Math.sin(time * 20) > 0);
   if (!(hh.boost > 0)) hh.sprint = false;
 }
 function toggleSprint() { if (hero.boost > 0) { hero.sprint = !hero.sprint; if (isLocal()) sfx('up'); } }
@@ -2280,11 +2341,11 @@ function heroTargets(pl) {
 function heroDmg() { return 10 + S.wave * 1.6; }
 // Armas do herói (compradas na loja). O dano cresce com a onda, como a vida dos monstros.
 const HW = {
-  blaster: { name: 'Blaster', icon: '🔫', desc: 'Tiro rápido em um monstro', cost: 0, power: 0, range: 7.5 },
-  fogo: { name: 'Lança-fogo', icon: '🔥', desc: 'Queima vários de perto', cost: 300, power: .06, range: 4 },
-  raio: { name: 'Cajado de raio', icon: '⚡', desc: 'Raio pula em 3 monstros', cost: 500, power: .08, range: 7 },
-  veneno: { name: 'Arma de veneno', icon: '☠️', desc: 'Nuvem que envenena em área', cost: 800, power: .12, range: 8 },
-  radiacao: { name: 'Arma de radiação', icon: '☢️', desc: 'A mais forte: área radioativa que queima sem parar e solta faíscas', cost: 1200, power: .16, range: 8 },
+  blaster: { name: 'Blaster', icon: '🔫', desc: 'Tiro rápido em um monstro', cost: 0, power: 0, range: 8.5 },
+  fogo: { name: 'Lança-fogo', icon: '🔥', desc: 'Queima vários de perto', cost: 300, power: .06, range: 6 },
+  raio: { name: 'Cajado de raio', icon: '⚡', desc: 'Raio pula em 3 monstros', cost: 500, power: .08, range: 9 },
+  radiacao: { name: 'Arma de radiação', icon: '☢️', desc: 'Área radioativa que queima sem parar e solta faíscas', cost: 1200, power: .16, range: 9.5 },
+  laser: { name: 'Arma de laser', icon: '🔴', desc: 'A mais forte: raio que atravessa tudo, aniquila monstros e tira muita vida dos chefões (ainda mais do Rei Rex)', cost: 2000, power: .2, range: 11 },
 };
 const poisonMat = M(0xa3e635, 0x4d7c0f);
 // Radiação: bola verde neon que vira uma área radioativa pulsando. Quem está dentro leva dano sem parar,
@@ -2329,10 +2390,10 @@ function heroAttack(dir) {
   if (w === 'fogo') {
     hero.cd = .12;
     const src = V(hero.pos.x + dir.x * .5, .75, hero.pos.z + dir.z * .5);
-    burstDir(src, dir, 0xff7a18, 3, 7, .12); burstDir(src, dir, 0xffd54a, 2, 6, .09);
+    burstDir(src, dir, 0xff7a18, 4, 10, .12); burstDir(src, dir, 0xffd54a, 3, 9, .09);
     for (const e of heroTargets(hero.pl)) {
       const dx = e.pos.x - hero.pos.x, dz = e.pos.z - hero.pos.z, d = Math.hypot(dx, dz) || 1e-3;
-      if (d > 4 + e.r || (dx * dir.x + dz * dir.z) / d < .8) continue;
+      if (d > HW.fogo.range + e.r || (dx * dir.x + dz * dir.z) / d < .75) continue;
       if (e.kind === 'hero') { damageTarget(e, 3 + n * .6); continue; }
       hurt(e, 3 + n * .6); e.burnDps = Math.max(e.burnT > 0 ? e.burnDps : 0, 4 + n * .8); e.burnT = 2.5;
     }
@@ -2343,7 +2404,7 @@ function heroAttack(dir) {
     let first = null, bs = -2;
     for (const e of heroTargets(hero.pl)) {
       const dx = e.pos.x - hero.pos.x, dz = e.pos.z - hero.pos.z, d = Math.hypot(dx, dz);
-      if (d > 7 + e.r) continue;
+      if (d > HW.raio.range + e.r) continue;
       const sc = (dx * dir.x + dz * dir.z) / (d || 1) - d * .05; if (sc > bs) { bs = sc; first = e; }
     }
     if (first) chainFrom(V(hero.pos.x + dir.x * .5, .8, hero.pos.z + dir.z * .5), first, 3, 14 + n * 2.2, hero.pl);
@@ -2352,20 +2413,34 @@ function heroAttack(dir) {
   if (w === 'radiacao') {
     hero.cd = .5;
     const o = V(hero.pos.x + dir.x * .55, .78, hero.pos.z + dir.z * .55), m = new THREE.Mesh(BIGBALL, radMat); m.position.copy(o); scene.add(m);
-    shots.push({ k: 'hb', m, dir: dir.clone(), sp: 12, life: .7, dmg: 20 + n * 3, rad: true, pl: hero.pl });
+    shots.push({ k: 'hb', m, dir: dir.clone(), sp: 12, life: .8, dmg: 20 + n * 3, rad: true, pl: hero.pl });
     burstDir(o, dir, 0x7dff2a, 4, 4, .08);
     return;
   }
+  // laser: raio reto que atravessa todos na linha; monstro comum quase sempre morre, chefão perde um pedaço grande da vida
   hero.cd = .4;
-  const o = V(hero.pos.x + dir.x * .55, .78, hero.pos.z + dir.z * .55);
-  const m = new THREE.Mesh(BALL, poisonMat); m.position.copy(o); scene.add(m);
-  shots.push({ k: 'hb', m, dir: dir.clone(), sp: 13, life: .62, dmg: 12 + n * 2, poison: 10 + n * 2, pl: hero.pl });
+  const o = V(hero.pos.x + dir.x * .55, .8, hero.pos.z + dir.z * .55), L = HW.laser.range;
+  for (const e of heroTargets(hero.pl)) {
+    const dx = e.pos.x - o.x, dz = e.pos.z - o.z, t = dx * dir.x + dz * dir.z;
+    if (t < 0 || t > L + e.r || Math.abs(dx * dir.z - dz * dir.x) > e.r + .3) continue;
+    if (e.kind === 'hero') { damageTarget(e, 40 + n * 4); continue; }
+    hurt(e, e.T.boss ? e.maxHp * (e.type === 'rex' ? .06 : e.type === 'dragao' ? .045 : .04) + 30 + n * 4 : e.maxHp + 50);
+    burst(V(e.pos.x, e.hitY + .2, e.pos.z), 0xff4040, 6, 2, .08);
+  }
+  laserBeam(o, V(o.x + dir.x * L, .8, o.z + dir.z * L));
+}
+const heroLaserMat = new THREE.MeshBasicMaterial({ color: 0xff2a2a }), laserCore = new THREE.MeshBasicMaterial({ color: 0xffe4e4 });
+function laserBeam(a, b) {
+  fxRec(['L', r2(a.x), r2(a.y), r2(a.z), r2(b.x), r2(b.y), r2(b.z)]); sfx('laser', a.x, a.z);
+  const Lb = a.distanceTo(b);
+  for (const [mm, w] of [[heroLaserMat, .16], [laserCore, .06]]) { const m = new THREE.Mesh(BOX, mm); m.scale.set(w, w, Lb); m.position.lerpVectors(a, b, .5); m.lookAt(b); scene.add(m); bolts.push({ m, life: .14 }); }
+  burst(b, 0xff6060, 4, 1.5, .06);
 }
 function heroFire(dir) {
   const o = V(hero.pos.x + dir.x * .55, .78, hero.pos.z + dir.z * .55);
   sfx('shot', o.x, o.z);
   const m = new THREE.Mesh(BULLET, heroShotMat); m.position.copy(o); m.lookAt(o.x + dir.x, o.y, o.z + dir.z); scene.add(m);
-  shots.push({ k: 'hb', m, dir: dir.clone(), sp: 18, life: .45, dmg: heroDmg(), pl: hero.pl });
+  shots.push({ k: 'hb', m, dir: dir.clone(), sp: 18, life: .5, dmg: heroDmg(), pl: hero.pl });
   hero.cd = .24; hero.recoil = 1;
 }
 function heroShootAt(p) {
@@ -2405,7 +2480,7 @@ function moveLocalHero(dt) {
   if (keys.has('KeyD') || keys.has('ArrowRight')) mx += 1;
   const ml = Math.hypot(mx, mz); if (ml > 1) { mx /= ml; mz /= ml; }
   const moving = ml > .1 && dt > 0;
-  const run = hero.sprint && hero.boost > 0, hsp = 3.6 * (run ? BOOST_MUL : 1);
+  const run = (hero.sprint && hero.boost > 0) || hero.starT > 0, hsp = 3.6 * (run ? BOOST_MUL : 1);
   if (moving) { hero.pos.x += mx * hsp * dt; hero.pos.z += mz * hsp * dt; hero.walk += hsp * dt; C.follow = true; C.goal = null; if (run) { hero.boost = Math.max(0, hero.boost - dt); if (Math.random() < dt * 14) burst(tmp.set(hero.pos.x, .2, hero.pos.z), 0xfacc15, 1, .6, .07); } }
   for (const e of enemies) {
     if (e.dead) continue;
@@ -2427,7 +2502,7 @@ function updateHero(dt, rdt, time) {
     if (hero.respawnT <= 0) { resetHero(); pfx('warp', hero.pos.x, 0, hero.pos.z); toast('O herói voltou!'); }
     return;
   }
-  hero.cd -= dt; hero.bombCd -= dt; hero.hurtT -= rdt; hero.recoil = Math.max(0, hero.recoil - rdt * 8);
+  hero.cd -= dt * (hero.starT > 0 ? 2 : 1); hero.bombCd -= dt; hero.hurtT -= rdt; hero.recoil = Math.max(0, hero.recoil - rdt * 8);
   let face, moving, aimP = null;
   if (hero.pl === ME) { face = moveLocalHero(dt); moving = face !== null; if (!TOUCH && mouse.ok) aimP = mouse.p; }
   else {
@@ -2490,7 +2565,7 @@ if (ONLINE) { Object.assign(S, freshPlayer()); PS[1] = pickKeys(freshPlayer(), P
 const bossWave = n => n >= 10 && n % 2 === 0;   // chefões só na onda 10, 12, 14...
 
 function waveList(n, team = -1) {
-  const W = [['rapido', 5], ['aranha', n >= 2 ? 2 : 0], ['tanque', n >= 2 ? 2 + n * .1 : 0], ['arqueiro', n >= 3 ? 2.2 : 0], ['bomba', n >= 4 ? 1.5 : 0], ['cura', n >= 5 ? 1 : 0], ['zumbi', n >= 5 ? .7 : 0], ['ogro', n >= 10 ? .3 : 0], ['mutante', n >= 15 ? .25 : 0]];
+  const W = [['rapido', 5], ['aranha', n >= 2 ? 2 : 0], ['tanque', n >= 2 ? 2 + n * .1 : 0], ['arqueiro', n >= 3 ? 2.2 : 0], ['bomba', n >= 4 ? 1.5 : 0], ['cura', n >= 5 ? 1 : 0], ['zumbi', n >= 5 ? .7 : 0], ['ogro', n >= 8 ? .6 : 0], ['mutante', n >= 15 ? .25 : 0]];
   const tot = W.reduce((a, [, w]) => a + w, 0), L = [];
   let side = Math.floor(Math.random() * 4);
   const count = 6 + Math.floor(n * 2.2);
@@ -2503,7 +2578,7 @@ function waveList(n, team = -1) {
   const side0 = () => team < 0 ? Math.floor(Math.random() * 4) : TEAM_SIDES[team][Math.floor(Math.random() * 2)];
   if (n === 10) L.splice(L.length >> 1, 0, { type: 'ogro', side: side0(), team });
   if (n === 15) L.splice(L.length >> 1, 0, { type: 'mutante', side: side0(), team });
-  if (n >= 20 && n % 5 === 0) L.push({ type: 'rex', side: side0(), boss: true, team });
+  if (n >= 20 && n % 5 === 0) L.push({ type: n >= 25 ? 'dragao' : 'rex', side: side0(), boss: true, team });
   if (bossWave(n)) {
     const nb = 1 + Math.floor(n / 9);
     for (let b = 0; b < nb; b++) L.splice(Math.floor(L.length * (b + 1) / (nb + 1)), 0, { type: (n / 3 + b) % 2 ? 'golem' : 'bruxo', side: team < 0 ? Math.floor(Math.random() * 4) : TEAM_SIDES[team][b % 2], boss: true, team });
@@ -2522,6 +2597,8 @@ function spawnFrom(item) {
 }
 function startWave() {
   if (S.waveActive || S.over) return;
+  if (MODE === 'solo' && S.wave >= 1 && !S.fresh) return newMapWave();
+  S.fresh = false;
   S.wave++; S.waveActive = true; S.spawnT = .3; sfx('wave');
   if (PVP) { const a = waveList(S.wave, 0), b = waveList(S.wave, 1); S.queue = []; for (let k = 0; k < Math.max(a.length, b.length); k++) { if (a[k]) S.queue.push(a[k]); if (b[k]) S.queue.push(b[k]); } }
   else S.queue = waveList(S.wave);
@@ -2543,7 +2620,7 @@ function updateWave(dt) {
     if (PVP) { withPlayer(0, give); withPlayer(1, give); } else give();
     for (const t of towers) t.hp = Math.min(t.maxHp, t.hp + t.maxHp * .3);
     for (const cs of CASTLES) { pfx('confetti', cs.x, 2.5, cs.z); pfx('coin', cs.x, 1, cs.z + 2.2); }
-    toast(`Onda ${S.wave} vencida! +🪙 ${bonus} e +${CASTLE_MAX / 10} de vida no castelo e nas armas`, 2800); bump('gold'); updateUI();
+    toast(`Onda ${S.wave} vencida! +🪙 ${bonus} e +${CASTLE_MAX / 10} de vida no castelo e nas armas${MODE === 'solo' ? '. A próxima onda vem num mapa novo!' : ''}`, 3200); bump('gold'); updateUI();
   }
 }
 // Modo contra: ondas saem sozinhas, de tempos em tempos
@@ -2699,8 +2776,8 @@ $('runBtn').onclick = toggleSprint;
 $('speed').onclick = () => { S.speed = S.speed === 1 ? 2 : 1; $('speed').textContent = S.speed + 'x'; };
 $('again').onclick = () => act({ c: 'again' });
 $('helpList').innerHTML = TOUCH
-  ? '<li>🧟 A partir da onda 5 aparecem os zumbis <b>Chipados</b>. Derrube um e ele solta uma ❤️: pegue e leve até o castelo para ganhar vida.</li><li>🛡️ Onda 10: o <b>Ogro</b> solta um escudo (1 minuto sem levar dano). ⚡ Onda 15: o <b>Mutante</b> solta fôlego para correr mais rápido. 🦖 Onda 20: chega o <b>Rei Rex</b>!</li><li>' + BICHOS_TXT + ' andam pelo mapa e atrapalham os monstros.</li><li>Ande com o controle redondo à esquerda.</li><li>O herói atira sozinho no monstro mais perto.</li><li>💣 joga uma bomba. 🛒 abre a loja de armas.</li><li>Toque nas placas de pedra para pôr armas.</li><li>Os monstros vêm de todos os lados e atacam suas armas.</li>'
-  : '<li>🧟 A partir da onda 5 aparecem os zumbis <b>Chipados</b>. Derrube um e ele solta uma ❤️: pegue e leve até o castelo para ganhar vida.</li><li>🛡️ Onda 10: o <b>Ogro</b> solta um escudo (1 minuto sem levar dano). ⚡ Onda 15: o <b>Mutante</b> solta fôlego para correr mais rápido. 🦖 Onda 20: chega o <b>Rei Rex</b>!</li><li>' + BICHOS_TXT + ' andam pelo mapa e atrapalham os monstros.</li><li><b>WASD</b> ou setas: anda com o herói.</li><li>O herói atira sozinho quando um monstro chega perto. <b>O mouse escolhe a direção</b>. Clique para atirar também.</li><li><b>Q</b> ou <b>espaço</b>: joga bomba onde o mouse aponta.</li><li>Clique nas placas de pedra para pôr armas.</li><li><b>B</b> ou 🛒: loja com armas novas.</li><li><b>Enter</b> começa a onda. Arraste para mover a câmera, roda do mouse para zoom.</li>';
+  ? '<li>🧟 A partir da onda 5 aparecem os zumbis <b>Chipados</b>. Derrube um e ele solta uma ❤️: pegue e leve até o castelo para ganhar vida.</li><li>🛡️ Onda 10: o <b>Ogro</b> solta um escudo (1 minuto sem levar dano). ⚡ Onda 15: o <b>Mutante</b> solta fôlego para correr mais rápido. 🦖 Onda 20: chega o <b>Rei Rex</b>! 🐉 Da onda 25 em diante: o <b>Dragão</b>, que cospe fogo!</li><li>' + BICHOS_TXT + ' andam pelo mapa e atrapalham os monstros.</li><li>Ande com o controle redondo à esquerda.</li><li>O herói atira sozinho no monstro mais perto.</li><li>💣 joga uma bomba. 🛒 abre a loja de armas.</li><li>Toque nas placas de pedra para pôr armas.</li><li>Os monstros vêm de todos os lados e atacam suas armas.</li>'
+  : '<li>🧟 A partir da onda 5 aparecem os zumbis <b>Chipados</b>. Derrube um e ele solta uma ❤️: pegue e leve até o castelo para ganhar vida.</li><li>🛡️ Onda 10: o <b>Ogro</b> solta um escudo (1 minuto sem levar dano). ⚡ Onda 15: o <b>Mutante</b> solta fôlego para correr mais rápido. 🦖 Onda 20: chega o <b>Rei Rex</b>! 🐉 Da onda 25 em diante: o <b>Dragão</b>, que cospe fogo!</li><li>' + BICHOS_TXT + ' andam pelo mapa e atrapalham os monstros.</li><li><b>WASD</b> ou setas: anda com o herói.</li><li>O herói atira sozinho quando um monstro chega perto. <b>O mouse escolhe a direção</b>. Clique para atirar também.</li><li><b>Q</b> ou <b>espaço</b>: joga bomba onde o mouse aponta.</li><li>Clique nas placas de pedra para pôr armas.</li><li><b>B</b> ou 🛒: loja com armas novas.</li><li><b>Enter</b> começa a onda. Arraste para mover a câmera, roda do mouse para zoom.</li>';
 $('bombKey').hidden = TOUCH;
 function addPower(p) { S.power = Math.round((S.power + p) * 100) / 100; S.dmgMul = 1 + S.power * .5; }
 let shopSig = '';
@@ -2871,6 +2948,33 @@ function onTap(x, y, isMouse) {
   if (!hinted) { hinted = true; toast('Toque nas placas de pedra para pôr armas. Ande com o controle à esquerda.'); }
 }
 
+// Pássaros guardiões: 3 por castelo voam em volta dele e só atacam os chefões (bicadas que tiram vida)
+const birds = [];
+{
+  const bm = M(0x6b4a2a), wm = M(0x8a6038), hm = M(0xf3f1ea), km = M(0xf5b324);
+  CASTLES.forEach(c => { for (let k = 0; k < 3; k++) {
+    const g = new THREE.Group(), wl = new THREE.Group(), wr = new THREE.Group();
+    box(bm, .22, .2, .55, 0, 0, 0, g); box(hm, .2, .2, .2, 0, .06, .33, g); box(km, .08, .07, .14, 0, .04, .48, g); box(bm, .2, .05, .22, 0, 0, -.36, g);
+    box(wm, .7, .04, .3, -.35, 0, 0, wl); box(wm, .7, .04, .3, .35, 0, 0, wr); wl.position.x = -.1; wr.position.x = .1; g.add(wl, wr);
+    const a = k / 3 * 6.28; g.position.set(wc(c.ci) + Math.cos(a) * 4.5, 5, wc(c.cj) + Math.sin(a) * 4.5); scene.add(g);
+    birds.push({ g, wl, wr, c, a, tg: null, cd: 0, ph: Math.random() * 6 });
+  } });
+}
+function updateBirds(dt, rdt) {
+  for (const b of birds) {
+    b.ph += rdt * (b.tg ? 18 : 9); const fl = Math.sin(b.ph) * .7; b.wl.rotation.z = fl; b.wr.rotation.z = -fl;
+    const cx = wc(b.c.ci), cz = wc(b.c.cj);
+    if (b.tg && (b.tg.dead || !enemies.includes(b.tg))) b.tg = null;
+    if (!b.tg) { let bd = 26; for (const e of enemies) if (e.T.boss && !e.dead && (!PVP || e.tc === b.c)) { const d = Math.max(Math.abs(e.pos.x - cx), Math.abs(e.pos.z - cz)); if (d < bd) { bd = d; b.tg = e; } } }
+    let tx, ty, tz;
+    if (b.tg) { const e = b.tg, an = b.a + time * 2.2; tx = e.pos.x + Math.cos(an) * 1.1; tz = e.pos.z + Math.sin(an) * 1.1; ty = e.T.size * 1.1 + .3 + Math.max(0, Math.sin(time * 3 + b.a)) * 1.3; }
+    else { b.a += rdt * .5; tx = cx + Math.cos(b.a) * 4.5; tz = cz + Math.sin(b.a) * 4.5; ty = 5 + Math.sin(time + b.a * 3) * .4; }
+    const p = b.g.position, k = 1 - Math.exp(-rdt * (b.tg ? 3.5 : 2)), ox = p.x, oz = p.z;
+    p.x += (tx - p.x) * k; p.y += (ty - p.y) * k; p.z += (tz - p.z) * k;
+    if (Math.hypot(p.x - ox, p.z - oz) > 1e-4) b.g.rotation.y = Math.atan2(p.x - ox, p.z - oz);
+    if (b.tg && dt && !GUEST && (b.cd -= dt) <= 0 && Math.hypot(p.x - b.tg.pos.x, p.z - b.tg.pos.z) < 2) { b.cd = .9; hurt(b.tg, b.tg.maxHp * .012 + 8); burst(V(b.tg.pos.x, b.tg.hitY + .4, b.tg.pos.z), 0xffffff, 4, 1.5, .06); }
+  }
+}
 // Nome do chefão em cima da cabeça
 const btags = new Map(), bv = V();
 function updateBossTags() {
@@ -2887,7 +2991,7 @@ function updateTension() {
   let tn = 0;
   for (const e of enemies) if (e.T.boss && !e.dead) { const c = e.tc || CASTLES[0]; tn = Math.max(tn, Math.max(Math.abs(e.pos.x - wc(c.ci)), Math.abs(e.pos.z - wc(c.cj))) < 16 ? 2 : 1); }
   const was = SND.tense | 0; if (tn === was) return;
-  if (tn > was) { sfx('alarm'); if (tn === 2) toast('⚠️ O chefão está chegando perto do castelo!', 2600); }
+  if (tn > was) { sfx('alarm'); if (!was) toast('🦅 Os pássaros guardiões foram atacar o chefão!', 2400); if (tn === 2) toast('⚠️ O chefão está chegando perto do castelo!', 2600); }
   SND.tense = tn; SND.step = 0;
 }
 // Setas na borda da tela mostram monstros fora de vista
@@ -2924,7 +3028,7 @@ function loop(now) {
     if (ONLINE) for (const hh of heroes) withPlayer(hh.pl, () => updateHero(dt, rdt, time)); else updateHero(dt, rdt, time);
     updateShots(dt); updateClouds(dt); updateRads(dt, rdt); updateHearts(dt, rdt); updateAnimals(dt); updateDrops(dt, rdt);
   }
-  updateParticles(rdt); updatePfx(rdt); updateBossTags(); updateTension();
+  updateParticles(rdt); updatePfx(rdt); updateBossTags(); updateTension(); updateBirds(dt, rdt);
   for (const hh of heroes) heroExtras(hh, GUEST ? 0 : dt, time);
   if (SND.ac && SND.sfxOn && dt && (stepT -= rdt) <= 0) {
     stepT = .26;
@@ -2972,7 +3076,7 @@ function makeSnap(sdt) {
   return { t: 's', me, foe: Math.ceil(pget(0, 'castle')), w: S.wave, wa: S.waveActive, q: S.queue.length, o: S.over, win: S.winner, nt: r2(S.nextT), cs: CASTLES.map(c => r2(c.shake)),
     h: heroes.map(hh => [r2(hh.pos.x), r2(hh.pos.z), r2(hh.g.rotation.y), Math.ceil(hh.hp), hh.dead ? 1 : 0, hh.life, r2(hh.recoil), hh.hurtT > 0 ? 1 : 0, r2(Math.max(0, hh.bombCd)), Math.ceil(hh.shieldT || 0), r2(hh.boost || 0)]),
     an: animals.map(a => [r2(a.pos.x), r2(a.pos.z), r2(a.g.rotation.y), r2(a.walk)]),
-    dr: drops.map(d => [d.id, d.kind === 'escudo' ? 0 : 1, r2(d.x), r2(d.z), r2(d.life)]),
+    dr: drops.map(d => [d.id, DROP_KINDS.indexOf(d.kind), r2(d.x), r2(d.z), r2(d.life)]),
     e: enemies.filter(e => !e.dead).map(e => [e.id, ETK.indexOf(e.type), e.team, r2(e.pos.x), r2(e.pos.z), r2(e.g.rotation.y), Math.ceil(e.hp), e.maxHp, e.bar.g.visible ? 1 : 0, tint(e), r2(e.inner.position.z), r2(e.walk)]),
     tw: towers.map(t => [t.pad.n, TTK.indexOf(t.type), t.lv, Math.ceil(t.hp), t.owner, t.aim ? r2(t.aim.rotation.y) : 0, t.bar.g.visible ? 1 : 0,
       t.beam && t.beam.visible ? [t.beam.position.x, t.beam.position.y, t.beam.position.z, t.beam.rotation.x, t.beam.rotation.y, t.beam.rotation.z, t.beam.scale.x, t.beam.scale.z].map(r2) : 0]),
@@ -3051,11 +3155,12 @@ function applySnap(m) {
   for (const hh of [...hearts]) if (!hseen.has(hh)) removeHeart(hh);
   (m.an || []).forEach((a, k) => { const an = animals[k]; if (an) { an.tx = a[0]; an.tz = a[1]; an.try = a[2]; an.tw = a[3]; } });
   const dseen = new Set();
-  for (const a of m.dr || []) { const d = drops.find(q => q.id === a[0]) || dropItem(a[1] ? 'raio' : 'escudo', a[2], a[3], a[0]); d.life = a[4]; dseen.add(d); }
+  for (const a of m.dr || []) { const d = drops.find(q => q.id === a[0]) || dropItem(DROP_KINDS[a[1]] || 'raio', a[2], a[3], a[0]); d.life = a[4]; dseen.add(d); }
   for (const d of [...drops]) if (!dseen.has(d)) removeDrop(d);
   for (const a of m.fx) {
     if (a[0] === 'b') burst(V(a[1], a[2], a[3]), a[4], a[5], a[6], a[7]);
     else if (a[0] === 'd') burstDir(V(a[1], a[2], a[3]), V(a[4], 0, a[5]), a[6], a[7], a[8], a[9]);
+    else if (a[0] === 'L') laserBeam(V(a[1], a[2], a[3]), V(a[4], a[5], a[6]));
     else if (a[0] === 'z') zap(V(a[1], a[2], a[3]), V(a[4], a[5], a[6]), a[7] ? radZapMat : zapMat);
     else if (a[0] === 'c') dropCoin(V(a[1], 0, a[2]));
     else if (a[0] === 'p') pfx(a[1], a[2], a[3], a[4], a[5], a[6] || undefined);
@@ -3208,12 +3313,34 @@ async function startNet() {
   });
 }
 
+// ===== Mapa novo a cada onda (jogo sozinho) =====
+// Guarda ouro, onda, vida do castelo, armas compradas e as armas do campo, e recarrega com outro mapa sorteado.
+function newMapWave() {
+  const st = { gold: S.gold, castle: S.castle, wave: S.wave, power: S.power, hw: S.hw, owned: [...S.owned], un: Object.keys(TT).filter(k => S.unlocked.has(TT[k])), bk: S.bossKills || 0,
+    boost: hero.boost || 0, shield: hero.shieldT || 0, star: hero.starT || 0, tw: towers.filter(t => !t.dead).map(t => [t.type, t.lv, t.pad.n, t.inv]) };
+  try { sessionStorage.setItem('vd-cont', JSON.stringify(st)); } catch (e) { S.fresh = true; return startWave(); }
+  $('load').classList.remove('hide');
+  const q = new URLSearchParams(location.search); q.set('mapa', (Math.random() * 2 ** 31) | 0); q.set('cont', '1');
+  setTimeout(() => { location.href = location.pathname + '?' + q; }, 60);
+}
+(() => {
+  if (MODE !== 'solo' || !QS0.has('cont')) return;
+  let st = null; try { st = JSON.parse(sessionStorage.getItem('vd-cont')); sessionStorage.removeItem('vd-cont'); } catch (e) {}
+  const q = new URLSearchParams(location.search); q.delete('cont'); history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''));
+  if (!st) return;
+  Object.assign(S, { gold: st.gold, castle: st.castle, wave: st.wave, hw: st.hw, owned: new Set(st.owned), unlocked: new Set(st.un.map(k => TT[k])), bossKills: st.bk });
+  S.power = 0; addPower(st.power);
+  hero.boost = st.boost; hero.shieldT = st.shield; hero.starT = st.star;
+  for (const [type, lv, n, inv] of st.tw) { const pad = pads[n]; if (pad && !pad.t && (!PVP || pad.owner === 0)) { const t = makeTower(type, pad, 0, lv); t.inv = inv; } else S.gold += Math.round(inv * .8); }
+  $('help').classList.remove('show'); S.started = true; S.fresh = true;
+  setTimeout(() => { startWave(); toast(`🗺️ Mapa novo! Onda ${S.wave}: monstros vindo de: ${[...new Set(S.queue.map(q => SIDE_NAME[q.side]))].join(', ')}`, 3200); }, 400);
+})();
 resize(); updateUI();
-C.tx = hero.home.x; C.tz = hero.home.z; clampCam(); updateCam();
+C.tx = hero.home.x; C.tz = hero.home.z; clampCam(); updateCam(); C.tz = hero.home.z; clampCam(); updateCam();
 if (ONLINE) startNet();
-setTimeout(() => $('load').classList.add('hide'), Math.max(0, 5000 - performance.now()));
+setTimeout(() => $('load').classList.add('hide'), QS0.has('cont') || S.fresh ? 0 : Math.max(0, 5000 - performance.now()));
 requestAnimationFrame(loop);
-if (location.search.includes('teste')) window.__vd = { SND, sfx, setMusic, setSfx, S, pads, hearts, dropHeart, PORTALS, PSEED, ET, spawnEnemy, waveList, bossWave, trail, placeTower, startWave, enemies, towers, hero, heroes, NET, MODE, ROLE, ME, CASTLES, act, pget, PS, gE, roomLink, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, heroShootAt, rads, renderShop: () => renderShop(), giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE, pfx, pfxList, FXM, PIXEL, explodeAt, BIOMA, Hjs, HAMP, giants, volcs, SND, animals, drops, dropItem, hurt, buildEnemy };
+if (location.search.includes('teste')) window.__vd = { SND, sfx, setMusic, setSfx, S, pads, hearts, dropHeart, PORTALS, PSEED, ET, spawnEnemy, waveList, bossWave, trail, placeTower, startWave, enemies, towers, hero, heroes, NET, MODE, ROLE, ME, CASTLES, act, pget, PS, gE, roomLink, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, heroShootAt, rads, renderShop: () => renderShop(), giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE, pfx, pfxList, FXM, PIXEL, explodeAt, BIOMA, Hjs, HAMP, giants, volcs, SND, newMapWave, towers, enemies, startWave, HW, TT, birds, heroAttack, hero, animals, drops, dropItem, hurt, buildEnemy };
 </script>
 </body>
 </html>
