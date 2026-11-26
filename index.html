@@ -74,12 +74,14 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
 #fpHp{position:fixed;left:50%;bottom:calc(var(--sab) + 18px);width:220px;max-width:40vw;height:14px;transform:translateX(-50%);background:#000a;border:2px solid #fffa;border-radius:9px;overflow:hidden;display:none;pointer-events:none}
 #fpHp i{display:block;height:100%;width:100%;background:linear-gradient(#7ef08f,#2fbf4a);transition:width .15s}
 #fpHint{position:fixed;left:50%;top:calc(50% + 40px);transform:translateX(-50%);background:#000b;color:#fff;padding:8px 14px;border-radius:12px;pointer-events:none;display:none;white-space:nowrap;font-weight:800}
-#fpBtns{position:fixed;right:calc(var(--sar) + 14px);bottom:calc(var(--sab) + 104px);display:none;align-items:flex-end;gap:14px;touch-action:none}
+#fpBtns{position:fixed;right:calc(var(--sar) + 92px);bottom:calc(var(--sab) + 84px);display:none;flex-direction:column;align-items:center;gap:12px;touch-action:none}
 #fpFire{width:88px;height:88px;border-radius:50%;background:#e23b3bdd;box-shadow:0 4px 0 #8f1f1f,0 6px 14px #0006}#fpFire .ico{width:40px;height:40px;margin:0}
 #fpFire.on{transform:translateY(3px);box-shadow:0 1px 0 #8f1f1f}
 #fpJump{width:64px;height:64px;border-radius:50%;background:var(--card);font-size:26px;box-shadow:0 4px 12px #0006}
 body.fp #cross,body.fp #fpHp{display:block}body.fp #fpHint:not([hidden]){display:block}body.fp.touch #fpBtns{display:flex}
-body.fp #shopBtn,body.fp #wave,body.fp #aimHint{display:none}
+body.fpSolo #shopBtn,body.fp.fpWaving #wave{display:none}body.touch #fpHp{left:calc(var(--sal) + 18px);bottom:calc(var(--sab) + 162px);width:132px;transform:none}
+body.touch #viewBtn{width:60px;height:60px;border-radius:50%;padding:0;flex-direction:column;justify-content:center;gap:1px;font-size:10px;line-height:1.05}body.touch #viewBtn .ico{margin:0;width:22px;height:22px}
+#viewBtn{display:flex;align-items:center;gap:4px;padding:0 14px;background:var(--card);box-shadow:0 4px 12px #0006;font-weight:800}#viewBtn[hidden]{display:none}#viewBtn.on{background:#ffc93c;color:#2a1a00}
 .ico{width:1.25em;height:1.25em;flex:none;vertical-align:-.25em;margin-right:.4em;filter:drop-shadow(0 1px 0 #0006)}
 .pill .ico{width:24px;height:24px;margin-right:2px}#menuBtn .ico,#helpBtn .ico,#musPill .ico{margin:0}#menuBtn .lbl{font-family:"Lilita One",Nunito,sans-serif;font-weight:400;letter-spacing:.5px}
 .pill b{font-family:"Lilita One",Nunito,sans-serif;font-weight:400;font-size:17px;letter-spacing:.5px}
@@ -189,6 +191,7 @@ body.fp #shopBtn,body.fp #wave,body.fp #aimHint{display:none}
 <div id="fpHint" hidden>Clique na tela para mirar · Esc solta o mouse</div>
 <div id="fpBtns"><button id="fpJump" aria-label="Pular">▲</button><button id="fpFire" aria-label="Atirar (segure)"><span class="hi" data-i="target"></span></button></div>
 <div id="bar">
+  <button id="viewBtn" hidden><span class="hi" data-i="eye"></span><span class="t">1ª pessoa</span></button>
   <button id="shopBtn" class="round" aria-label="Abrir loja">🛒</button>
   <button id="runBtn" class="round" aria-label="Correr mais rápido" hidden>⚡<small id="runLeft"></small></button>
   <button id="bomb" aria-label="Jogar bomba">💣<small id="bombKey">Q</small></button>
@@ -352,6 +355,7 @@ const ICO = {
   keys: ['KKKKKKKKKK', 'KWWKWWKWWK', 'KKKKKKKKKK', 'KWKWWWWKWK', 'KKKKKKKKKK'],
   mouse: ['..KKKK..', '.KWWKSK.', 'KWWWKSSK', 'KKKKKKKK', 'KSSSSSSK', 'KSSSSSSK', '.KSSSSK.', '..KKKK..'],
   pad: ['KKKKKKKKKK', 'KSSSSKSSSK', 'KSSSSKSSSK', 'KKKKKKKKKK', 'KSSKSSSSSK', 'KSSKSSSSSK', 'KKKKKKKKKK'],
+  eye: ['..........', '...KKKK...', '.KKWWWWKK.', 'KWWWccWWWK', 'KWWcKKcWWK', 'KWWcKKcWWK', 'KWWWccWWWK', '.KKWWWWKK.', '...KKKK...'],
   play: ['KK......', 'KWKK....', 'KWWWKK..', 'KWWWWWKK', 'KWWWWWKK', 'KWWWKK..', 'KWKK....', 'KK......'],
 };
 /** Ícone em SVG (pixels nítidos). Junta pixels vizinhos da mesma cor para ficar leve. */
@@ -495,7 +499,8 @@ const BICHOS_TXT = { floresta: '🐄 Bois, bodes e coelhos', deserto: '🐪 Came
 const PVP = MODE === "pvp", ONLINE = MODE !== "solo", ME = ROLE === "guest" ? 1 : 0, GUEST = ROLE === "guest";
 // Castelos (centro em coordenadas de casa). No contra, cada jogador tem o seu: 0 a oeste, 1 a leste.
 const CASTLE_MAX = 500;   // vida do castelo (todos os modos)
-const CASTLES = PVP ? [{ ci: HALF - 15.5, cj: C0 }, { ci: HALF + 14.5, cj: C0 }] : [{ ci: C0, cj: C0 }];
+const PVP_GAP = 40;   // casas entre os dois castelos no modo contra (era 30)
+const CASTLES = PVP ? [{ ci: HALF - PVP_GAP / 2 - .5, cj: C0 }, { ci: HALF + PVP_GAP / 2 - .5, cj: C0 }] : [{ ci: C0, cj: C0 }];
 // Portais: 0 norte, 1 sul, 2 oeste, 3 leste. No contra, os do jogador 0 são norte e oeste; os do jogador 1, sul e leste.
 const SIDE_TEAM = [0, 1, 0, 1];
 const castleDist = (i, j) => Math.min(...CASTLES.map(c => Math.max(Math.abs(i - c.ci), Math.abs(j - c.cj))));
@@ -1948,6 +1953,18 @@ const hitAny = (tg, dmg, flash) => tg.kind === 'hero' ? damageTarget(tg, dmg) : 
 // Herói inimigo (só no contra) que um tiro/área do jogador pl pode acertar
 const foeHero = pl => PVP ? heroes[1 - pl] : null;
 function hitFoeHero(pl, x, z, rad, dmg) { const fh = foeHero(pl); if (fh && !fh.dead && Math.hypot(fh.pos.x - x, fh.pos.z - z) < rad + fh.r) { damageTarget(fh, dmg); return fh; } return null; }
+// Contra: as armas e o castelo do outro jogador também levam tiro e bomba do herói.
+const PVP_HIT_TOWER = 1, PVP_HIT_CASTLE = .4, CASTLE_R = 2.2;
+function pvpStructs(pl) {
+  if (!PVP) return [];
+  const L = [];
+  for (const t of towers) if (!t.dead && t.owner !== pl) L.push({ tg: t, x: t.pos.x, z: t.pos.z, r: t.r, k: PVP_HIT_TOWER });
+  for (const cs of CASTLES) if (cs.T.pl !== pl) L.push({ tg: cs.T, x: cs.x, z: cs.z, r: CASTLE_R, k: PVP_HIT_CASTLE, box: true });
+  return L;
+}
+const structDist = (o, x, z) => o.box ? Math.hypot(Math.max(Math.abs(x - o.x) - o.r, 0), Math.max(Math.abs(z - o.z) - o.r, 0)) : Math.max(0, Math.hypot(x - o.x, z - o.z) - o.r);
+function pvpStructHit(pl, x, z, rad, dmg) { for (const o of pvpStructs(pl)) if (structDist(o, x, z) < rad) { damageTarget(o.tg, dmg * o.k); return o; } return null; }
+function pvpStructArea(pl, x, z, rad, dmg) { for (const o of pvpStructs(pl)) if (structDist(o, x, z) < rad) damageTarget(o.tg, dmg * o.k); }
 function areaDamage(p, radius, dmg, castleDmg, team = -1) {
   const foe = PVP ? 1 - team : -1, ok = pl => !PVP || pl === foe;
   for (const hh of heroes) if (!hh.dead && ok(hh.pl) && Math.hypot(hh.pos.x - p.x, hh.pos.z - p.z) < radius + hh.r) damageTarget(hh, dmg);
@@ -2259,7 +2276,7 @@ function explodeAt(p, radius, dmg, big, pl = 0, heroHit = false) {
   p.y = .2; sfx('boom', p.x, p.z); pfx(big ? 'bigboom' : 'boom', p.x, 0, p.z, big ? 1 : .75);
   burst(p, 0xffa53a, big ? 18 : 10, big ? 4 : 3, big ? .17 : .14); burst(p, 0x777777, big ? 9 : 6, 2, .12);
   for (const e of [...enemies]) if (!e.dead && !(PVP && e.team === pl) && Math.hypot(e.pos.x - p.x, e.pos.z - p.z) <= radius + e.r) hurt(e, dmg);
-  if (heroHit) hitFoeHero(pl, p.x, p.z, radius, dmg * .5);
+  if (heroHit) { hitFoeHero(pl, p.x, p.z, radius, dmg * .5); pvpStructArea(pl, p.x, p.z, radius, dmg * .5); }
 }
 function updateShots(dt) {
   for (const s of shots) {
@@ -2273,6 +2290,7 @@ function updateShots(dt) {
     if (s.k === 'hb') {
       const step = s.sp * dt; s.m.position.addScaledVector(s.dir, step); s.life -= dt;
       const pl = s.pl || 0, land = () => { if (s.rad) radArea(s.m.position, pl); else if (s.poison) { poisonArea(s.m.position, 1.4, 0, s.poison, pl); clouds[clouds.length - 1].hero = PVP; } else burst(s.m.position, 0x93c5fd, 3, 1, .06); };
+      if (PVP && pvpStructHit(pl, s.m.position.x, s.m.position.z, .18, s.boom ? s.dmg * 4 : s.dmg)) { s.done = true; land(); continue; }
       if (s.life <= 0 || hitsSolid(s.m.position.x, s.m.position.z)) { s.done = true; land(); continue; }
       for (const e of enemies) if (!e.dead && !(PVP && e.team === pl) && Math.hypot(e.pos.x - s.m.position.x, e.pos.z - s.m.position.z) < e.r + .18) {
         hurt(e, s.dmg); s.done = true; if (s.boom) stickArrow(e, pl); else land();
@@ -2539,6 +2557,7 @@ function heroAttack(dir) {
       if (e.kind === 'hero') { damageTarget(e, 3 + n * .6); continue; }
       hurt(e, 3 + n * .6); e.burnDps = Math.max(e.burnT > 0 ? e.burnDps : 0, 4 + n * .8); e.burnT = 2.5;
     }
+    for (const st of pvpStructs(hero.pl)) { const dx = st.x - hero.pos.x, dz = st.z - hero.pos.z, d = Math.hypot(dx, dz) || 1e-3; if (d <= HW.fogo.range + st.r && (dx * dir.x + dz * dir.z) / d >= .75) damageTarget(st.tg, (3 + n * .6) * st.k); }
     return;
   }
   if (w === 'raio') {
@@ -2575,6 +2594,7 @@ function heroAttack(dir) {
     hurt(e, e.T.boss ? e.maxHp * (e.type === 'rex' ? .06 : e.type === 'dragao' ? .045 : .04) + 30 + n * 4 : e.maxHp + 50);
     burst(V(e.pos.x, e.hitY + .2, e.pos.z), 0xff4040, 6, 2, .08);
   }
+  for (const st of pvpStructs(hero.pl)) { const dx = st.x - o.x, dz = st.z - o.z, t = dx * dir.x + dz * dir.z; if (t >= 0 && t <= L + st.r && Math.abs(dx * dir.z - dz * dir.x) <= st.r + .3) damageTarget(st.tg, (40 + n * 4) * st.k); }
   laserBeam(o, V(o.x + dir.x * L, .8, o.z + dir.z * L));
 }
 const heroLaserMat = new THREE.MeshBasicMaterial({ color: 0xff2a2a }), laserCore = new THREE.MeshBasicMaterial({ color: 0xffe4e4 });
@@ -2675,9 +2695,11 @@ function updateHero(dt, rdt, time) {
     if (d < nd) { nd = d; nearE = e; }
     if (d < 3.5) danger = true;
   }
-  if (FP.on && hero.pl === ME) {
+  if (!nearE && PVP) for (const st of pvpStructs(hero.pl)) { const d = structDist(st, hero.pos.x, hero.pos.z); if (d < nd) { nd = d; nearE = { pos: V(st.x, 0, st.z) }; } }
+  const fpCtl = hero.pl === ME ? (FP.on ? FP : null) : (NET.inp && NET.inp.fp && NET.inp.life === hero.life ? NET.inp : null);
+  if (fpCtl) {
     // primeira pessoa: atira para onde a mira aponta, só quando você aperta. Ajuda leve puxa para o monstro perto da mira.
-    aimV.set(-Math.sin(FP.yaw), 0, -Math.cos(FP.yaw));
+    aimV.set(-Math.sin(fpCtl.yaw), 0, -Math.cos(fpCtl.yaw));
     let bestA = .1, tgt = null;
     for (const e of TG) {
       const dx = e.pos.x - hero.pos.x, dz = e.pos.z - hero.pos.z, d = Math.hypot(dx, dz);
@@ -2686,7 +2708,7 @@ function updateHero(dt, rdt, time) {
     }
     if (tgt) aimV.set(tgt.pos.x - hero.pos.x, 0, tgt.pos.z - hero.pos.z).normalize();
     face = null; hero.g.rotation.y = Math.atan2(aimV.x, aimV.z);
-    if (FP.fire && dt && hero.cd <= 0) { heroAttack(aimV); FP.kick = 1; }
+    if (fpCtl.fire && dt && hero.cd <= 0) { heroAttack(aimV); if (hero.pl === ME) FP.kick = 1; }
   } else if (nearE && dt) {
     if (aimP) {
       aimV.set(aimP.x - hero.pos.x, 0, aimP.z - hero.pos.z).normalize();
@@ -2947,7 +2969,7 @@ $('helpList').innerHTML = TOUCH
   ? '<li>' + ico('zombie') + ' A partir da onda 5 aparecem os zumbis <b>Chipados</b>. Derrube um e ele solta uma ' + ico('heart') + ': pegue e leve até o castelo para ganhar vida.</li><li>' + ico('shield') + ' Onda 10: o <b>Ogro</b> solta um escudo (1 minuto sem levar dano). ' + ico('bolt') + ' Onda 15: o <b>Mutante</b> solta fôlego para correr mais rápido. ' + ico('dino') + ' Onda 20: chega o <b>Rei Rex</b>! ' + ico('dragon') + ' Da onda 25 em diante: o <b>Dragão</b>, que cospe fogo!</li><li>' + ico('cow') + BICHOS_TXT.replace(/^\S+\s/, '') + ' andam pelo mapa e atrapalham os monstros.</li><li>Ande com o controle redondo à esquerda.</li><li>O herói atira sozinho no monstro mais perto.</li><li>' + ico('bomb') + ' joga uma bomba. ' + ico('cart') + ' abre a loja de armas.</li><li>Toque nas placas de pedra para pôr armas.</li><li>Os monstros vêm de todos os lados e atacam suas armas.</li>'
   : '<li>' + ico('zombie') + ' A partir da onda 5 aparecem os zumbis <b>Chipados</b>. Derrube um e ele solta uma ' + ico('heart') + ': pegue e leve até o castelo para ganhar vida.</li><li>' + ico('shield') + ' Onda 10: o <b>Ogro</b> solta um escudo (1 minuto sem levar dano). ' + ico('bolt') + ' Onda 15: o <b>Mutante</b> solta fôlego para correr mais rápido. ' + ico('dino') + ' Onda 20: chega o <b>Rei Rex</b>! ' + ico('dragon') + ' Da onda 25 em diante: o <b>Dragão</b>, que cospe fogo!</li><li>' + ico('cow') + BICHOS_TXT.replace(/^\S+\s/, '') + ' andam pelo mapa e atrapalham os monstros.</li><li><b>WASD</b> ou setas: anda com o herói.</li><li>O herói atira sozinho quando um monstro chega perto. <b>O mouse escolhe a direção</b>. Clique para atirar também.</li><li><b>Q</b> ou <b>espaço</b>: joga bomba onde o mouse aponta.</li><li>Clique nas placas de pedra para pôr armas.</li><li><b>B</b> ou ' + ico('cart') + ': loja com armas novas.</li><li><b>Enter</b> começa a onda. Arraste para mover a câmera, roda do mouse para zoom.</li>';
 $('bombKey').hidden = TOUCH;
-$('helpList').insertAdjacentHTML('afterbegin', '<li>' + ico('target') + ' Nas ondas <b>5, 10, 15...</b> vem um chefão e o jogo vira <b>primeira pessoa</b>: ' + (TOUCH ? 'arraste a tela para mirar, segure o botão vermelho para atirar e use ▲ para pular' : 'o mouse mira, o clique atira, <b>espaço</b> pula e <b>Q</b> joga bomba') + '. A loja fecha até você vencer a onda.</li>');
+$('helpList').insertAdjacentHTML('afterbegin', '<li>' + ico('target') + ' Nas ondas <b>5, 10, 15...</b> vem um chefão e o jogo vira <b>primeira pessoa</b>: ' + (TOUCH ? 'arraste a tela para mirar, segure o botão vermelho para atirar e use ▲ para pular' : 'o mouse mira, o clique atira, <b>espaço</b> pula e <b>Q</b> joga bomba') + '. A loja fecha até você vencer a onda. No jogo online, o botão <b>1ª pessoa</b>' + (TOUCH ? '' : ' (ou a tecla <b>V</b>)') + ' troca a visão quando você quiser.</li>');
 for (const el of document.querySelectorAll('.hi[data-i]')) el.outerHTML = ico(el.dataset.i, el.className.replace('hi', '').trim());
 function addPower(p) { S.power = Math.round((S.power + p) * 100) / 100; S.dmgMul = 1 + S.power * .5; }
 let shopSig = '';
@@ -2966,7 +2988,7 @@ function renderShop() {
     `${T.desc}. Depois custa 🪙 ${T.cost} cada${pw(S.unlocked.has(T) ? 0 : T.power)}`,
     S.unlocked.has(T) ? '<button class="on" disabled>✓ Liberada</button>' : `<button class="pri" data-unlock="${k}" ${S.gold >= T.unlock ? '' : 'disabled'}>Liberar 🪙 ${T.unlock}</button>`)).join('');
 }
-function openShop() { if (S.over) return; if (FP.on) return toast('Na onda do chefão a loja fica fechada. Vença a onda para comprar!', 2600); closeSheet(); S.shop = true; shopSig = ''; renderShop(); $('shop').classList.add('show'); }
+function openShop() { if (S.over) return; if (document.pointerLockElement) document.exitPointerLock(); if (FP.on && !ONLINE) return toast('Na onda do chefão a loja fica fechada. Vença a onda para comprar!', 2600); closeSheet(); S.shop = true; shopSig = ''; renderShop(); $('shop').classList.add('show'); }
 function closeShop() { S.shop = false; $('shop').classList.remove('show'); updateUI(); }
 $('shopBtn').onclick = openShop;
 $('shopClose').onclick = closeShop;
@@ -3017,6 +3039,7 @@ addEventListener('keydown', e => {
   if (e.code === 'Enter') act({ c: 'wave' });
   if (e.code === 'KeyB') { S.shop ? closeShop() : openShop(); }
   if (e.code === 'Escape' && S.shop) closeShop();
+  if (e.code === 'KeyV') toggleView();
   if (e.code === 'Space' && FP.on) { e.preventDefault(); fpJump(); }
   else if (e.code === 'KeyQ' || e.code === 'Space') { e.preventDefault(); throwBomb(); }
   if ((e.code === 'ShiftLeft' || e.code === 'ShiftRight') && !e.repeat) toggleSprint();
@@ -3137,7 +3160,7 @@ const FP_GLOW = { blaster: 0x93c5fd, fogo: 0xff8a1f, raio: 0xfde047, radiacao: 0
 const fpTouch = new Map();
 function fpSet(on) {
   if (FP.on === on) return;
-  FP.on = on; document.body.classList.toggle('fp', on);
+  FP.on = on; document.body.classList.toggle('fp', on); document.body.classList.toggle('fpSolo', on && !ONLINE); viewBtnUI();
   if (!FP.arms) FP.arms = makeFpArms();
   FP.arms.visible = on; FP.fire = false; FP.y = FP.vy = 0; fpTouch.clear(); $('fpFire').classList.remove('on');
   ptrs.clear(); drag = null;
@@ -3145,13 +3168,19 @@ function fpSet(on) {
   if (on) {
     closeSheet();
     FP.yaw = hero.g.rotation.y + Math.PI; FP.pitch = -.06;
-    toast('👑 Onda do chefão! Agora você vê pelos olhos do herói. ' + (TOUCH ? 'Arraste a tela para mirar, segure o botão vermelho para atirar.' : 'Clique na tela, mire com o mouse e clique para atirar. Espaço pula.'), 4500);
+    showToast((ONLINE ? '👁️ Primeira pessoa! ' : '👑 Onda do chefão! Agora você vê pelos olhos do herói. ') + (TOUCH ? 'Arraste a tela para mirar, segure o botão vermelho para atirar.' : 'Clique na tela, mire com o mouse e clique para atirar. Espaço pula.'), 4500);
   } else {
     if (document.pointerLockElement) document.exitPointerLock();
     hero.g.visible = hero.bar.g.visible = !hero.dead; C.follow = true; C.goal = null;
+    if (ONLINE) showToast('Visão normal. Aqui você coloca armas nas placas.', 2200);
   }
   updateCam();
 }
+// No online cada jogador escolhe: primeira pessoa ou normal (fica guardado no aparelho).
+FP.pick = (() => { try { return localStorage.getItem('vd-visao') === '1p'; } catch (e) { return false; } })();
+function viewBtnUI() { const b = $('viewBtn'); b.hidden = !ONLINE; b.classList.toggle('on', FP.pick); b.querySelector('.t').textContent = FP.pick ? (TOUCH ? 'Normal' : 'Visão normal') : '1ª pessoa'; b.setAttribute('aria-label', FP.pick ? 'Voltar para a visão normal' : 'Jogar em primeira pessoa'); }
+function toggleView() { if (!ONLINE) return; FP.pick = !FP.pick; try { localStorage.setItem('vd-visao', FP.pick ? '1p' : 'normal'); } catch (e) {} viewBtnUI(); }
+$('viewBtn').onclick = toggleView; viewBtnUI();
 function fpJump() { if (!FP.on || hero.dead || FP.y > 0) return; FP.vy = FP_JUMP; sfx('step', hero.pos.x, hero.pos.z); }
 function fpPointerDown(e) {
   if (e.pointerType === 'mouse') {
@@ -3183,7 +3212,8 @@ document.addEventListener('pointerlockchange', () => { if (document.pointerLockE
 }
 // Chamado a cada quadro: liga/desliga pela onda, faz o pulo e mexe os bracinhos.
 function fpFrame(rdt, dt) {
-  const want = fpWave(S.wave) && S.waveActive && !S.over && !GUEST;
+  const want = ONLINE ? FP.pick && !S.over : fpWave(S.wave) && S.waveActive && !S.over;
+  document.body.classList.toggle('fpWaving', !!S.waveActive);
   if (want !== FP.on) fpSet(want);
   if (!FP.on) return;
   hero.g.visible = hero.bar.g.visible = false;
@@ -3193,7 +3223,7 @@ function fpFrame(rdt, dt) {
   if (moving && FP.y === 0) FP.bob += rdt * 10;
   C.tx = hero.pos.x; C.tz = hero.pos.z; C.follow = true; C.goal = null;
   $('fpHpIn').style.width = (hero.dead ? 0 : Math.max(0, hero.hp / hero.maxHp) * 100) + '%';
-  $('fpHint').hidden = TOUCH || document.pointerLockElement === canvas || !S.started;
+  $('fpHint').hidden = TOUCH || document.pointerLockElement === canvas || (!ONLINE && !S.started) || S.shop;
 }
 function fpArmsPose(time) {
   if (!FP.on || !FP.arms) return;
@@ -3500,7 +3530,7 @@ function guestFrame(rdt, dt) {
   for (const an of animals) { if (an.tx === undefined) continue; an.pos.x += (an.tx - an.pos.x) * f; an.pos.z += (an.tz - an.pos.z) * f; an.g.rotation.y = lerpAng(an.g.rotation.y, an.try, f); an.walk += (an.tw - an.walk) * f; animAnimal(an); }
   if (NET.live && (inT += rdt) >= .05) {
     inT = 0; const hh = heroes[ME];
-    NET.send({ t: 'i', x: r2(hh.pos.x), z: r2(hh.pos.z), life: hh.life, sp: hh.sprint ? 1 : 0, aim: !TOUCH && mouse.ok ? [r2(mouse.p.x), r2(mouse.p.z)] : null });
+    NET.send({ t: 'i', x: r2(hh.pos.x), z: r2(hh.pos.z), life: hh.life, sp: hh.sprint ? 1 : 0, aim: !FP.on && !TOUCH && mouse.ok ? [r2(mouse.p.x), r2(mouse.p.z)] : null, fp: FP.on ? 1 : 0, yaw: Math.round(FP.yaw * 1000) / 1000, fire: FP.fire ? 1 : 0 });
   }
 }
 function onNet(m) {
