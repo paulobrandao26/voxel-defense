@@ -68,6 +68,18 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
 #toast.show{opacity:1}
 .ov{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#0009;padding:20px}
 .ov.show{display:flex}
+#cross{position:fixed;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;pointer-events:none;display:none;z-index:5}
+#cross::before,#cross::after{content:"";position:absolute;background:#fff;box-shadow:0 0 0 1.5px #000b;border-radius:1px}
+#cross::before{left:12px;top:0;width:2px;height:26px}#cross::after{top:12px;left:0;height:2px;width:26px}
+#fpHp{position:fixed;left:50%;bottom:calc(var(--sab) + 18px);width:220px;max-width:40vw;height:14px;transform:translateX(-50%);background:#000a;border:2px solid #fffa;border-radius:9px;overflow:hidden;display:none;pointer-events:none}
+#fpHp i{display:block;height:100%;width:100%;background:linear-gradient(#7ef08f,#2fbf4a);transition:width .15s}
+#fpHint{position:fixed;left:50%;top:calc(50% + 40px);transform:translateX(-50%);background:#000b;color:#fff;padding:8px 14px;border-radius:12px;pointer-events:none;display:none;white-space:nowrap;font-weight:800}
+#fpBtns{position:fixed;right:calc(var(--sar) + 14px);bottom:calc(var(--sab) + 104px);display:none;align-items:flex-end;gap:14px;touch-action:none}
+#fpFire{width:88px;height:88px;border-radius:50%;background:#e23b3bdd;box-shadow:0 4px 0 #8f1f1f,0 6px 14px #0006}#fpFire .ico{width:40px;height:40px;margin:0}
+#fpFire.on{transform:translateY(3px);box-shadow:0 1px 0 #8f1f1f}
+#fpJump{width:64px;height:64px;border-radius:50%;background:var(--card);font-size:26px;box-shadow:0 4px 12px #0006}
+body.fp #cross,body.fp #fpHp{display:block}body.fp #fpHint:not([hidden]){display:block}body.fp.touch #fpBtns{display:flex}
+body.fp #shopBtn,body.fp #wave,body.fp #aimHint{display:none}
 .ico{width:1.25em;height:1.25em;flex:none;vertical-align:-.25em;margin-right:.4em;filter:drop-shadow(0 1px 0 #0006)}
 .pill .ico{width:24px;height:24px;margin-right:2px}#menuBtn .ico,#helpBtn .ico,#musPill .ico{margin:0}#menuBtn .lbl{font-family:"Lilita One",Nunito,sans-serif;font-weight:400;letter-spacing:.5px}
 .pill b{font-family:"Lilita One",Nunito,sans-serif;font-weight:400;font-size:17px;letter-spacing:.5px}
@@ -172,6 +184,10 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
 <div id="inds"></div>
 <div id="toast" role="status" aria-live="polite"></div>
 <div id="joy" aria-label="Controle do herói"><div id="knob"></div></div>
+<div id="cross" aria-hidden="true"></div>
+<div id="fpHp" role="progressbar" aria-label="Vida do herói"><i id="fpHpIn"></i></div>
+<div id="fpHint" hidden>Clique na tela para mirar · Esc solta o mouse</div>
+<div id="fpBtns"><button id="fpJump" aria-label="Pular">▲</button><button id="fpFire" aria-label="Atirar (segure)"><span class="hi" data-i="target"></span></button></div>
 <div id="bar">
   <button id="shopBtn" class="round" aria-label="Abrir loja">🛒</button>
   <button id="runBtn" class="round" aria-label="Correr mais rápido" hidden>⚡<small id="runLeft"></small></button>
@@ -818,7 +834,7 @@ function pixF() {
 function drawFrame() {
   if (PIXEL && pixF() !== PIX.F) pixResize();
   const U = PIX.mat.uniforms.uOff.value, tx = C.tx, tz = C.tz;
-  if (PIX.F > 1) {
+  if (PIX.F > 1 && !FP.on) {
     // prende a câmera na grade dos pixels grandes e desliza a imagem pelo resto
     const wpp = 2 * C.dist * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) / (PIX.h - 2), sp = Math.sin(C.pitch), wz = wpp / sp;
     const sx = Math.round(tx / wpp) * wpp, sz = Math.round(tz / wz) * wz;
@@ -826,7 +842,7 @@ function drawFrame() {
     C.tx = sx; C.tz = sz; updateCam();
   } else U.set(0, 0);
   renderer.setRenderTarget(PIX.rt); renderer.render(scene, cam);
-  if (PIX.F > 1) { C.tx = tx; C.tz = tz; updateCam(); }
+  if (PIX.F > 1 && !FP.on) { C.tx = tx; C.tz = tz; updateCam(); }
   renderer.setRenderTarget(null); renderer.render(PIX.scene, PIX.cam);
 }
 
@@ -2584,7 +2600,8 @@ function throwBomb() {
   if (hero.dead || S.over || hero.bombCd > 0) return;
   let to;
   const foes = GUEST ? enemies.filter(e => !e.dead && !(PVP && e.team === ME)) : heroTargets(hero.pl);
-  if (!TOUCH && mouse.ok) to = mouse.p.clone();
+  if (FP.on) to = V(hero.pos.x - Math.sin(FP.yaw) * 6, 0, hero.pos.z - Math.cos(FP.yaw) * 6);
+  else if (!TOUCH && mouse.ok) to = mouse.p.clone();
   else {
     let best = null, bd = 9;
     for (const e of foes) { const d = Math.hypot(e.pos.x - hero.pos.x, e.pos.z - hero.pos.z); if (d < bd) { bd = d; best = e; } }
@@ -2611,6 +2628,7 @@ function moveLocalHero(dt) {
   if (keys.has('KeyA') || keys.has('ArrowLeft')) mx -= 1;
   if (keys.has('KeyD') || keys.has('ArrowRight')) mx += 1;
   const ml = Math.hypot(mx, mz); if (ml > 1) { mx /= ml; mz /= ml; }
+  if (FP.on) { const sn = Math.sin(FP.yaw), cs = Math.cos(FP.yaw), wx = cs * mx + sn * mz, wz = -sn * mx + cs * mz; mx = wx; mz = wz; } // primeira pessoa: W anda para onde você olha
   const moving = ml > .1 && dt > 0;
   const run = (hero.sprint && hero.boost > 0) || hero.starT > 0, hsp = 3.6 * (run ? BOOST_MUL : 1);
   if (moving) { hero.pos.x += mx * hsp * dt; hero.pos.z += mz * hsp * dt; hero.walk += hsp * dt; C.follow = true; C.goal = null; if (run) { hero.boost = Math.max(0, hero.boost - dt); if (Math.random() < dt * 14) burst(tmp.set(hero.pos.x, .2, hero.pos.z), 0xfacc15, 1, .6, .07); } }
@@ -2657,7 +2675,19 @@ function updateHero(dt, rdt, time) {
     if (d < nd) { nd = d; nearE = e; }
     if (d < 3.5) danger = true;
   }
-  if (nearE && dt) {
+  if (FP.on && hero.pl === ME) {
+    // primeira pessoa: atira para onde a mira aponta, só quando você aperta. Ajuda leve puxa para o monstro perto da mira.
+    aimV.set(-Math.sin(FP.yaw), 0, -Math.cos(FP.yaw));
+    let bestA = .1, tgt = null;
+    for (const e of TG) {
+      const dx = e.pos.x - hero.pos.x, dz = e.pos.z - hero.pos.z, d = Math.hypot(dx, dz);
+      if (d > HR + e.r || d < .01) continue;
+      const a = Math.acos(clamp((dx * aimV.x + dz * aimV.z) / d, -1, 1)) - Math.atan(e.r / d); if (a < bestA) { bestA = a; tgt = e; }
+    }
+    if (tgt) aimV.set(tgt.pos.x - hero.pos.x, 0, tgt.pos.z - hero.pos.z).normalize();
+    face = null; hero.g.rotation.y = Math.atan2(aimV.x, aimV.z);
+    if (FP.fire && dt && hero.cd <= 0) { heroAttack(aimV); FP.kick = 1; }
+  } else if (nearE && dt) {
     if (aimP) {
       aimV.set(aimP.x - hero.pos.x, 0, aimP.z - hero.pos.z).normalize();
       let bestA = .5, tgt = null;
@@ -2712,6 +2742,8 @@ function waveList(n, team = -1) {
   if (n === 15) L.splice(L.length >> 1, 0, { type: 'mutante', side: side0(), team });
   // onda 20: Rei Rex. Da 25 em diante o Dragão vem mais vezes: nas ondas ímpares e nas de 5 em 5
   if (n === 20 || (n >= 25 && (n % 2 === 1 || n % 5 === 0))) L.push({ type: n >= 25 ? 'dragao' : 'rex', side: side0(), boss: true, team });
+  // ondas de primeira pessoa (5, 15) também têm chefão no modo sozinho
+  if (!ONLINE && n % FP_EVERY === 0 && !bossWave(n) && n !== 20 && n < 25) L.splice(L.length >> 1, 0, { type: 'golem', side: side0(), boss: true, team });
   if (bossWave(n)) {
     const nb = 1 + Math.floor(n / 9);
     for (let b = 0; b < nb; b++) L.splice(Math.floor(L.length * (b + 1) / (nb + 1)), 0, { type: (n / 3 + b) % 2 ? 'golem' : 'bruxo', side: team < 0 ? Math.floor(Math.random() * 4) : TEAM_SIDES[team][b % 2], boss: true, team });
@@ -2915,6 +2947,7 @@ $('helpList').innerHTML = TOUCH
   ? '<li>' + ico('zombie') + ' A partir da onda 5 aparecem os zumbis <b>Chipados</b>. Derrube um e ele solta uma ' + ico('heart') + ': pegue e leve até o castelo para ganhar vida.</li><li>' + ico('shield') + ' Onda 10: o <b>Ogro</b> solta um escudo (1 minuto sem levar dano). ' + ico('bolt') + ' Onda 15: o <b>Mutante</b> solta fôlego para correr mais rápido. ' + ico('dino') + ' Onda 20: chega o <b>Rei Rex</b>! ' + ico('dragon') + ' Da onda 25 em diante: o <b>Dragão</b>, que cospe fogo!</li><li>' + ico('cow') + BICHOS_TXT.replace(/^\S+\s/, '') + ' andam pelo mapa e atrapalham os monstros.</li><li>Ande com o controle redondo à esquerda.</li><li>O herói atira sozinho no monstro mais perto.</li><li>' + ico('bomb') + ' joga uma bomba. ' + ico('cart') + ' abre a loja de armas.</li><li>Toque nas placas de pedra para pôr armas.</li><li>Os monstros vêm de todos os lados e atacam suas armas.</li>'
   : '<li>' + ico('zombie') + ' A partir da onda 5 aparecem os zumbis <b>Chipados</b>. Derrube um e ele solta uma ' + ico('heart') + ': pegue e leve até o castelo para ganhar vida.</li><li>' + ico('shield') + ' Onda 10: o <b>Ogro</b> solta um escudo (1 minuto sem levar dano). ' + ico('bolt') + ' Onda 15: o <b>Mutante</b> solta fôlego para correr mais rápido. ' + ico('dino') + ' Onda 20: chega o <b>Rei Rex</b>! ' + ico('dragon') + ' Da onda 25 em diante: o <b>Dragão</b>, que cospe fogo!</li><li>' + ico('cow') + BICHOS_TXT.replace(/^\S+\s/, '') + ' andam pelo mapa e atrapalham os monstros.</li><li><b>WASD</b> ou setas: anda com o herói.</li><li>O herói atira sozinho quando um monstro chega perto. <b>O mouse escolhe a direção</b>. Clique para atirar também.</li><li><b>Q</b> ou <b>espaço</b>: joga bomba onde o mouse aponta.</li><li>Clique nas placas de pedra para pôr armas.</li><li><b>B</b> ou ' + ico('cart') + ': loja com armas novas.</li><li><b>Enter</b> começa a onda. Arraste para mover a câmera, roda do mouse para zoom.</li>';
 $('bombKey').hidden = TOUCH;
+$('helpList').insertAdjacentHTML('afterbegin', '<li>' + ico('target') + ' Nas ondas <b>5, 10, 15...</b> vem um chefão e o jogo vira <b>primeira pessoa</b>: ' + (TOUCH ? 'arraste a tela para mirar, segure o botão vermelho para atirar e use ▲ para pular' : 'o mouse mira, o clique atira, <b>espaço</b> pula e <b>Q</b> joga bomba') + '. A loja fecha até você vencer a onda.</li>');
 for (const el of document.querySelectorAll('.hi[data-i]')) el.outerHTML = ico(el.dataset.i, el.className.replace('hi', '').trim());
 function addPower(p) { S.power = Math.round((S.power + p) * 100) / 100; S.dmgMul = 1 + S.power * .5; }
 let shopSig = '';
@@ -2933,7 +2966,7 @@ function renderShop() {
     `${T.desc}. Depois custa 🪙 ${T.cost} cada${pw(S.unlocked.has(T) ? 0 : T.power)}`,
     S.unlocked.has(T) ? '<button class="on" disabled>✓ Liberada</button>' : `<button class="pri" data-unlock="${k}" ${S.gold >= T.unlock ? '' : 'disabled'}>Liberar 🪙 ${T.unlock}</button>`)).join('');
 }
-function openShop() { if (S.over) return; closeSheet(); S.shop = true; shopSig = ''; renderShop(); $('shop').classList.add('show'); }
+function openShop() { if (S.over) return; if (FP.on) return toast('Na onda do chefão a loja fica fechada. Vença a onda para comprar!', 2600); closeSheet(); S.shop = true; shopSig = ''; renderShop(); $('shop').classList.add('show'); }
 function closeShop() { S.shop = false; $('shop').classList.remove('show'); updateUI(); }
 $('shopBtn').onclick = openShop;
 $('shopClose').onclick = closeShop;
@@ -2984,7 +3017,8 @@ addEventListener('keydown', e => {
   if (e.code === 'Enter') act({ c: 'wave' });
   if (e.code === 'KeyB') { S.shop ? closeShop() : openShop(); }
   if (e.code === 'Escape' && S.shop) closeShop();
-  if (e.code === 'KeyQ' || e.code === 'Space') { e.preventDefault(); throwBomb(); }
+  if (e.code === 'Space' && FP.on) { e.preventDefault(); fpJump(); }
+  else if (e.code === 'KeyQ' || e.code === 'Space') { e.preventDefault(); throwBomb(); }
   if ((e.code === 'ShiftLeft' || e.code === 'ShiftRight') && !e.repeat) toggleSprint();
 });
 addEventListener('keyup', e => keys.delete(e.code));
@@ -3006,13 +3040,18 @@ addEventListener('blur', () => keys.clear());
 
 // ===== Câmera e toque =====
 const C = { tx: 0, tz: 3, dist: 24, pitch: .95, goal: null, follow: true };
+// Primeira pessoa: nas ondas de chefão (5, 10, 15...) a câmera vai para os olhos do herói. Só no modo sozinho.
+const FP_EVERY = 5, FP_EYE = 1.15, FP_JUMP = 6.5, FP_GRAV = 20, FP_LOOK = .0024, FP_TOUCH_LOOK = .006;
+const FP = { on: false, yaw: 0, pitch: 0, y: 0, vy: 0, fire: false, bob: 0, kick: 0, arms: null };
+const fpWave = n => !ONLINE && n > 0 && n % FP_EVERY === 0;
 const MIN = 8, MAX = 60;
 const SUNZ = new THREE.Vector3(-9, 18, 6).normalize(), SUNX = new THREE.Vector3(0, 1, 0).cross(SUNZ).normalize(), SUNY = SUNZ.clone().cross(SUNX);
 function updateCam() {
   // plano de perto acompanha o zoom: com a câmera longe a profundidade fica precisa (sem linhas pretas no chão)
-  const nr = clamp(C.dist * .1, .5, 6); if (Math.abs(cam.near - nr) > .01) { cam.near = nr; cam.updateProjectionMatrix(); PIX.mat.uniforms.uNear.value = nr; }
-  cam.position.set(C.tx, Math.sin(C.pitch) * C.dist, C.tz + Math.cos(C.pitch) * C.dist);
-  cam.lookAt(C.tx, 0, C.tz); cam.updateMatrixWorld();
+  const nr = FP.on ? .05 : clamp(C.dist * .1, .5, 6); if (Math.abs(cam.near - nr) > .01) { cam.near = nr; cam.updateProjectionMatrix(); PIX.mat.uniforms.uNear.value = nr; }
+  if (FP.on) { cam.position.set(hero.pos.x, Hjs(hero.pos.x, hero.pos.z) + FP_EYE + FP.y, hero.pos.z); cam.rotation.set(FP.pitch, FP.yaw, 0, 'YXZ'); }
+  else { cam.position.set(C.tx, Math.sin(C.pitch) * C.dist, C.tz + Math.cos(C.pitch) * C.dist); cam.lookAt(C.tx, 0, C.tz); }
+  cam.updateMatrixWorld();
   // sombra presa na grade da própria sombra: não fica tremendo quando a câmera anda
   const SC = sun.shadow.camera, tex = (SC.right - SC.left) / sun.shadow.mapSize.x;
   const a = C.tx * SUNX.x + C.tz * SUNX.z, b = C.tx * SUNY.x + C.tz * SUNY.z, da = Math.round(a / tex) * tex - a, db = Math.round(b / tex) * tex - b;
@@ -3020,11 +3059,11 @@ function updateCam() {
   sun.position.set(gx - 9, gy + 18, gz + 6); sun.target.position.set(gx, gy, gz); sun.target.updateMatrixWorld();
 }
 function clampCam() { C.tx = clamp(C.tx, -HALF, HALF); C.tz = clamp(C.tz, -HALF, HALF + 4); }
-function fitDist() { const t = 2 * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)), a = innerWidth / innerHeight; return clamp(Math.max(14 / (t * a), 17 / t), MIN, MAX); }
+function fitDist() { const t = 2 * Math.tan(THREE.MathUtils.degToRad(45 / 2)), a = innerWidth / innerHeight; return clamp(Math.max(14 / (t * a), 17 / t), MIN, MAX); }
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
   pixResize();
-  cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix();
+  cam.aspect = innerWidth / innerHeight; if (FP.on) cam.fov = innerWidth < innerHeight ? FP_FOV_TALL : FP_FOV; cam.updateProjectionMatrix();
   C.dist = PIX.d0 = fitDist(); updateCam(); pixResize();
 }
 addEventListener('resize', resize);
@@ -3042,6 +3081,7 @@ function groundAt(x, y, out) { setRay(x, y); const r = ray.ray.intersectPlane(pl
 const ptrs = new Map(); let drag = null;
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 canvas.addEventListener('pointerdown', e => {
+  if (FP.on) return fpPointerDown(e);
   canvas.setPointerCapture(e.pointerId);
   ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (ptrs.size === 1) drag = { sx: e.clientX, sy: e.clientY, moved: false };
@@ -3049,6 +3089,7 @@ canvas.addEventListener('pointerdown', e => {
 });
 canvas.addEventListener('pointermove', e => {
   if (e.pointerType === 'mouse') { mouse.sx = e.clientX; mouse.sy = e.clientY; mouse.ok = true; }
+  if (FP.on) return fpPointerMove(e);
   const p = ptrs.get(e.pointerId); if (!p || !drag) return;
   const px = p.x, py = p.y; p.x = e.clientX; p.y = e.clientY;
   if (drag.pinch) {
@@ -3063,6 +3104,7 @@ canvas.addEventListener('pointermove', e => {
 });
 canvas.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') mouse.ok = false; });
 function pointerEnd(e) {
+  if (fpPointerEnd(e)) return;
   if (!ptrs.delete(e.pointerId) || !drag) return;
   if (!drag.pinch && !drag.moved && e.type === 'pointerup') onTap(e.clientX, e.clientY, e.pointerType === 'mouse');
   if (!ptrs.size) drag = null;
@@ -3070,7 +3112,101 @@ function pointerEnd(e) {
 }
 canvas.addEventListener('pointerup', pointerEnd);
 canvas.addEventListener('pointercancel', pointerEnd);
-canvas.addEventListener('wheel', e => { e.preventDefault(); C.dist = clamp(C.dist * Math.exp(e.deltaY * .001), MIN, MAX); updateCam(); }, { passive: false });
+canvas.addEventListener('wheel', e => { e.preventDefault(); if (FP.on) return; C.dist = clamp(C.dist * Math.exp(e.deltaY * .001), MIN, MAX); updateCam(); }, { passive: false });
+
+// ===== Primeira pessoa (ondas de chefão) =====
+// Bracinhos do herói em blocos com a arma na mão direita. Ficam no mundo, presos à câmera
+// (o relevo do mapa sobe tudo no shader, então descontamos a altura do chão aqui).
+function makeFpArms() {
+  const g = new THREE.Group(), inner = new THREE.Group(), [c1, c2] = HERO_COL[0], skin = M(0xf1c7a0), sleeve = M(c1), cuff = M(c2);
+  g.add(inner); g.userData.inner = inner;
+  const L = new THREE.Group(); L.position.set(-.18, -.14, -.32); L.rotation.set(.12, .32, 0); L.scale.setScalar(FP_ARM); inner.add(L); g.userData.L = L;
+  box(sleeve, .12, .12, .36, 0, 0, 0, L); box(cuff, .13, .13, .06, 0, 0, -.19, L); box(skin, .1, .1, .12, 0, 0, -.27, L);
+  const R = new THREE.Group(); R.position.set(.18, -.14, -.32); R.rotation.set(.05, -.1, 0); R.scale.setScalar(FP_ARM); inner.add(R); g.userData.R = R;
+  box(sleeve, .12, .12, .36, 0, 0, 0, R); box(cuff, .13, .13, .06, 0, 0, -.19, R); box(skin, .1, .1, .12, 0, 0, -.27, R);
+  box(mat.iron, .08, .1, .42, 0, .09, -.34, R); box(mat.iron, .06, .12, .06, 0, .0, -.2, R);
+  const glowM = new THREE.MeshBasicMaterial({ color: 0x93c5fd }); g.userData.glow = glowM;
+  const tip = new THREE.Mesh(BOX, glowM); tip.scale.set(.06, .06, .05); tip.position.set(0, .09, -.57); R.add(tip);
+  const strip = new THREE.Mesh(BOX, glowM); strip.scale.set(.085, .02, .24); strip.position.set(0, .145, -.32); R.add(strip);
+  g.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+  g.visible = false; scene.add(g);
+  return g;
+}
+const FP_ARM = .4, FP_FOV = 70, FP_FOV_TALL = 85; // tamanho dos bracinhos e ângulo de visão (tela em pé vê mais para cima e para baixo) // tamanho dos bracinhos
+const FP_GLOW = { blaster: 0x93c5fd, fogo: 0xff8a1f, raio: 0xfde047, radiacao: 0x7dff2a, laser: 0xff3030, flecha: 0xff3b1f };
+const fpTouch = new Map();
+function fpSet(on) {
+  if (FP.on === on) return;
+  FP.on = on; document.body.classList.toggle('fp', on);
+  if (!FP.arms) FP.arms = makeFpArms();
+  FP.arms.visible = on; FP.fire = false; FP.y = FP.vy = 0; fpTouch.clear(); $('fpFire').classList.remove('on');
+  ptrs.clear(); drag = null;
+  cam.fov = on ? (innerWidth < innerHeight ? FP_FOV_TALL : FP_FOV) : 45; cam.updateProjectionMatrix();
+  if (on) {
+    closeSheet();
+    FP.yaw = hero.g.rotation.y + Math.PI; FP.pitch = -.06;
+    toast('👑 Onda do chefão! Agora você vê pelos olhos do herói. ' + (TOUCH ? 'Arraste a tela para mirar, segure o botão vermelho para atirar.' : 'Clique na tela, mire com o mouse e clique para atirar. Espaço pula.'), 4500);
+  } else {
+    if (document.pointerLockElement) document.exitPointerLock();
+    hero.g.visible = hero.bar.g.visible = !hero.dead; C.follow = true; C.goal = null;
+  }
+  updateCam();
+}
+function fpJump() { if (!FP.on || hero.dead || FP.y > 0) return; FP.vy = FP_JUMP; sfx('step', hero.pos.x, hero.pos.z); }
+function fpPointerDown(e) {
+  if (e.pointerType === 'mouse') {
+    if (document.pointerLockElement !== canvas) { try { canvas.requestPointerLock(); } catch (er) {} return; }
+    if (e.button === 0) FP.fire = true;
+    else if (e.button === 2) throwBomb();
+    return;
+  }
+  try { canvas.setPointerCapture(e.pointerId); } catch (er) {}
+  fpTouch.set(e.pointerId, { x: e.clientX, y: e.clientY });
+}
+function fpPointerMove(e) {
+  const t = fpTouch.get(e.pointerId); if (!t) return;
+  fpLook(e.clientX - t.x, e.clientY - t.y, FP_TOUCH_LOOK); t.x = e.clientX; t.y = e.clientY;
+}
+function fpPointerEnd(e) {
+  if (!FP.on && !fpTouch.has(e.pointerId)) return false;
+  fpTouch.delete(e.pointerId); ptrs.delete(e.pointerId);
+  if (e.pointerType === 'mouse' && e.button === 0) FP.fire = false;
+  return true;
+}
+function fpLook(dx, dy, k) { FP.yaw -= dx * k; FP.pitch = clamp(FP.pitch - dy * k, -1.15, 1.15); }
+document.addEventListener('mousemove', e => { if (FP.on && document.pointerLockElement === canvas) fpLook(e.movementX, e.movementY, FP_LOOK); });
+document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement !== canvas) FP.fire = false; });
+{
+  const f = $('fpFire'), on = e => { e.preventDefault(); FP.fire = true; f.classList.add('on'); }, off = () => { FP.fire = false; f.classList.remove('on'); };
+  f.addEventListener('pointerdown', on); f.addEventListener('pointerup', off); f.addEventListener('pointercancel', off); f.addEventListener('pointerleave', off);
+  $('fpJump').addEventListener('pointerdown', e => { e.preventDefault(); fpJump(); });
+}
+// Chamado a cada quadro: liga/desliga pela onda, faz o pulo e mexe os bracinhos.
+function fpFrame(rdt, dt) {
+  const want = fpWave(S.wave) && S.waveActive && !S.over && !GUEST;
+  if (want !== FP.on) fpSet(want);
+  if (!FP.on) return;
+  hero.g.visible = hero.bar.g.visible = false;
+  if (dt) { FP.vy -= FP_GRAV * dt; FP.y += FP.vy * dt; if (FP.y <= 0) { FP.y = 0; FP.vy = 0; } }
+  FP.kick = Math.max(0, FP.kick - rdt * 7);
+  const moving = dt && !hero.dead && (Math.abs(joy.x) + Math.abs(joy.y) > .2 || ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].some(k => keys.has(k)));
+  if (moving && FP.y === 0) FP.bob += rdt * 10;
+  C.tx = hero.pos.x; C.tz = hero.pos.z; C.follow = true; C.goal = null;
+  $('fpHpIn').style.width = (hero.dead ? 0 : Math.max(0, hero.hp / hero.maxHp) * 100) + '%';
+  $('fpHint').hidden = TOUCH || document.pointerLockElement === canvas || !S.started;
+}
+function fpArmsPose(time) {
+  if (!FP.on || !FP.arms) return;
+  const g = FP.arms, in_ = g.userData.inner;
+  g.visible = !hero.dead;
+  g.position.copy(cam.position); g.position.y -= Hjs(cam.position.x, cam.position.z); g.quaternion.copy(cam.quaternion);
+  in_.position.set(Math.sin(FP.bob) * .018, -Math.abs(Math.cos(FP.bob)) * .016 + Math.sin(time * 2) * .004 + clamp(-FP.vy * .004, -.03, .03), FP.kick * .07);
+  in_.rotation.x = FP.kick * .18;
+  // tela em pé (celular) é estreita: os braços chegam mais para o meio para continuarem aparecendo
+  const ax = Math.min(.18, Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * cam.aspect * .32 * .78);
+  g.userData.L.position.x = -ax; g.userData.R.position.x = ax;
+  g.userData.glow.color.setHex(FP_GLOW[S.hw] || 0x93c5fd);
+}
 
 let hinted = false;
 function onTap(x, y, isMouse) {
@@ -3221,10 +3357,11 @@ function loop(now) {
     cs.g.position.x = Math.sin(time * 70) * .06 * cs.shake;
   }
   if (NET.host && NET.live && (snapT += rdt) >= .05) { NET.send(makeSnap(snapT)); snapT = 0; }
-  if (C.follow && !hero.dead) { const f = Math.min(1, rdt * 5); C.tx += (hero.pos.x - C.tx) * f; C.tz += (hero.pos.z - C.tz) * f; clampCam(); }
+  fpFrame(rdt, dt);
+  if (C.follow && !hero.dead && !FP.on) { const f = Math.min(1, rdt * 5); C.tx += (hero.pos.x - C.tx) * f; C.tz += (hero.pos.z - C.tz) * f; clampCam(); }
   if (C.goal !== null) { C.tz += (C.goal - C.tz) * Math.min(1, rdt * 8); if (Math.abs(C.goal - C.tz) < .01) C.goal = null; }
-  updateCam();
-  if (!TOUCH && mouse.ok && groundAt(mouse.sx, mouse.sy, mouse.p)) { aimMark.visible = !hero.dead; aimMark.position.set(mouse.p.x, .06, mouse.p.z); } else aimMark.visible = false;
+  updateCam(); fpArmsPose(time);
+  if (!FP.on && !TOUCH && mouse.ok && groundAt(mouse.sx, mouse.sy, mouse.p)) { aimMark.visible = !hero.dead; aimMark.position.set(mouse.p.x, .06, mouse.p.z); } else aimMark.visible = false;
   updateHUD();
   if ((slowTick += rdt) > .2) { slowTick = 0; refreshSheet(); updateIndicators(); waveText(); if (ONLINE) { updateUI(); if (S.shop) renderShop(); } }
   drawFrame();
@@ -3505,7 +3642,7 @@ C.tx = hero.home.x; C.tz = hero.home.z; clampCam(); updateCam(); C.tz = hero.hom
 if (ONLINE) startNet();
 setTimeout(() => $('load').classList.add('hide'), QS0.has('cont') || S.fresh ? 0 : Math.max(0, 5000 - performance.now()));
 requestAnimationFrame(loop);
-if (location.search.includes('teste')) window.__vd = { SND, sfx, setMusic, setSfx, S, pads, hearts, dropHeart, PORTALS, PSEED, ET, spawnEnemy, waveList, bossWave, trail, placeTower, startWave, enemies, towers, hero, heroes, NET, MODE, ROLE, ME, CASTLES, act, pget, PS, gE, roomLink, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, heroShootAt, rads, renderShop: () => renderShop(), giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE, pfx, pfxList, FXM, PIXEL, explodeAt, BIOMA, Hjs, HAMP, giants, volcs, SND, sticks, newMapWave, towers, enemies, startWave, HW, TT, birds, heroAttack, hero, animals, drops, dropItem, hurt, buildEnemy };
+if (location.search.includes('teste')) window.__vd = { FP, fpSet, fpWave, SND, sfx, setMusic, setSfx, S, pads, hearts, dropHeart, PORTALS, PSEED, ET, spawnEnemy, waveList, bossWave, trail, placeTower, startWave, enemies, towers, hero, heroes, NET, MODE, ROLE, ME, CASTLES, act, pget, PS, gE, roomLink, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, heroShootAt, rads, renderShop: () => renderShop(), giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE, pfx, pfxList, FXM, PIXEL, explodeAt, BIOMA, Hjs, HAMP, giants, volcs, SND, sticks, newMapWave, towers, enemies, startWave, HW, TT, birds, heroAttack, hero, animals, drops, dropItem, hurt, buildEnemy };
 </script>
 </body>
 </html>
