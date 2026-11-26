@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#141c28">
+<meta name="robots" content="noindex">
+<title>Painel Brand Defense</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="../icons/icon-192.png">
+<link rel="apple-touch-icon" href="../icons/icon-192.png">
+<style>
+:root{--bg:#141c28;--card:#1e2a3a;--line:#2f3f55;--txt:#f4f1e8;--muted:#a9b4c2;--pri:#ffb627;--ok:#4ade80;--bad:#f87171}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+main{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:4px 0 2px}.sub{color:var(--muted);margin:0 0 14px}
+button,input{font:inherit}
+button{min-height:44px;border:0;border-radius:12px;padding:0 16px;font-weight:700;cursor:pointer;background:#33445a;color:var(--txt)}
+.pri{background:var(--pri);color:#2a1a00}
+input{min-height:46px;border-radius:10px;border:2px solid #4a5d75;background:#101822;color:var(--txt);padding:0 12px;width:100%;font-size:16px}
+input:focus{outline:none;border-color:var(--pri)}
+.card{background:var(--card);border-radius:16px;padding:16px}
+#login{max-width:380px;margin:12vh auto 0}#login form{display:flex;flex-direction:column;gap:10px}#login label{display:flex;flex-direction:column;gap:4px;font-weight:600}
+.msg{margin:10px 0 0;padding:10px;border-radius:10px;background:#7f1d1d55;color:#fecaca}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0}
+.kpi{background:var(--card);border-radius:14px;padding:12px}.kpi b{display:block;font-size:28px;font-variant-numeric:tabular-nums}.kpi span{color:var(--muted);font-size:13px}
+.bars{display:flex;flex-direction:column;gap:6px;margin-top:8px}.bar{display:grid;grid-template-columns:64px 1fr 36px;align-items:center;gap:8px;font-size:13px}
+.bar i{display:block;height:14px;border-radius:7px;background:var(--pri);min-width:2px}.bar em{font-style:normal;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}.grid2 h2{font-size:15px;margin:0}
+.tools{display:flex;gap:8px;margin:12px 0}.tools input{flex:1}
+.tbl{overflow:auto;border-radius:14px;background:var(--card)}
+table{width:100%;border-collapse:collapse;font-size:14px;min-width:720px}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{position:sticky;top:0;background:#26354a;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+td.o{white-space:normal;min-width:160px;color:var(--muted)}
+tr.novo td:first-child{box-shadow:inset 3px 0 0 var(--ok)}
+.empty{padding:24px;text-align:center;color:var(--muted)}
+@media (max-width:640px){.kpis{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}.kpi b{font-size:24px}}
+</style>
+</head>
+<body>
+<main>
+<section id="login" class="card" hidden>
+  <h1>Painel Brand Defense</h1>
+  <p class="sub">Entre com a sua conta do jogo. Só o administrador vê os dados.</p>
+  <form id="lf">
+    <label>E-mail<input id="le" type="email" autocomplete="email" inputmode="email" required></label>
+    <label>Senha<input id="ls" type="password" autocomplete="current-password" required></label>
+    <button class="pri" id="lg">Entrar</button>
+  </form>
+  <p id="lm" class="msg" role="alert" hidden></p>
+</section>
+
+<section id="app" hidden>
+  <div class="top">
+    <div><h1>Jogadores cadastrados</h1><p class="sub" id="upd">Atualizado agora</p></div>
+    <div style="display:flex;gap:8px"><button id="rf">↻ Atualizar</button><button id="out">Sair</button></div>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><b id="kT">0</b><span>Total de contas</span></div>
+    <div class="kpi"><b id="kH">0</b><span>Novas hoje</span></div>
+    <div class="kpi"><b id="kS">0</b><span>Nos últimos 7 dias</span></div>
+    <div class="kpi"><b id="kA">0</b><span>Jogaram nos últimos 7 dias</span></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><h2>Idades</h2><div class="bars" id="ages"></div></div>
+    <div class="card"><h2>Onde conheceram</h2><div class="bars" id="orig"></div></div>
+  </div>
+  <div class="tools"><input id="q" type="search" placeholder="Buscar por nick, nome ou e-mail" aria-label="Buscar"><button id="csv" class="pri">⬇ Planilha</button></div>
+  <div class="tbl"><table>
+    <thead><tr><th>Cadastro</th><th>Nickname</th><th>Nome</th><th>Idade</th><th>E-mail</th><th>Melhor onda</th><th>Último acesso</th><th>Onde conheceu</th></tr></thead>
+    <tbody id="tb"></tbody>
+  </table></div>
+</section>
+</main>
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
+const sb = createClient('https://rjbzkkmomehneylooqas.supabase.co', 'sb_publishable_g55dcfE3Vrjj1u2vvDVvsA_SBfrtyL_');
+const $ = id => document.getElementById(id);
+let rows = [];
+
+const idade = n => { const d = new Date(n + 'T12:00:00'), h = new Date(); let a = h.getFullYear() - d.getFullYear(); if (h.getMonth() < d.getMonth() || (h.getMonth() === d.getMonth() && h.getDate() < d.getDate())) a--; return a; };
+const data = t => t ? new Date(t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const FAIXAS = [['até 12', 0, 12], ['13–17', 13, 17], ['18–24', 18, 24], ['25–34', 25, 34], ['35–44', 35, 44], ['45+', 45, 200]];
+const ORIGENS = [['TopIdle', /top ?idle/i], ['Amigo', /amig|indica/i], ['Instagram', /insta/i], ['TikTok', /tik ?tok/i], ['YouTube', /you ?tube/i], ['WhatsApp', /whats|zap/i], ['Google', /google|pesquis/i]];
+
+function bars(el, pares) {
+  const max = Math.max(1, ...pares.map(p => p[1]));
+  el.innerHTML = pares.map(([k, v]) => `<div class="bar"><span>${esc(k)}</span><i style="width:${v / max * 100}%"></i><em>${v}</em></div>`).join('');
+}
+
+function render() {
+  const q = $('q').value.trim().toLowerCase(), now = Date.now(), dia = 864e5, hoje = new Date().toDateString();
+  $('kT').textContent = rows.length;
+  $('kH').textContent = rows.filter(r => new Date(r.criado_em).toDateString() === hoje).length;
+  $('kS').textContent = rows.filter(r => now - new Date(r.criado_em) < 7 * dia).length;
+  $('kA').textContent = rows.filter(r => r.ultimo_acesso && now - new Date(r.ultimo_acesso) < 7 * dia).length;
+  bars($('ages'), FAIXAS.map(([k, a, b]) => [k, rows.filter(r => { const i = idade(r.nascimento); return i >= a && i <= b; }).length]));
+  const cont = {}; for (const r of rows) { const o = (r.origem || '').trim(); const k = !o ? 'Não disse' : (ORIGENS.find(([, re]) => re.test(o)) || ['Outros'])[0]; cont[k] = (cont[k] || 0) + 1; }
+  bars($('orig'), Object.entries(cont).sort((a, b) => b[1] - a[1]));
+  const vis = rows.filter(r => !q || [r.nick, r.nome, r.email].some(v => (v || '').toLowerCase().includes(q)));
+  $('tb').innerHTML = vis.length ? vis.map(r => `<tr class="${now - new Date(r.criado_em) < dia ? 'novo' : ''}"><td>${data(r.criado_em)}</td><td><b>${esc(r.nick)}</b></td><td>${esc(r.nome)}</td><td>${idade(r.nascimento)}</td><td>${esc(r.email)}</td><td>${r.melhor_onda}</td><td>${data(r.ultimo_acesso)}</td><td class="o">${esc(r.origem) || '—'}</td></tr>`).join('')
+    : `<tr><td colspan="8" class="empty">${rows.length ? 'Nada encontrado nessa busca.' : 'Ainda não tem ninguém cadastrado.'}</td></tr>`;
+}
+
+async function carregar() {
+  const { data: d, error } = await sb.from('jogadores').select('*').order('criado_em', { ascending: false });
+  if (error) { alert('Não deu para carregar. Confira a internet.'); return; }
+  rows = d; render(); $('upd').textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+async function iniciar() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { $('login').hidden = false; $('app').hidden = true; return; }
+  const { data: adm } = await sb.rpc('is_admin');
+  if (!adm) { await sb.auth.signOut(); $('login').hidden = false; $('app').hidden = true; const m = $('lm'); m.textContent = 'Essa conta não é de administrador.'; m.hidden = false; return; }
+  $('login').hidden = true; $('app').hidden = false; carregar();
+}
+
+$('lf').onsubmit = async e => {
+  e.preventDefault(); const m = $('lm'); m.hidden = true; $('lg').disabled = true;
+  const { error } = await sb.auth.signInWithPassword({ email: $('le').value.trim(), password: $('ls').value });
+  $('lg').disabled = false;
+  if (error) { m.textContent = 'E-mail ou senha errados.'; m.hidden = false; return; }
+  iniciar();
+};
+$('out').onclick = async () => { await sb.auth.signOut(); iniciar(); };
+$('rf').onclick = carregar;
+$('q').oninput = render;
+$('csv').onclick = () => {
+  const cab = ['cadastro', 'nickname', 'nome', 'idade', 'nascimento', 'email', 'melhor_onda', 'ultimo_acesso', 'onde_conheceu'];
+  const linhas = rows.map(r => [data(r.criado_em), r.nick, r.nome, idade(r.nascimento), r.nascimento, r.email, r.melhor_onda, data(r.ultimo_acesso), r.origem || ''].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(';'));
+  const blob = new Blob(['﻿' + [cab.join(';'), ...linhas].join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'jogadores-brand-defense-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();
+};
+// Novo cadastro aparece sozinho, sem atualizar a página.
+sb.channel('novos').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'jogadores' }, () => carregar()).subscribe();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+iniciar();
+</script>
+</body>
+</html>

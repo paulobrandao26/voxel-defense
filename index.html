@@ -66,6 +66,16 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
 #toast.show{opacity:1}
 .ov{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#0009;padding:20px}
 .ov.show{display:flex}
+.box.accBox{max-height:calc(100vh - 40px);overflow:auto;position:relative;text-align:left}.accBox h1,.accBox>p{text-align:center}
+.accX{position:absolute;right:8px;top:8px;background:transparent;font-size:18px}
+.accTabs{display:flex;gap:6px;margin:12px 0}.accTabs button{flex:1;background:#2a3a4e}.accTabs button[aria-selected=true]{background:#4a6280;box-shadow:inset 0 -3px 0 var(--pri)}
+.accBox form{display:flex;flex-direction:column;gap:10px}.accBox label{display:flex;flex-direction:column;gap:4px;font-size:14px}.accBox label small{color:var(--muted);font-weight:500}
+.accBox input:not([type=checkbox]){font:inherit;font-weight:500;font-size:16px;min-height:46px;border-radius:10px;border:2px solid #4a5d75;background:#101822;color:var(--txt);padding:0 12px;width:100%;box-sizing:border-box;user-select:text;-webkit-user-select:text}
+.accBox input:focus{outline:none;border-color:var(--pri)}
+.pw{display:flex;gap:6px}.pw input{flex:1}.olho{min-width:84px;font-size:13px}
+.chk{flex-direction:row!important;align-items:flex-start;gap:10px!important}.chk input{width:22px;height:22px;margin-top:1px;flex:none;accent-color:var(--pri)}.chk a{color:var(--pri)}
+.link{background:transparent;color:var(--pri);text-decoration:underline;min-height:44px}
+.accMsg{margin-top:10px;padding:10px;border-radius:10px;background:#7f1d1d55;color:#fecaca!important;text-align:center}.accMsg.ok{background:#14532d55;color:#bbf7d0!important}
 .box{background:var(--card);border-radius:20px;padding:22px;text-align:center;max-width:380px;width:100%}
 .box h1{margin:0 0 10px;font-size:24px}
 .box p{margin:6px 0;color:var(--muted)}
@@ -159,6 +169,7 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
     <div id="maps" class="maps" role="radiogroup" aria-label="Escolha o mapa"></div>
     <button id="play" class="pri">Jogar</button>
     <button id="online" class="sec wide">🌐 Jogar online com um amigo</button>
+    <button id="accBtn" class="sec wide" hidden>👤 Criar conta / Entrar</button>
     <div class="row"><button id="musBtn" class="sec"></button><button id="sfxBtn" class="sec"></button></div>
     <button id="gfx" class="sec wide"></button>
     <button id="visBtn" class="sec wide"></button>
@@ -194,6 +205,39 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
     <button id="netMenu" class="sec wide">Voltar ao menu</button>
   </div>
 </div>
+<div id="acc" class="ov">
+  <div class="box accBox" role="dialog" aria-labelledby="accT">
+    <button id="accClose" class="accX" aria-label="Fechar">✕</button>
+    <h1 id="accT">Sua conta</h1>
+    <p>É grátis. Com a conta, seu recorde fica guardado. Dá para jogar sem conta também.</p>
+    <div id="accTabs" class="accTabs" role="tablist">
+      <button type="button" role="tab" data-aba="novo">Criar conta</button>
+      <button type="button" role="tab" data-aba="entrar">Entrar</button>
+    </div>
+    <form id="accNovo" novalidate>
+      <label>Nickname<input id="fNick" autocomplete="username" maxlength="20" placeholder="Como aparece no jogo" required></label>
+      <label>Nome<input id="fNome" autocomplete="name" maxlength="80" required></label>
+      <label>E-mail<input id="fEmail" type="email" autocomplete="email" inputmode="email" required></label>
+      <label>Senha<span class="pw"><input id="fSenha" type="password" autocomplete="new-password" minlength="6" placeholder="Pelo menos 6 caracteres" required><button type="button" class="olho" data-for="fSenha">Mostrar</button></span></label>
+      <label>Data de nascimento<input id="fNasc" type="date" required></label>
+      <label>Onde conheceu o jogo? <small>(opcional)</small><input id="fOrigem" maxlength="200" placeholder="Ex.: amigo, Instagram, TopIdle"></label>
+      <label class="chk"><input id="fTermos" type="checkbox"> <span>Li e aceito os <a href="privacidade.html" target="_blank" rel="noopener">termos e a política de privacidade</a>.</span></label>
+      <button id="fGo" class="pri" type="submit">Criar conta</button>
+    </form>
+    <form id="accEntrar" novalidate hidden>
+      <label>E-mail<input id="eEmail" type="email" autocomplete="email" inputmode="email" required></label>
+      <label>Senha<span class="pw"><input id="eSenha" type="password" autocomplete="current-password" required><button type="button" class="olho" data-for="eSenha">Mostrar</button></span></label>
+      <button id="eGo" class="pri" type="submit">Entrar</button>
+      <button id="eForgot" type="button" class="link">Esqueci a senha</button>
+    </form>
+    <div id="accMeu" hidden>
+      <p>Você entrou como <b id="accNick"></b>.</p>
+      <p>Sua melhor onda: <b id="accOnda">0</b></p>
+      <button id="accSair" class="sec wide">Sair da conta</button>
+    </div>
+    <p id="accErr" class="accMsg" role="alert" hidden></p>
+  </div>
+</div>
 <div id="over" class="ov">
   <div class="box">
     <h1 id="ovTitle">O castelo caiu!</h1>
@@ -223,6 +267,7 @@ addEventListener('error', () => {
 });
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 </script>
+<script type="module" src="conta.js"></script>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
 <script type="module">
 import * as THREE from 'three';
@@ -2616,6 +2661,7 @@ function startWave() {
   else S.queue = waveList(S.wave);
   S.hpMul = 1.12 + .18 * (S.wave - 1) + .012 * (S.wave - 1) ** 2;
   if (!ONLINE && S.wave > S.best) { S.best = S.wave; saveBest(); }
+  if (!ONLINE) dispatchEvent(new CustomEvent('vd-onda', { detail: S.wave }));
   const dirs = [...new Set(S.queue.map(q => SIDE_NAME[q.side]))];
   if (PVP) toast(`Onda ${S.wave}! Seus monstros vão atacar o castelo do outro.`, 2500);
   else if (!bossWave(S.wave)) toast(`Monstros vindo de: ${dirs.join(', ')}`, 2500);
@@ -2847,6 +2893,7 @@ $('musPill').onclick = () => { audioInit(); setMusic(!SND.musicOn); };
 $('play').onclick = () => { $('help').classList.remove('show'); S.started = true; };
 $('helpBtn').onclick = () => { $('help').classList.add('show'); $('maps').hidden = true; S.started = false; };
 addEventListener('keydown', e => {
+  if (e.target.closest && e.target.closest('input,textarea,select')) return; // digitando no cadastro: não mexe no jogo
   if (e.target.closest && e.target.closest('button') && (e.code === 'Space' || e.code === 'Enter')) e.preventDefault();
   keys.add(e.code);
   if (e.code === 'Escape') closeSheet();
