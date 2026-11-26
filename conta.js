@@ -41,7 +41,8 @@ function mostrarConta() {
   $('accClose').hidden = !perfil && CONVIDADO; // convidado da sala online só fecha depois de entrar
   if (perfil && depois) { const d = depois; depois = null; $('acc').classList.remove('show'); setTimeout(() => $(d)?.click(), 300); return true; }
   else if (!perfil && CONVIDADO) { abrir('novo'); msg($('accErr'), 'Para jogar com o seu amigo, crie a sua conta ou entre.', true); }
-  btn.textContent = perfil ? `👤 ${perfil.nick} · Minha conta` : '👤 Criar conta / Entrar';
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  btn.innerHTML = (window.__ico?.('user') || '') + (perfil ? `${esc(perfil.nick)} · Minha conta` : 'Criar conta / Entrar');
 }
 
 async function carregarPerfil() {
