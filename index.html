@@ -1626,6 +1626,7 @@ function buildEnemy(type, T, s, inner, body, band) {
   if (type === 'mutante') { for (let k = 0; k < 4; k++) box(mat.chip, s * .06, s * .14, s * .06, (k - 1.5) * s * .12, t + s * .07, 0, inner); }
   return { L: b.L, top: t };
 }
+const KILL_GOLD = 2.5;
 const ET = {
   rapido: { name: 'Corredor', hp: 30, sp: 1.8, size: .42, color: 0xe8553d, reward: 5, kind: 'melee', atk: 8 },
   aranha: { name: 'Aranha', hp: 16, sp: 2.5, size: .34, color: 0x6b4a2b, reward: 3, kind: 'melee', atk: 5 },
@@ -1797,8 +1798,9 @@ function hurt(e, dmg, flash = true) {
     const P = BOSS_POWERS[((S.bossKills = (S.bossKills || 0) + 1) - 1) % BOSS_POWERS.length];
     if (P === 'vida') dropHeart(e.pos.x, e.pos.z, undefined, e.T.name); else dropItem(P, e.pos.x, e.pos.z, undefined, e.T.name);
   }
+  // Moedas por monstro: 2,5x o valor base (quem dava 10 agora dá 25).
   const pay = () => {
-    S.gold += Math.round(e.T.reward * (1 + .05 * (S.wave - 1)) * (1 + S.power * .6));
+    S.gold += Math.round(KILL_GOLD * e.T.reward * (1 + .05 * (S.wave - 1)) * (1 + S.power * .6));
     if (e.T.boss) toast(`Você derrotou o ${e.T.name}! 👑`);
     bump('gold'); updateUI();
   };
