@@ -2348,7 +2348,7 @@ const HW = {
   raio: { name: 'Cajado de raio', icon: '⚡', desc: 'Raio pula em 3 monstros', cost: 500, power: .08, range: 9 },
   radiacao: { name: 'Arma de radiação', icon: '☢️', desc: 'Área radioativa que queima sem parar e solta faíscas', cost: 1200, power: .16, range: 9.5 },
   laser: { name: 'Arma de laser', icon: '🔴', desc: 'Raio que atravessa tudo, aniquila monstros e tira muita vida dos chefões (ainda mais do Rei Rex)', cost: 2000, power: .2, range: 11 },
-  flecha: { name: 'Flecha explosiva', icon: '🏹', desc: 'A mais forte: crava no monstro e explode em 3 segundos. Os pequenos morrem; os grandes perdem muita vida, e quanto maior o monstro, mais ele perde', cost: 3000, power: .24, range: 11 },
+  flecha: { name: 'Flecha explosiva', icon: '🏹', desc: 'A mais forte: crava no monstro e explode em 2 segundos numa bomba enorme. Todo monstro perto morre na hora; chefão perde mais da metade da vida e morre com 2 flechadas', cost: 3000, power: .24, range: 11 },
 };
 const poisonMat = M(0xa3e635, 0x4d7c0f);
 // Radiação: bola verde neon que vira uma área radioativa pulsando. Quem está dentro leva dano sem parar,
@@ -2958,15 +2958,15 @@ function onTap(x, y, isMouse) {
   if (!hinted) { hinted = true; toast('Toque nas placas de pedra para pôr armas. Ande com o controle à esquerda.'); }
 }
 
-// Flecha explosiva: fica cravada no monstro 3 segundos (piscando cada vez mais rápido) e explode.
-// Pequenos morrem; grandes perdem muito da vida (Rei Rex 65%). O Dragão perde 25%: morre com 4 flechadas.
+// Flecha explosiva: fica cravada no monstro 2 segundos (piscando cada vez mais rápido) e explode.
+// Bomba enorme (raio 4.5): todo monstro comum morre. Chefão atingido perde 55% (morre com 2); chefão perto perde 30%.
 const stickMat = new THREE.MeshBasicMaterial({ color: 0xff3b1f }), stickMat2 = new THREE.MeshBasicMaterial({ color: 0xfff1a8 }), sticks = [];
-const arrowPct = e => !e.T.boss && e.T.size < .7 ? 2 : !e.T.boss ? .55 : ({ rex: .65, dragao: .25 })[e.type] ?? .6;
-function stickArrow(e, pl) { const m = new THREE.Mesh(ARROW, stickMat); m.scale.setScalar(1.7); scene.add(m); sticks.push({ e, m, t: 3, pl, x: e.pos.x, z: e.pos.z, off: Math.random() * 6.28 }); sfx('hurt', e.pos.x, e.pos.z); }
+const ARROW_R = 4.5, arrowPct = (e, hit) => !e.T.boss ? 2 : hit ? .55 : .3;
+function stickArrow(e, pl) { const m = new THREE.Mesh(ARROW, stickMat); m.scale.setScalar(1.7); scene.add(m); sticks.push({ e, m, t: 2, pl, x: e.pos.x, z: e.pos.z, off: Math.random() * 6.28 }); sfx('hurt', e.pos.x, e.pos.z); }
 function arrowBoom(k) {
-  const x = k.x, z = k.z; sfx('boom', x, z); pfx('bigboom', x, 0, z, .9); burst(tmp.set(x, .5, z), 0xff7a18, 18, 4, .16); burst(tmp.set(x, .5, z), 0xfff1a8, 8, 3, .1);
-  for (const e of [...enemies]) if (!e.dead && !(PVP && e.team === k.pl) && Math.hypot(e.pos.x - x, e.pos.z - z) <= 2.2 + e.r) { const pc = arrowPct(e); hurt(e, (e === k.e || pc > 1 ? pc : pc * .4) * e.maxHp + 30); }
-  hitFoeHero(k.pl, x, z, 2.2, 90);
+  const x = k.x, z = k.z; sfx('boom', x, z); pfx('bigboom', x, 0, z, 1.8); pfx('bigboom', x, 0, z, 1.1); burst(tmp.set(x, .5, z), 0xff7a18, 40, 8, .2); burst(tmp.set(x, .5, z), 0xfff1a8, 20, 6, .14); burst(tmp.set(x, .5, z), 0x555555, 16, 4, .18);
+  for (const e of [...enemies]) if (!e.dead && !(PVP && e.team === k.pl) && Math.hypot(e.pos.x - x, e.pos.z - z) <= ARROW_R + e.r) hurt(e, arrowPct(e, e === k.e) * e.maxHp + 30);
+  hitFoeHero(k.pl, x, z, ARROW_R, 220);
 }
 function updateSticks(dt) {
   for (const k of sticks) {
