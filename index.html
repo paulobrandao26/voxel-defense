@@ -213,7 +213,7 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
   <div class="box accBox" role="dialog" aria-labelledby="accT">
     <button id="accClose" class="accX" aria-label="Fechar">✕</button>
     <h1 id="accT">Sua conta</h1>
-    <p>É grátis. Com a conta, seu recorde fica guardado. Dá para jogar sem conta também.</p>
+    <p>Para jogar, crie a sua conta. É grátis e o seu recorde fica guardado.</p>
     <div id="accTabs" class="accTabs" role="tablist">
       <button type="button" role="tab" data-aba="novo">Criar conta</button>
       <button type="button" role="tab" data-aba="entrar">Entrar</button>
@@ -2822,6 +2822,7 @@ $('sheet').addEventListener('click', ev => {
 });
 // Tudo que muda o jogo passa por aqui: no convidado vai pela rede, no host/sozinho roda na hora
 function act(c) {
+  if (!S.started && !contaOk()) return; // sem conta não começa a partida
   if (GUEST) { if (NET.live) NET.send({ t: 'c', ...c }); return; }
   withPlayer(ME, () => applyCmd(c));
 }
@@ -2900,7 +2901,12 @@ soundUI();
 $('musBtn').onclick = () => { audioInit(); setMusic(!SND.musicOn); };
 $('sfxBtn').onclick = () => { audioInit(); setSfx(!SND.sfxOn); };
 $('musPill').onclick = () => { audioInit(); setMusic(!SND.musicOn); };
-$('play').onclick = () => { $('help').classList.remove('show'); S.started = true; };
+// Só joga quem tem conta: sem login, o botão abre o cadastro (conta.js marca window.__contaOk).
+const contaOk = () => window.__contaOk === true;
+function pedirConta(depois) {
+  if (window.__pedirConta) window.__pedirConta(depois); else toast('Para jogar, entre na sua conta. Confira a internet e recarregue a página.', 3500);
+}
+$('play').onclick = () => { if (!contaOk()) return pedirConta('play'); $('help').classList.remove('show'); S.started = true; };
 $('helpBtn').onclick = () => { $('help').classList.add('show'); $('maps').hidden = true; S.started = false; };
 addEventListener('keydown', e => {
   if (e.target.closest && e.target.closest('input,textarea,select')) return; // digitando no cadastro: não mexe no jogo
@@ -3316,7 +3322,7 @@ function netPanel(title, msg, { share = false, go = false } = {}) {
   $('netShare').hidden = !share; $('netGo').hidden = !go;
   $('net').classList.add('show');
 }
-$('online').onclick = () => $('onl').classList.add('show');
+$('online').onclick = () => { if (!contaOk()) return pedirConta('online'); $('onl').classList.add('show'); };
 $('onlBack').onclick = () => $('onl').classList.remove('show');
 $('onl').addEventListener('click', ev => {
   const b = ev.target.closest('button.mode'); if (!b) return;

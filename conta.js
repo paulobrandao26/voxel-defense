@@ -8,7 +8,8 @@ const sb = createClient(SUPA_URL, SUPA_KEY);
 const $ = id => document.getElementById(id);
 const IDADE_MIN = 6, IDADE_MAX = 110, NICK_RE = /^[A-Za-z0-9_.\-]{3,20}$/;
 
-let perfil = null;
+let perfil = null, depois = null; // depois: o que fazer quando a pessoa entrar ('play' ou 'online')
+const CONVIDADO = /[?&]sala=/.test(location.search) && !/[?&]host/.test(location.search);
 
 /** Idade em anos completos a partir de 'AAAA-MM-DD'. */
 export function idade(nasc, hoje = new Date()) {
@@ -36,17 +37,22 @@ function msg(el, t, ok = false) { el.textContent = t; el.className = 'accMsg' + 
 function mostrarConta() {
   const btn = $('accBtn');
   btn.hidden = false;
+  window.__contaOk = !!perfil;
+  $('accClose').hidden = !perfil && CONVIDADO; // convidado da sala online só fecha depois de entrar
+  if (perfil && depois) { const d = depois; depois = null; $('acc').classList.remove('show'); setTimeout(() => $(d)?.click(), 300); return true; }
+  else if (!perfil && CONVIDADO) { abrir('novo'); msg($('accErr'), 'Para jogar com o seu amigo, crie a sua conta ou entre.', true); }
   btn.textContent = perfil ? `👤 ${perfil.nick} · Minha conta` : '👤 Criar conta / Entrar';
 }
 
 async function carregarPerfil() {
   const { data: { session } } = await sb.auth.getSession();
-  if (!session) { perfil = null; mostrarConta(); return; }
+  if (!session) { perfil = null; return mostrarConta(); }
   const { data } = await sb.from('jogadores').select('nick,nome,melhor_onda').eq('id', session.user.id).maybeSingle();
   perfil = data || { nick: session.user.user_metadata?.nick || 'Jogador', melhor_onda: 0 };
   perfil.id = session.user.id;
-  mostrarConta();
+  const foi = mostrarConta();
   sb.from('jogadores').update({ ultimo_acesso: new Date().toISOString() }).eq('id', perfil.id).then(() => {});
+  return foi;
 }
 
 function abrir(aba) {
@@ -73,7 +79,7 @@ async function criarConta(e) {
       options: { data: { nick: f.nick, nome: f.nome, nascimento: f.nascimento, origem: f.origem }, emailRedirectTo: location.origin } });
     if (error) return msg(out, /registered|already/i.test(error.message) ? 'Esse e-mail já tem conta. Use "Entrar".' : /rate|limit/i.test(error.message) ? 'Muitos cadastros agora. Tente de novo em alguns minutos.' : 'Não deu para criar a conta. Tente de novo.');
     if (!data.session) { msg(out, `Conta criada! Abra o e-mail ${f.email} e clique no link para confirmar. Depois é só entrar.`, true); return; }
-    await carregarPerfil(); abrir('meu'); toastConta(`Bem-vindo, ${f.nick}!`);
+    if (!(await carregarPerfil())) abrir('meu'); toastConta(`Bem-vindo, ${f.nick}!`);
   } catch { msg(out, 'Sem conexão. Confira a internet e tente de novo.'); }
   finally { go.disabled = false; }
 }
@@ -85,7 +91,7 @@ async function entrar(e) {
   try {
     const { error } = await sb.auth.signInWithPassword({ email: $('eEmail').value.trim(), password: $('eSenha').value });
     if (error) return msg(out, /confirm/i.test(error.message) ? 'Falta confirmar o e-mail. Abra o link que mandamos.' : 'E-mail ou senha errados.');
-    await carregarPerfil(); abrir('meu'); toastConta(`Olá, ${perfil.nick}!`);
+    if (!(await carregarPerfil())) abrir('meu'); toastConta(`Olá, ${perfil.nick}!`);
   } catch { msg(out, 'Sem conexão. Confira a internet e tente de novo.'); }
   finally { go.disabled = false; }
 }
@@ -131,7 +137,8 @@ $('accNova').onsubmit = async e => {
   $('nGo').disabled = false;
   if (error) return msg(out, 'Não deu para salvar. Peça o link de novo em "Esqueci a senha".');
   history.replaceState(null, '', location.pathname + location.search);
-  await carregarPerfil(); abrir('meu'); toastConta('Senha nova salva!');
+  if (!(await carregarPerfil())) abrir('meu'); toastConta('Senha nova salva!');
 };
 carregarPerfil().catch(() => { $('accBtn').hidden = true; });
+window.__pedirConta = d => { depois = d; abrir('novo'); msg($('accErr'), 'Para jogar, crie a sua conta grátis ou toque em "Entrar" se já tiver.', true); };
 window.__conta = { sb, idade, validarCadastro, abrir, get perfil() { return perfil; } };
