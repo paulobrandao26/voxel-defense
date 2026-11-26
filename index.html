@@ -66,6 +66,9 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
 #toast.show{opacity:1}
 .ov{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#0009;padding:20px}
 .ov.show{display:flex}
+#helpDet summary{cursor:pointer;min-height:44px;display:flex;align-items:center;justify-content:center;border-radius:var(--r);background:#2a3a4e;font-weight:700;list-style:none}#helpDet summary::-webkit-details-marker{display:none}#helpDet[open] summary{margin-bottom:6px}
+@media (min-width:900px){#helpDet summary{display:none}}
+@media (min-width:900px){#help .box{max-width:920px;max-height:calc(100vh - 40px);overflow:auto}#help .helpCols{display:grid;grid-template-columns:1.15fr 1fr;gap:22px;align-items:start}#help .helpTxt{max-height:calc(100vh - 130px);overflow:auto;padding-right:6px}#help .helpTxt ul{margin-top:0}#help .helpAct .maps{margin-top:0}}
 .box.accBox{max-height:calc(100vh - 40px);overflow:auto;position:relative;text-align:left}.accBox h1,.accBox>p{text-align:center}
 .accX{position:absolute;right:8px;top:8px;background:transparent;font-size:18px}
 .accTabs{display:flex;gap:6px;margin:12px 0}.accTabs button{flex:1;background:#2a3a4e}.accTabs button[aria-selected=true]{background:#4a6280;box-shadow:inset 0 -3px 0 var(--pri)}
@@ -165,7 +168,7 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
 <div id="help" class="ov show">
   <div class="box">
     <h1>Defenda o castelo!</h1>
-    <ul id="helpList"></ul>
+    <div class="helpCols"><details class="helpTxt" id="helpDet"><summary>📖 Como jogar</summary><ul id="helpList"></ul></details><div class="helpAct">
     <div id="maps" class="maps" role="radiogroup" aria-label="Escolha o mapa"></div>
     <button id="play" class="pri">Jogar</button>
     <button id="online" class="sec wide">🌐 Jogar online com um amigo</button>
@@ -173,6 +176,7 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
     <div class="row"><button id="musBtn" class="sec"></button><button id="sfxBtn" class="sec"></button></div>
     <button id="gfx" class="sec wide"></button>
     <button id="visBtn" class="sec wide"></button>
+    </div></div>
   </div>
 </div>
 <div id="quit" class="ov">
@@ -229,6 +233,11 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
       <label>Senha<span class="pw"><input id="eSenha" type="password" autocomplete="current-password" required><button type="button" class="olho" data-for="eSenha">Mostrar</button></span></label>
       <button id="eGo" class="pri" type="submit">Entrar</button>
       <button id="eForgot" type="button" class="link">Esqueci a senha</button>
+    </form>
+    <form id="accNova" novalidate hidden>
+      <p>Crie a sua senha nova.</p>
+      <label>Senha nova<span class="pw"><input id="nSenha" type="password" autocomplete="new-password" minlength="6" placeholder="Pelo menos 6 caracteres" required><button type="button" class="olho" data-for="nSenha">Mostrar</button></span></label>
+      <button id="nGo" class="pri" type="submit">Salvar senha nova</button>
     </form>
     <div id="accMeu" hidden>
       <p>Você entrou como <b id="accNick"></b>.</p>
@@ -2833,6 +2842,7 @@ $('bomb').onclick = throwBomb;
 $('runBtn').onclick = toggleSprint;
 $('speed').onclick = () => { S.speed = S.speed === 1 ? 2 : 1; $('speed').textContent = S.speed + 'x'; };
 $('again').onclick = () => act({ c: 'again' });
+$('helpDet').open = matchMedia('(min-width:900px)').matches; // no PC o texto fica aberto ao lado; no celular, fechado
 $('helpList').innerHTML = TOUCH
   ? '<li>🧟 A partir da onda 5 aparecem os zumbis <b>Chipados</b>. Derrube um e ele solta uma ❤️: pegue e leve até o castelo para ganhar vida.</li><li>🛡️ Onda 10: o <b>Ogro</b> solta um escudo (1 minuto sem levar dano). ⚡ Onda 15: o <b>Mutante</b> solta fôlego para correr mais rápido. 🦖 Onda 20: chega o <b>Rei Rex</b>! 🐉 Da onda 25 em diante: o <b>Dragão</b>, que cospe fogo!</li><li>' + BICHOS_TXT + ' andam pelo mapa e atrapalham os monstros.</li><li>Ande com o controle redondo à esquerda.</li><li>O herói atira sozinho no monstro mais perto.</li><li>💣 joga uma bomba. 🛒 abre a loja de armas.</li><li>Toque nas placas de pedra para pôr armas.</li><li>Os monstros vêm de todos os lados e atacam suas armas.</li>'
   : '<li>🧟 A partir da onda 5 aparecem os zumbis <b>Chipados</b>. Derrube um e ele solta uma ❤️: pegue e leve até o castelo para ganhar vida.</li><li>🛡️ Onda 10: o <b>Ogro</b> solta um escudo (1 minuto sem levar dano). ⚡ Onda 15: o <b>Mutante</b> solta fôlego para correr mais rápido. 🦖 Onda 20: chega o <b>Rei Rex</b>! 🐉 Da onda 25 em diante: o <b>Dragão</b>, que cospe fogo!</li><li>' + BICHOS_TXT + ' andam pelo mapa e atrapalham os monstros.</li><li><b>WASD</b> ou setas: anda com o herói.</li><li>O herói atira sozinho quando um monstro chega perto. <b>O mouse escolhe a direção</b>. Clique para atirar também.</li><li><b>Q</b> ou <b>espaço</b>: joga bomba onde o mouse aponta.</li><li>Clique nas placas de pedra para pôr armas.</li><li><b>B</b> ou 🛒: loja com armas novas.</li><li><b>Enter</b> começa a onda. Arraste para mover a câmera, roda do mouse para zoom.</li>';

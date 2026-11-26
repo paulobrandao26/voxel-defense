@@ -52,9 +52,10 @@ async function carregarPerfil() {
 function abrir(aba) {
   $('acc').classList.add('show');
   const logado = !!perfil;
-  $('accTabs').hidden = logado; $('accNovo').hidden = logado || aba !== 'novo'; $('accEntrar').hidden = logado || aba !== 'entrar'; $('accMeu').hidden = !logado;
+  const nova = aba === 'nova';
+  $('accTabs').hidden = logado || nova; $('accNovo').hidden = logado || aba !== 'novo'; $('accEntrar').hidden = logado || aba !== 'entrar'; $('accMeu').hidden = !logado || nova; $('accNova').hidden = !nova;
   for (const b of document.querySelectorAll('#accTabs button')) b.setAttribute('aria-selected', b.dataset.aba === aba);
-  if (logado) { $('accNick').textContent = perfil.nick; $('accOnda').textContent = perfil.melhor_onda || 0; }
+  if (logado && !nova) { $('accNick').textContent = perfil.nick; $('accOnda').textContent = perfil.melhor_onda || 0; }
   msg($('accErr'), '');
 }
 
@@ -115,6 +116,22 @@ $('accSair').onclick = async () => { await sb.auth.signOut(); perfil = null; mos
 for (const b of document.querySelectorAll('.olho')) b.onclick = () => { const i = $(b.dataset.for); i.type = i.type === 'password' ? 'text' : 'password'; b.textContent = i.type === 'password' ? 'Mostrar' : 'Esconder'; };
 $('fNasc').max = new Date().toISOString().slice(0, 10);
 
-sb.auth.onAuthStateChange((ev) => { if (ev === 'SIGNED_IN' || ev === 'SIGNED_OUT') carregarPerfil(); });
+// Link de "esqueci a senha" ou de convite: abre a tela de senha nova.
+const pedeSenha = /type=(recovery|invite)/.test(location.hash);
+sb.auth.onAuthStateChange((ev) => {
+  if (ev === 'PASSWORD_RECOVERY') { abrir('nova'); return; }
+  if (ev === 'SIGNED_IN' || ev === 'SIGNED_OUT') carregarPerfil().then(() => { if (pedeSenha && ev === 'SIGNED_IN') abrir('nova'); });
+});
+$('accNova').onsubmit = async e => {
+  e.preventDefault();
+  const out = $('accErr'), senha = $('nSenha').value;
+  if (senha.length < 6) return msg(out, 'A senha precisa ter pelo menos 6 caracteres.');
+  $('nGo').disabled = true;
+  const { error } = await sb.auth.updateUser({ password: senha });
+  $('nGo').disabled = false;
+  if (error) return msg(out, 'Não deu para salvar. Peça o link de novo em "Esqueci a senha".');
+  history.replaceState(null, '', location.pathname + location.search);
+  await carregarPerfil(); abrir('meu'); toastConta('Senha nova salva!');
+};
 carregarPerfil().catch(() => { $('accBtn').hidden = true; });
-window.__conta = { sb, idade, validarCadastro, get perfil() { return perfil; } };
+window.__conta = { sb, idade, validarCadastro, abrir, get perfil() { return perfil; } };
