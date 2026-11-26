@@ -2587,7 +2587,8 @@ function waveList(n, team = -1) {
   const side0 = () => team < 0 ? Math.floor(Math.random() * 4) : TEAM_SIDES[team][Math.floor(Math.random() * 2)];
   if (n === 10) L.splice(L.length >> 1, 0, { type: 'ogro', side: side0(), team });
   if (n === 15) L.splice(L.length >> 1, 0, { type: 'mutante', side: side0(), team });
-  if (n >= 20 && n % 5 === 0) L.push({ type: n >= 25 ? 'dragao' : 'rex', side: side0(), boss: true, team });
+  // onda 20: Rei Rex. Da 25 em diante o Dragão vem mais vezes: nas ondas ímpares e nas de 5 em 5
+  if (n === 20 || (n >= 25 && (n % 2 === 1 || n % 5 === 0))) L.push({ type: n >= 25 ? 'dragao' : 'rex', side: side0(), boss: true, team });
   if (bossWave(n)) {
     const nb = 1 + Math.floor(n / 9);
     for (let b = 0; b < nb; b++) L.splice(Math.floor(L.length * (b + 1) / (nb + 1)), 0, { type: (n / 3 + b) % 2 ? 'golem' : 'bruxo', side: team < 0 ? Math.floor(Math.random() * 4) : TEAM_SIDES[team][b % 2], boss: true, team });
@@ -2958,9 +2959,9 @@ function onTap(x, y, isMouse) {
 }
 
 // Flecha explosiva: fica cravada no monstro 3 segundos (piscando cada vez mais rápido) e explode.
-// Pequenos morrem; grandes perdem muito da vida, e quanto maior, maior o pedaço (até 70% no Dragão).
+// Pequenos morrem; grandes perdem muito da vida (Rei Rex 65%). O Dragão perde 25%: morre com 4 flechadas.
 const stickMat = new THREE.MeshBasicMaterial({ color: 0xff3b1f }), stickMat2 = new THREE.MeshBasicMaterial({ color: 0xfff1a8 }), sticks = [];
-const arrowPct = e => !e.T.boss && e.T.size < .7 ? 2 : !e.T.boss ? .55 : ({ rex: .65, dragao: .7 })[e.type] ?? .6;
+const arrowPct = e => !e.T.boss && e.T.size < .7 ? 2 : !e.T.boss ? .55 : ({ rex: .65, dragao: .25 })[e.type] ?? .6;
 function stickArrow(e, pl) { const m = new THREE.Mesh(ARROW, stickMat); m.scale.setScalar(1.7); scene.add(m); sticks.push({ e, m, t: 3, pl, x: e.pos.x, z: e.pos.z, off: Math.random() * 6.28 }); sfx('hurt', e.pos.x, e.pos.z); }
 function arrowBoom(k) {
   const x = k.x, z = k.z; sfx('boom', x, z); pfx('bigboom', x, 0, z, .9); burst(tmp.set(x, .5, z), 0xff7a18, 18, 4, .16); burst(tmp.set(x, .5, z), 0xfff1a8, 8, 3, .1);
@@ -2993,12 +2994,15 @@ function updateBirds(dt, rdt) {
     b.ph += rdt * (b.tg ? 18 : 9); const fl = Math.sin(b.ph) * .7; b.wl.rotation.z = fl; b.wr.rotation.z = -fl;
     const cx = wc(b.c.ci), cz = wc(b.c.cj);
     if (b.tg && (b.tg.dead || !enemies.includes(b.tg))) b.tg = null;
-    if (!b.tg) { let bd = 26; for (const e of enemies) if (e.T.boss && !e.dead && (!PVP || e.tc === b.c)) { const d = Math.max(Math.abs(e.pos.x - cx), Math.abs(e.pos.z - cz)); if (d < bd) { bd = d; b.tg = e; } } }
+    // cada pássaro vai num chefão diferente (se tiver menos chefões que pássaros, eles se dividem)
+    if (!b.tg) { const L = enemies.filter(e => e.T.boss && !e.dead && (!PVP || e.tc === b.c) && Math.max(Math.abs(e.pos.x - cx), Math.abs(e.pos.z - cz)) < 26);
+      if (L.length) { const mine = birds.filter(o => o.c === b.c), cnt = e => mine.filter(o => o.tg === e).length; L.sort((p, q) => cnt(p) - cnt(q) || Math.hypot(p.pos.x - b.g.position.x, p.pos.z - b.g.position.z) - Math.hypot(q.pos.x - b.g.position.x, q.pos.z - b.g.position.z)); b.tg = L[0]; } }
     let tx, ty, tz;
     if (b.tg) { const e = b.tg, an = b.a + time * 2.2; tx = e.pos.x + Math.cos(an) * 1.1; tz = e.pos.z + Math.sin(an) * 1.1; ty = e.T.size * 1.1 + .3 + Math.max(0, Math.sin(time * 3 + b.a)) * 1.3; }
     else { b.a += rdt * .5; tx = cx + Math.cos(b.a) * 4.5; tz = cz + Math.sin(b.a) * 4.5; ty = 5 + Math.sin(time + b.a * 3) * .4; }
-    const p = b.g.position, k = 1 - Math.exp(-rdt * (b.tg ? 3.5 : 2)), ox = p.x, oz = p.z;
-    p.x += (tx - p.x) * k; p.y += (ty - p.y) * k; p.z += (tz - p.z) * k;
+    // voa de verdade: velocidade limitada, então dá para ver o pássaro indo do castelo até o chefão
+    const p = b.g.position, ox = p.x, oz = p.z, dx = tx - p.x, dy = ty - p.y, dz = tz - p.z, dd = Math.hypot(dx, dy, dz), mv = Math.min(dd, rdt * (b.tg ? 7 : 4));
+    if (dd > 1e-4) { p.x += dx / dd * mv; p.y += dy / dd * mv; p.z += dz / dd * mv; }
     if (Math.hypot(p.x - ox, p.z - oz) > 1e-4) b.g.rotation.y = Math.atan2(p.x - ox, p.z - oz);
     if (b.tg && dt && !GUEST && (b.cd -= dt) <= 0 && Math.hypot(p.x - b.tg.pos.x, p.z - b.tg.pos.z) < 2) { b.cd = .9; hurt(b.tg, b.tg.maxHp * .012 + 8); burst(V(b.tg.pos.x, b.tg.hitY + .4, b.tg.pos.z), 0xffffff, 4, 1.5, .06); }
   }
