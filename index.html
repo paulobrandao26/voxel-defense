@@ -1647,6 +1647,8 @@ const enemies = [];
 
 const TEAM_MAT = [M(0x2563eb, 0x0a2a6a), M(0xdc2626, 0x5a0a0a)];
 let eid = 0;
+// Velocidade dos monstros: o mapa dobrou, então já começam 35% mais rápidos; a cada 5 ondas ficam 10% mais rápidos, até no máximo 2x (onda 26 em diante)
+const waveSpeed = () => Math.min(2, 1.35 + Math.floor(Math.max(0, S.wave - 1) / 5) * .13);
 function spawnEnemy(type, x, z, team = 0) {
   const T = ET[type], s = T.size, g = new THREE.Group(), inner = new THREE.Group(), band = PVP ? TEAM_MAT[team] : T.dmat;
   g.add(inner);
@@ -1661,7 +1663,7 @@ function spawnEnemy(type, x, z, team = 0) {
   const e = { id: ++eid, team, tc: CASTLES[tci], flowF: flows[tci], kind: 'enemy', type, T, g, inner, body, f1, f2, limbs: built.L, bar, hp, maxHp: hp, pos: g.position, r: s * .45, cr: Math.min(s * .45, .48),
     vel: V(), dir: V(), walk: 0, slowT: 0, slowF: 1, flashT: 0, burnT: 0, burnDps: 0, poisonT: 0, poisonDps: 0, think: 0, target: null, atkCd: Math.random(),
     healCd: 2, sumCd: 5, slamCd: 2, ph: Math.random() * 6.28, wf: .4 + Math.random() * .7, wob: .35 + Math.random() * .45,
-    hitY: s * .5, fd: 99, dead: false, sp: T.sp * (.9 + Math.random() * .2), px: x, pz: z };
+    hitY: s * .5, fd: 99, dead: false, sp: T.sp * waveSpeed() * (.9 + Math.random() * .2), px: x, pz: z };
   e.pos.set(x, 0, z);
   enemies.push(e);
   return e;
@@ -2134,7 +2136,7 @@ function updateShots(dt) {
       const pl = s.pl || 0, land = () => { if (s.rad) radArea(s.m.position, pl); else if (s.poison) { poisonArea(s.m.position, 1.4, 0, s.poison, pl); clouds[clouds.length - 1].hero = PVP; } else burst(s.m.position, 0x93c5fd, 3, 1, .06); };
       if (s.life <= 0 || hitsSolid(s.m.position.x, s.m.position.z)) { s.done = true; land(); continue; }
       for (const e of enemies) if (!e.dead && !(PVP && e.team === pl) && Math.hypot(e.pos.x - s.m.position.x, e.pos.z - s.m.position.z) < e.r + .18) {
-        hurt(e, s.dmg); s.done = true; land();
+        hurt(e, s.dmg); s.done = true; if (s.boom) stickArrow(e, pl); else land();
         break;
       }
       if (!s.done && hitFoeHero(pl, s.m.position.x, s.m.position.z, .18, s.dmg)) { s.done = true; land(); }
@@ -2345,7 +2347,8 @@ const HW = {
   fogo: { name: 'Lança-fogo', icon: '🔥', desc: 'Queima vários de perto', cost: 300, power: .06, range: 6 },
   raio: { name: 'Cajado de raio', icon: '⚡', desc: 'Raio pula em 3 monstros', cost: 500, power: .08, range: 9 },
   radiacao: { name: 'Arma de radiação', icon: '☢️', desc: 'Área radioativa que queima sem parar e solta faíscas', cost: 1200, power: .16, range: 9.5 },
-  laser: { name: 'Arma de laser', icon: '🔴', desc: 'A mais forte: raio que atravessa tudo, aniquila monstros e tira muita vida dos chefões (ainda mais do Rei Rex)', cost: 2000, power: .2, range: 11 },
+  laser: { name: 'Arma de laser', icon: '🔴', desc: 'Raio que atravessa tudo, aniquila monstros e tira muita vida dos chefões (ainda mais do Rei Rex)', cost: 2000, power: .2, range: 11 },
+  flecha: { name: 'Flecha explosiva', icon: '🏹', desc: 'A mais forte: crava no monstro e explode em 3 segundos. Os pequenos morrem; os grandes perdem muita vida, e quanto maior o monstro, mais ele perde', cost: 3000, power: .24, range: 11 },
 };
 const poisonMat = M(0xa3e635, 0x4d7c0f);
 // Radiação: bola verde neon que vira uma área radioativa pulsando. Quem está dentro leva dano sem parar,
@@ -2408,6 +2411,12 @@ function heroAttack(dir) {
       const sc = (dx * dir.x + dz * dir.z) / (d || 1) - d * .05; if (sc > bs) { bs = sc; first = e; }
     }
     if (first) chainFrom(V(hero.pos.x + dir.x * .5, .8, hero.pos.z + dir.z * .5), first, 3, 14 + n * 2.2, hero.pl);
+    return;
+  }
+  if (w === 'flecha') {
+    hero.cd = 1.1;
+    const o = V(hero.pos.x + dir.x * .55, .8, hero.pos.z + dir.z * .55), m = new THREE.Mesh(ARROW, stickMat); m.scale.setScalar(1.7); m.position.copy(o); m.lookAt(o.x + dir.x, o.y, o.z + dir.z); scene.add(m);
+    shots.push({ k: 'hb', m, dir: dir.clone(), sp: 20, life: .6, dmg: 20 + n * 2, boom: true, pl: hero.pl });
     return;
   }
   if (w === 'radiacao') {
@@ -2948,6 +2957,25 @@ function onTap(x, y, isMouse) {
   if (!hinted) { hinted = true; toast('Toque nas placas de pedra para pôr armas. Ande com o controle à esquerda.'); }
 }
 
+// Flecha explosiva: fica cravada no monstro 3 segundos (piscando cada vez mais rápido) e explode.
+// Pequenos morrem; grandes perdem muito da vida, e quanto maior, maior o pedaço (até 70% no Dragão).
+const stickMat = new THREE.MeshBasicMaterial({ color: 0xff3b1f }), stickMat2 = new THREE.MeshBasicMaterial({ color: 0xfff1a8 }), sticks = [];
+const arrowPct = e => !e.T.boss && e.T.size < .7 ? 2 : !e.T.boss ? .55 : ({ rex: .65, dragao: .7 })[e.type] ?? .6;
+function stickArrow(e, pl) { const m = new THREE.Mesh(ARROW, stickMat); m.scale.setScalar(1.7); scene.add(m); sticks.push({ e, m, t: 3, pl, x: e.pos.x, z: e.pos.z, off: Math.random() * 6.28 }); sfx('hurt', e.pos.x, e.pos.z); }
+function arrowBoom(k) {
+  const x = k.x, z = k.z; sfx('boom', x, z); pfx('bigboom', x, 0, z, .9); burst(tmp.set(x, .5, z), 0xff7a18, 18, 4, .16); burst(tmp.set(x, .5, z), 0xfff1a8, 8, 3, .1);
+  for (const e of [...enemies]) if (!e.dead && !(PVP && e.team === k.pl) && Math.hypot(e.pos.x - x, e.pos.z - z) <= 2.2 + e.r) { const pc = arrowPct(e); hurt(e, (e === k.e || pc > 1 ? pc : pc * .4) * e.maxHp + 30); }
+  hitFoeHero(k.pl, x, z, 2.2, 90);
+}
+function updateSticks(dt) {
+  for (const k of sticks) {
+    if (!k.e.dead) { k.x = k.e.pos.x; k.z = k.e.pos.z; }
+    k.m.position.set(k.x + Math.cos(k.off) * k.e.r * .5, k.e.hitY + .35, k.z + Math.sin(k.off) * k.e.r * .5); k.m.rotation.set(-.7, k.off, 0);
+    k.m.material = Math.sin(k.t * (k.t < 1 ? 40 : 14)) > 0 ? stickMat : stickMat2;
+    if (dt && (k.t -= dt) <= 0) arrowBoom(k);
+  }
+  for (let i = sticks.length - 1; i >= 0; i--) if (sticks[i].t <= 0) { scene.remove(sticks[i].m); sticks.splice(i, 1); }
+}
 // Pássaros guardiões: 3 por castelo voam em volta dele e só atacam os chefões (bicadas que tiram vida)
 const birds = [];
 {
@@ -3028,7 +3056,7 @@ function loop(now) {
     if (ONLINE) for (const hh of heroes) withPlayer(hh.pl, () => updateHero(dt, rdt, time)); else updateHero(dt, rdt, time);
     updateShots(dt); updateClouds(dt); updateRads(dt, rdt); updateHearts(dt, rdt); updateAnimals(dt); updateDrops(dt, rdt);
   }
-  updateParticles(rdt); updatePfx(rdt); updateBossTags(); updateTension(); updateBirds(dt, rdt);
+  updateParticles(rdt); updatePfx(rdt); updateBossTags(); updateTension(); updateBirds(dt, rdt); updateSticks(dt);
   for (const hh of heroes) heroExtras(hh, GUEST ? 0 : dt, time);
   if (SND.ac && SND.sfxOn && dt && (stepT -= rdt) <= 0) {
     stepT = .26;
@@ -3340,7 +3368,7 @@ C.tx = hero.home.x; C.tz = hero.home.z; clampCam(); updateCam(); C.tz = hero.hom
 if (ONLINE) startNet();
 setTimeout(() => $('load').classList.add('hide'), QS0.has('cont') || S.fresh ? 0 : Math.max(0, 5000 - performance.now()));
 requestAnimationFrame(loop);
-if (location.search.includes('teste')) window.__vd = { SND, sfx, setMusic, setSfx, S, pads, hearts, dropHeart, PORTALS, PSEED, ET, spawnEnemy, waveList, bossWave, trail, placeTower, startWave, enemies, towers, hero, heroes, NET, MODE, ROLE, ME, CASTLES, act, pget, PS, gE, roomLink, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, heroShootAt, rads, renderShop: () => renderShop(), giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE, pfx, pfxList, FXM, PIXEL, explodeAt, BIOMA, Hjs, HAMP, giants, volcs, SND, newMapWave, towers, enemies, startWave, HW, TT, birds, heroAttack, hero, animals, drops, dropItem, hurt, buildEnemy };
+if (location.search.includes('teste')) window.__vd = { SND, sfx, setMusic, setSfx, S, pads, hearts, dropHeart, PORTALS, PSEED, ET, spawnEnemy, waveList, bossWave, trail, placeTower, startWave, enemies, towers, hero, heroes, NET, MODE, ROLE, ME, CASTLES, act, pget, PS, gE, roomLink, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, heroShootAt, rads, renderShop: () => renderShop(), giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE, pfx, pfxList, FXM, PIXEL, explodeAt, BIOMA, Hjs, HAMP, giants, volcs, SND, sticks, newMapWave, towers, enemies, startWave, HW, TT, birds, heroAttack, hero, animals, drops, dropItem, hurt, buildEnemy };
 </script>
 </body>
 </html>

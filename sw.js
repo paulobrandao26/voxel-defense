@@ -1,6 +1,6 @@
 // Guarda os arquivos do jogo para abrir sem internet.
 // Ao mudar o jogo, troque o número da versão para os celulares baixarem a versão nova.
-const CACHE = 'voxel-defense-v22';
+const CACHE = 'voxel-defense-v23';
 const ASSETS = [
   './', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png',
   'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js',
