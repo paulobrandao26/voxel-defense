@@ -68,6 +68,11 @@ background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px #0007;
 #toast.show{opacity:1}
 .ov{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#0009;padding:20px}
 .ov.show{display:flex}
+.box .idle{background:linear-gradient(#5cc35a,#2e7d32);color:#fff;font-weight:900;flex-direction:column;line-height:1.1;padding:8px 14px}.box .idle small{display:block;font-weight:600;font-size:12px;opacity:.9;margin-top:2px}
+.idleBox .tx{flex:1;text-align:left}.idleBox{max-width:520px;max-height:calc(100vh - 40px);overflow:auto;text-align:left;padding:16px}.idleBox h1{text-align:center;margin:0 0 4px}.idleBox h3{margin:14px 0 6px;font-size:15px}.idleBox p{margin:6px 0;color:var(--muted);font-size:14px}
+.essBig{display:flex;align-items:center;justify-content:center;gap:8px;font-family:"Lilita One",Nunito,sans-serif;font-size:26px;margin:6px 0}.essBig .ico{width:30px;height:30px}
+.diffs{display:grid;grid-template-columns:1fr 1fr;gap:8px}.dif{display:flex;flex-direction:column;align-items:flex-start;border:2px solid transparent;border-radius:14px;padding:8px 10px;text-align:left;min-height:56px;background:#2a3a4e}.dif span{font-family:"Lilita One",Nunito,sans-serif;font-size:17px}.dif small{font-size:12px;color:var(--muted);line-height:1.25}.dif.on{border-color:#5cc35a;background:#2f4a3a}.dif:disabled{opacity:.55}
+body:not(.idle) .onlyIdle{display:none!important}
 .box .vote{background:linear-gradient(#ffb627,#e08a1e);color:#2a1a00;font-weight:900}
 #cross{position:fixed;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;pointer-events:none;display:none;z-index:5}
 #cross::before,#cross::after{content:"";position:absolute;background:#fff;box-shadow:0 0 0 1.5px #000b;border-radius:1px}
@@ -177,6 +182,8 @@ body.touch #viewBtn{width:60px;height:60px;border-radius:50%;padding:0;flex-dire
   <div class="pill" title="Ouro"><span class="hi" data-i="coin"></span><b id="gold">0</b></div>
   <div class="pill" title="Vida do seu castelo"><span class="hi" data-i="castle"></span><b id="castle">500</b></div>
   <div class="pill" id="foePill" title="Vida do castelo inimigo" hidden><span class="hi" data-i="target"></span><b id="foeCastle">500</b></div>
+  <div class="pill onlyIdle" title="Essência: compra melhorias que ficam para sempre"><span class="hi" data-i="gem"></span><b id="ess">0</b></div>
+  <button id="autoPill" class="pill onlyIdle" aria-label="Montar armas sozinho">Auto ✓</button>
   <div class="pill" title="Onda atual">Onda <b id="waveN">0</b></div>
   <div class="pill" title="Recorde de onda"><span class="hi" data-i="trophy"></span><b id="best">0</b></div>
   <button id="speed" class="pill" aria-label="Velocidade do jogo">1x</button>
@@ -203,6 +210,7 @@ body.touch #viewBtn{width:60px;height:60px;border-radius:50%;padding:0;flex-dire
   <div class="box shopbox" role="dialog" aria-label="Loja">
     <div class="sh-head"><h2>🛒 Loja</h2><button class="x" id="shopClose" aria-label="Fechar loja">✕</button></div>
     <div class="stats">Você tem 🪙 <b id="shopGold">0</b> · Força dos monstros: <b id="shopPow">normal</b></div>
+    <div class="onlyIdle"><h3>Melhorias permanentes · <span class="hi" data-i="gem"></span><b id="shopEss">0</b></h3><div id="shopUps"></div></div>
     <h3>Armas do herói</h3><div id="shopHero"></div>
     <h3>Armas novas para o campo</h3><div id="shopTower"></div>
     <p class="stats" id="shopNote">Para o jogo continuar justo, cada compra deixa os monstros um pouco mais fortes e eles passam a dar mais ouro. O jogo fica pausado enquanto a loja está aberta.</p>
@@ -214,6 +222,7 @@ body.touch #viewBtn{width:60px;height:60px;border-radius:50%;padding:0;flex-dire
     <div class="helpCols"><details class="helpTxt" id="helpDet"><summary><span class="hi" data-i="help"></span>Como jogar</summary><ul id="helpList"></ul></details><div class="helpAct">
     <div id="maps" class="maps" role="radiogroup" aria-label="Escolha o mapa"></div>
     <button id="play" class="pri">Jogar</button>
+    <button id="idleBtn" class="sec wide idle"><span><span class="hi" data-i="gem"></span>Modo automático (idle)</span><small>O jogo joga sozinho e rende até com ele fechado</small></button>
     <button id="online" class="sec wide"><span class="hi" data-i="globe"></span>Jogar online com um amigo</button>
     <button id="voteBtn" class="sec wide vote"><span class="hi" data-i="trophy"></span>Votar no TopIdle · +300 de ouro</button>
     <button id="accBtn" class="sec wide" hidden><span class="hi" data-i="user"></span><span class="t">Criar conta / Entrar</span></button>
@@ -221,6 +230,26 @@ body.touch #viewBtn{width:60px;height:60px;border-radius:50%;padding:0;flex-dire
     <button id="gfx" class="sec wide"></button>
     <button id="visBtn" class="sec wide"></button>
     </div></div>
+  </div>
+</div>
+<div id="idleOv" class="ov">
+  <div class="box idleBox" role="dialog" aria-labelledby="idleT">
+    <h1 id="idleT">Modo automático</h1>
+    <p>As ondas começam sozinhas e as armas são montadas e melhoradas sozinhas. Se o castelo cair, o jogo volta 5 ondas e continua. Cada onda vencida dá <b>essência</b>, que compra melhorias que ficam para sempre.</p>
+    <div class="essBig"><span class="hi" data-i="gem"></span><span id="idleEss">0</span></div>
+    <p id="idleInfo"></p>
+    <h3>Dificuldade</h3><div id="diffs" class="diffs" role="radiogroup" aria-label="Dificuldade"></div>
+    <h3>Melhorias permanentes</h3><div id="ups"></div>
+    <button id="idleGo" class="pri wide">Começar no automático</button>
+    <button id="idleBack" class="sec wide">Voltar</button>
+  </div>
+</div>
+<div id="awayOv" class="ov">
+  <div class="box" role="dialog" aria-labelledby="awayT">
+    <h1 id="awayT">Bem-vindo de volta!</h1>
+    <p id="awayMsg"></p>
+    <div class="essBig"><span class="hi" data-i="gem"></span>+<span id="awayGain">0</span></div>
+    <button id="awayOk" class="pri wide">Pegar</button>
   </div>
 </div>
 <div id="quit" class="ov">
@@ -358,6 +387,8 @@ const ICO = {
   mouse: ['..KKKK..', '.KWWKSK.', 'KWWWKSSK', 'KKKKKKKK', 'KSSSSSSK', 'KSSSSSSK', '.KSSSSK.', '..KKKK..'],
   pad: ['KKKKKKKKKK', 'KSSSSKSSSK', 'KSSSSKSSSK', 'KKKKKKKKKK', 'KSSKSSSSSK', 'KSSKSSSSSK', 'KKKKKKKKKK'],
   eye: ['..........', '...KKKK...', '.KKWWWWKK.', 'KWWWccWWWK', 'KWWcKKcWWK', 'KWWcKKcWWK', 'KWWWccWWWK', '.KKWWWWKK.', '...KKKK...'],
+  gem: ['..........', '..KKKKKK..', '.KWCCCCcK.', 'KWCCCCCccK', 'KKKKKKKKKK', '.KCCCCccK.', '..KCCCcK..', '...KCcK...', '....KK....', '..........'],
+  clock: ['..KKKKKK..', '.KWWWWWWK.', 'KWWWKWWWWK', 'KWWWKWWWWK', 'KWWWKKKWWK', 'KWWWWWWWWK', 'KWWWWWWWWK', '.KWWWWWWK.', '..KKKKKK..', '..........'],
   play: ['KK......', 'KWKK....', 'KWWWKK..', 'KWWWWWKK', 'KWWWWWKK', 'KWWWKK..', 'KWKK....', 'KK......'],
 };
 /** Ícone em SVG (pixels nítidos). Junta pixels vizinhos da mesma cor para ficar leve. */
@@ -499,6 +530,7 @@ const BIOMA = (() => { const b = QS0.get('bioma'); if (BIOMAS.includes(b)) retur
 const VUL = BIOMA === 'vulcao';
 const BICHOS_TXT = { floresta: '🐄 Bois, bodes e coelhos', deserto: '🐪 Camelos e coelhos', neve: '🐻‍❄️ Ursos polares, renas e coelhos', vulcao: '🐐 Bodes e coelhos' }[BIOMA];
 const PVP = MODE === "pvp", ONLINE = MODE !== "solo", ME = ROLE === "guest" ? 1 : 0, GUEST = ROLE === "guest";
+let IDLE = false;   // modo automático (idle): liga no botão do menu
 // Castelos (centro em coordenadas de casa). No contra, cada jogador tem o seu: 0 a oeste, 1 a leste.
 const CASTLE_MAX = 500;   // vida do castelo (todos os modos)
 const PVP_GAP = 40;   // casas entre os dois castelos no modo contra (era 30)
@@ -1927,6 +1959,7 @@ function towerHeal(t, f) {
 }
 function hurt(e, dmg, flash = true) {
   if (e.dead) return;
+  if (IDLE && dmg > 0) dmg *= idleDmg();
   e.hp -= dmg; if (flash) e.flashT = .1; e.bar.g.visible = true;
   if (e.hp > 0) return;
   removeEnemy(e);
@@ -1944,7 +1977,7 @@ function hurt(e, dmg, flash = true) {
   }
   // Moedas por monstro: 2,5x o valor base (quem dava 10 agora dá 25).
   const pay = () => {
-    S.gold += Math.round(KILL_GOLD * e.T.reward * (1 + .05 * (S.wave - 1)) * (1 + S.power * .6));
+    S.gold += Math.round(KILL_GOLD * e.T.reward * (1 + .05 * (S.wave - 1)) * (1 + S.power * .6) * (IDLE ? idleGold() : 1));
     if (e.T.boss) toast(`Você derrotou o ${e.T.name}! 👑`);
     bump('gold'); updateUI();
   };
@@ -1990,7 +2023,7 @@ function damageTarget(tg, amt) {
   else if (tg.kind === 'tower') { tg.hp -= amt; tg.shake = .15; tg.bar.g.visible = true; if (tg.hp <= 0) destroyTower(tg); }
   else {
     sfx('hit', tg.cs.x, tg.cs.z); pfx('spark', tg.cs.x + (Math.random() - .5) * 3, 1 + Math.random(), tg.cs.z + 1.6, 1, 0, .3);
-    const f = () => { S.castle -= amt; tg.cs.shake = .3; if (S.castle <= 0) { if (PVP) pvpEnd(1 - tg.pl); else gameOver(); } };
+    const f = () => { S.castle -= amt * (IDLE ? idleWall() : 1); tg.cs.shake = .3; if (S.castle <= 0) { if (PVP) pvpEnd(1 - tg.pl); else if (IDLE) idleFall(); else gameOver(); } };
     if (PVP) withPlayer(tg.pl, f); else f();
   }
 }
@@ -2786,14 +2819,14 @@ function spawnFrom(item) {
 }
 function startWave() {
   if (S.waveActive || S.over) return;
-  if (MODE === 'solo' && S.wave >= 1 && !S.fresh) return newMapWave();
+  if (MODE === 'solo' && !IDLE && S.wave >= 1 && !S.fresh) return newMapWave();
   S.fresh = false;
   S.wave++; S.waveActive = true; S.spawnT = .3; sfx('wave');
   if (PVP) { const a = waveList(S.wave, 0), b = waveList(S.wave, 1); S.queue = []; for (let k = 0; k < Math.max(a.length, b.length); k++) { if (a[k]) S.queue.push(a[k]); if (b[k]) S.queue.push(b[k]); } }
   else S.queue = waveList(S.wave);
-  S.hpMul = 1.12 + .18 * (S.wave - 1) + .012 * (S.wave - 1) ** 2;
-  if (!ONLINE && S.wave > S.best) { S.best = S.wave; saveBest(); }
-  if (!ONLINE) dispatchEvent(new CustomEvent('vd-onda', { detail: S.wave }));
+  S.hpMul = (1.12 + .18 * (S.wave - 1) + .012 * (S.wave - 1) ** 2) * (IDLE ? DIFF[ID.diff].hp : 1);
+  if (!ONLINE && !IDLE && S.wave > S.best) { S.best = S.wave; saveBest(); }
+  if (!ONLINE && !IDLE) dispatchEvent(new CustomEvent('vd-onda', { detail: S.wave }));
   const dirs = [...new Set(S.queue.map(q => SIDE_NAME[q.side]))];
   if (PVP) toast(`Onda ${S.wave}! Seus monstros vão atacar o castelo do outro.`, 2500);
   else if (!bossWave(S.wave)) toast(`Monstros vindo de: ${dirs.join(', ')}`, 2500);
@@ -2810,7 +2843,7 @@ function updateWave(dt) {
     if (PVP) { withPlayer(0, give); withPlayer(1, give); } else give();
     for (const t of towers) t.hp = Math.min(t.maxHp, t.hp + t.maxHp * .3);
     for (const cs of CASTLES) { pfx('confetti', cs.x, 2.5, cs.z); pfx('coin', cs.x, 1, cs.z + 2.2); }
-    toast(`Onda ${S.wave} vencida! +🪙 ${bonus} e +${CASTLE_MAX / 10} de vida no castelo e nas armas${MODE === 'solo' ? '. A próxima onda vem num mapa novo!' : ''}`, 3200); bump('gold'); updateUI();
+    if (IDLE) idleWaveWon(bonus); else toast(`Onda ${S.wave} vencida! +🪙 ${bonus} e +${CASTLE_MAX / 10} de vida no castelo e nas armas${MODE === 'solo' ? '. A próxima onda vem num mapa novo!' : ''}`, 3200); bump('gold'); updateUI();
   }
 }
 // Modo contra: ondas saem sozinhas, de tempos em tempos
@@ -2875,12 +2908,13 @@ function waveText() {
   const wb = $('wave'), left = qlen() + enemies.filter(e => !e.dead).length;
   if (PVP) { wb.disabled = true; wb.textContent = S.waveActive ? `Onda ${S.wave} · faltam ${left}` : `Onda ${S.wave + 1} em ${Math.max(0, Math.ceil(S.nextT))}s`; return; }
   wb.disabled = S.waveActive;
+  if (IDLE && !S.waveActive) { wb.textContent = `▶ Onda ${S.wave + 1} em ${Math.max(0, Math.ceil(S.idleT))}s`; return; }
   if (S.waveActive) wb.textContent = `Onda ${S.wave} · faltam ${left}`;
   else wb.textContent = `▶ Onda ${S.wave + 1}${bossWave(S.wave + 1) ? ' 👑' : ''}`;
 }
 function updateUI() {
   if (!isLocal()) return;
-  $('gold').textContent = S.gold; $('waveN').textContent = S.wave; $('best').textContent = S.best;
+  $('gold').textContent = S.gold; $('waveN').textContent = S.wave; $('best').textContent = IDLE ? ID.best[ID.diff] || 0 : S.best; if (IDLE) $('ess').textContent = ID.ess;
   updateHUD(); waveText();
   renderSheet();
 }
@@ -2964,7 +2998,7 @@ function applyCmd(c) {
 $('wave').onclick = () => act({ c: 'wave' });
 $('bomb').onclick = throwBomb;
 $('runBtn').onclick = toggleSprint;
-$('speed').onclick = () => { S.speed = S.speed === 1 ? 2 : 1; $('speed').textContent = S.speed + 'x'; };
+$('speed').onclick = () => { S.speed = IDLE ? { 1: 2, 2: 4, 4: 1 }[S.speed] : S.speed === 1 ? 2 : 1; $('speed').textContent = S.speed + 'x'; };
 $('again').onclick = () => act({ c: 'again' });
 $('helpDet').open = matchMedia('(min-width:900px)').matches; // no PC o texto fica aberto ao lado; no celular, fechado
 $('helpList').innerHTML = TOUCH
@@ -2977,8 +3011,9 @@ function addPower(p) { S.power = Math.round((S.power + p) * 100) / 100; S.dmgMul
 let shopSig = '';
 function renderShop() {
   if (!isLocal()) return;
-  const sig = [S.gold, S.power, S.hw, [...S.owned], [...S.unlocked].map(T => T.name)].join('|'); if (sig === shopSig && $('shop').classList.contains('show')) return; shopSig = sig;
+  const sig = [S.gold, ID.ess, S.power, S.hw, [...S.owned], [...S.unlocked].map(T => T.name)].join('|'); if (sig === shopSig && $('shop').classList.contains('show')) return; shopSig = sig;
   $('shopGold').textContent = S.gold;
+  if (IDLE) { $('shopEss').textContent = ID.ess; $('shopUps').innerHTML = upsHTML(); }
   $('shopPow').textContent = S.power ? `+${Math.round(S.power * 100)}% de vida` : 'normal';
   const row = (ic, name, desc, btn) => `<div class="item"><span class="ic">${ic}</span><div class="tx">${name}<small>${desc}</small></div>${btn}</div>`;
   const pw = p => p ? ` · <span class="warn">monstros +${Math.round(p * 100)}%</span>` : '';
@@ -2998,6 +3033,7 @@ $('shop').addEventListener('click', ev => {
   if (ev.target.id === 'shop') return closeShop();
   const b = ev.target.closest('button'); if (!b || b.disabled) return;
   const d = b.dataset;
+  if (d.up) return buyUp(d.up);
   if (d.buy || d.hw || d.unlock) act({ c: 'shop', buy: d.buy, hw: d.hw, unlock: d.unlock });
 });
 function shopAct(d) {
@@ -3031,6 +3067,116 @@ const contaOk = () => window.__contaOk === true;
 function pedirConta(depois) {
   if (window.__pedirConta) window.__pedirConta(depois); else toast('Para jogar, entre na sua conta. Confira a internet e recarregue a página.', 3500);
 }
+// ===== Modo automático (idle) =====
+// As ondas começam sozinhas, as armas são montadas e melhoradas sozinhas e o castelo que cai volta IDLE_BACK ondas.
+// Cada onda vencida dá essência (fica guardada), que compra melhorias permanentes. Com o jogo fechado rende até IDLE_MAX_H horas.
+const DIFF = {
+  facil: { n: 'Fácil', hp: .6, rw: .6, need: 0, d: 'Monstros mais fracos' },
+  normal: { n: 'Normal', hp: 1, rw: 1, need: 0, d: 'Monstros normais' },
+  dificil: { n: 'Difícil', hp: 1.8, rw: 1.8, need: 15, d: 'Monstros com quase o dobro de vida' },
+  pesadelo: { n: 'Pesadelo', hp: 3.2, rw: 3, need: 30, d: 'Monstros com 3 vezes mais vida' },
+};
+const IUP = {
+  dano: { n: 'Dano das armas', d: '+10% de dano por nível', base: 20, i: 'target' },
+  ouro: { n: 'Mais ouro', d: '+10% de ouro por monstro', base: 15, i: 'coin' },
+  muro: { n: 'Castelo forte', d: 'O castelo leva 6% menos dano', base: 20, i: 'castle', max: 10 },
+  fora: { n: 'Ganho com o jogo fechado', d: '+15% do que rende enquanto você está fora', base: 25, i: 'clock' },
+};
+const IDLE_MAX_H = 8, IDLE_BACK = 5, IDLE_WAIT = 3, OFF_WAVES_H = 15;
+const ID = (() => { try { return JSON.parse(localStorage.getItem('vd-idle')) || {}; } catch (e) { return {}; } })();
+ID.ess = ID.ess || 0; ID.up = ID.up || {}; ID.best = ID.best || {}; if (!DIFF[ID.diff]) ID.diff = 'normal'; if (ID.auto === undefined) ID.auto = true;
+const saveIdle = () => { try { localStorage.setItem('vd-idle', JSON.stringify(ID)); } catch (e) {} };
+const upLv = k => ID.up[k] || 0;
+const upCost = k => Math.round(IUP[k].base * 1.6 ** upLv(k));
+const upMax = k => IUP[k].max && upLv(k) >= IUP[k].max;
+const idleDmg = () => 1 + .1 * upLv('dano');
+const idleGold = () => 1 + .1 * upLv('ouro');
+const idleWall = () => 1 - .06 * upLv('muro');
+const waveEss = n => Math.max(1, Math.round((1 + n * .5) * DIFF[ID.diff].rw));
+const offRate = () => (ID.rate || 0) * (1 + .15 * upLv('fora'));   // essência por hora com o jogo fechado
+const diffOk = k => Math.max(0, ...Object.values(ID.best)) >= DIFF[k].need;
+function upsHTML() {
+  return Object.entries(IUP).map(([k, u]) => `<div class="item"><span class="ic">${ico(u.i)}</span><div class="tx">${u.n} · nível ${upLv(k)}<small>${u.d}</small></div>${upMax(k) ? '<button class="on" disabled>Máximo</button>'
+    : `<button class="pri" data-up="${k}" ${ID.ess >= upCost(k) ? '' : 'disabled'}>${ico('gem')} ${upCost(k)}</button>`}</div>`).join('');
+}
+function renderIdle() {
+  $('idleEss').textContent = ID.ess;
+  $('idleInfo').textContent = ID.rate ? `Com o jogo fechado você ganha cerca de ${Math.round(offRate())} de essência por hora (até ${IDLE_MAX_H} horas).` : `Depois da primeira onda vencida, o jogo rende essência mesmo fechado (até ${IDLE_MAX_H} horas).`;
+  $('diffs').innerHTML = Object.entries(DIFF).map(([k, d]) => `<button class="dif${k === ID.diff ? ' on' : ''}" role="radio" aria-checked="${k === ID.diff}" data-d="${k}" ${diffOk(k) ? '' : 'disabled'}><span>${d.n}</span><small>${diffOk(k) ? `${d.d} · essência ×${d.rw}` : `🔒 Chegue à onda ${d.need} no automático`}</small></button>`).join('');
+  $('ups').innerHTML = upsHTML();
+}
+function buyUp(k) {
+  if (!IUP[k] || upMax(k) || ID.ess < upCost(k)) return;
+  ID.ess -= upCost(k); ID.up[k] = upLv(k) + 1; saveIdle(); sfx('buy');
+  renderIdle(); if (S.shop) { shopSig = ''; renderShop(); } updateUI();
+}
+// Monta, melhora e conserta as armas sozinho
+function autoBuild() {
+  const cs = CASTLES[0];
+  for (const t of towers) if (!t.dead && t.hp < t.maxHp * .4 && repairCost(t) <= S.gold) return repairTower(t);
+  const free = pads.filter(p => !p.t).sort((a, b) => Math.hypot(a.x - cs.x, a.z - cs.z) - Math.hypot(b.x - cs.x, b.z - cs.z));
+  const cnt = k => towers.filter(t => t.type === k).length;
+  const pick = Object.keys(TT).filter(k => (!TT[k].unlock || S.unlocked.has(TT[k])) && TT[k].cost <= S.gold).sort((a, b) => cnt(a) - cnt(b) || TT[b].cost - TT[a].cost)[0];
+  const ups = towers.filter(t => !t.dead && t.lv < 2).sort((a, b) => a.T.up[a.lv] - b.T.up[b.lv]);
+  if (free.length && pick && towers.length < 5 + Math.floor(S.wave * .6)) return placeTower(pick, free[0]);
+  if (ups.length) { if (ups[0].T.up[ups[0].lv] <= S.gold) upgradeTower(ups[0]); return; }
+  if (free.length && pick) placeTower(pick, free[0]);
+}
+let autoT = 0, idleSaveT = 0;
+function idleTick(dt) {
+  if (!S.waveActive && !S.over && (S.idleT -= dt) <= 0) startWave();
+  if (ID.auto && (autoT -= dt) <= 0) { autoT = .6; autoBuild(); }
+  if ((idleSaveT -= dt) <= 0) { idleSaveT = 5; ID.last = Date.now(); saveIdle(); }
+  if (!S.waveActive) waveText();
+}
+function idleWaveWon(gold) {
+  const g = waveEss(S.wave);
+  ID.ess += g; ID.best[ID.diff] = Math.max(ID.best[ID.diff] || 0, S.wave);
+  ID.rate = Math.max(ID.rate || 0, g * OFF_WAVES_H); ID.last = Date.now(); saveIdle();
+  S.idleT = IDLE_WAIT;
+  toast(`Onda ${S.wave} vencida! +🪙 ${gold} e +${g} de essência`, 2600);
+}
+// O castelo caiu no automático: não acaba o jogo, volta algumas ondas e continua
+function idleFall() {
+  const fell = S.wave, back = Math.max(0, fell - IDLE_BACK);
+  for (const e of enemies) removeEnemy(e);
+  S.queue = []; S.waveActive = false; S.wave = back; S.castle = CASTLE_MAX; S.idleT = IDLE_WAIT + 1;
+  for (const t of towers) t.hp = t.maxHp;
+  for (const c of CASTLES) { c.shake = .6; pfx('bigboom', c.x, 0, c.z, .8); }
+  sfx('over');
+  toast(`O castelo caiu na onda ${fell}! Voltando para a onda ${back + 1}. Compre melhorias com essência (loja) para ir mais longe.`, 5000);
+  updateUI();
+}
+function startIdle() {
+  if (!contaOk()) return pedirConta('idleGo');
+  IDLE = true; document.body.classList.add('idle');
+  $('idleOv').classList.remove('show'); $('help').classList.remove('show');
+  if (S.wave === 0 && !S.waveActive) S.idleT = IDLE_WAIT;
+  S.started = true; ID.last = Date.now(); saveIdle();
+  $('autoPill').textContent = ID.auto ? 'Auto ✓' : 'Auto ✕';
+  updateUI(); dispatchEvent(new Event('vd-jogar'));
+  toast(`Modo automático · ${DIFF[ID.diff].n}. As armas se montam sozinhas!`, 3000);
+}
+$('idleBtn').onclick = () => { renderIdle(); $('idleOv').classList.add('show'); };
+$('idleBack').onclick = () => $('idleOv').classList.remove('show');
+$('idleGo').onclick = startIdle;
+$('diffs').onclick = e => { const b = e.target.closest('.dif'); if (!b || b.disabled) return; if (IDLE && b.dataset.d !== ID.diff && S.wave > 0) return toast('Para trocar a dificuldade, volte ao menu e comece de novo.', 3000); ID.diff = b.dataset.d; saveIdle(); renderIdle(); };
+$('ups').onclick = e => { const b = e.target.closest('[data-up]'); if (b && !b.disabled) buyUp(b.dataset.up); };
+$('autoPill').onclick = () => { ID.auto = !ID.auto; saveIdle(); $('autoPill').textContent = ID.auto ? 'Auto ✓' : 'Auto ✕'; toast(ID.auto ? 'As armas voltam a ser montadas sozinhas.' : 'Agora você monta as armas.', 2200); };
+addEventListener('pagehide', () => { if (IDLE) { ID.last = Date.now(); saveIdle(); } });
+// Ao voltar: o que rendeu com o jogo fechado (até IDLE_MAX_H horas)
+(() => {
+  if (ONLINE || !ID.last || !ID.rate) return;
+  const away = Math.min(IDLE_MAX_H * 3600e3, Date.now() - ID.last);
+  const gain = Math.floor(offRate() * away / 3600e3);
+  if (away < 120e3 || gain < 1) return;
+  ID.ess += gain; ID.last = Date.now(); saveIdle();
+  const h = Math.floor(away / 3600e3), m = Math.floor(away % 3600e3 / 60e3);
+  $('awayMsg').textContent = `Enquanto você estava fora (${h ? h + 'h ' : ''}${m}min), suas armas continuaram lutando.` + (Date.now() - ID.last >= 0 && away >= IDLE_MAX_H * 3600e3 ? ` O máximo é ${IDLE_MAX_H} horas: volte antes para não perder.` : '');
+  $('awayGain').textContent = gain;
+  $('awayOv').classList.add('show');
+  $('awayOk').onclick = () => { $('awayOv').classList.remove('show'); renderIdle(); $('idleOv').classList.add('show'); };
+})();
 $('play').onclick = () => { if (!contaOk()) return pedirConta('play'); $('help').classList.remove('show'); S.started = true; if (!ONLINE) dispatchEvent(new Event('vd-jogar')); };
 // Ouro dos votos no TopIdle (conta.js busca no banco quando a partida começa)
 addEventListener('vd-bonus', e => { if (ONLINE || !(e.detail > 0)) return; S.gold += e.detail; bump('gold'); updateUI(); toast(`Obrigado pelo voto no TopIdle! +🪙 ${e.detail}`, 3500); });
@@ -3070,7 +3216,7 @@ const C = { tx: 0, tz: 3, dist: 24, pitch: .95, goal: null, follow: true };
 // Primeira pessoa: nas ondas de chefão (5, 10, 15...) a câmera vai para os olhos do herói. Só no modo sozinho.
 const FP_EVERY = 5, FP_EYE = 1.15, FP_JUMP = 6.5, FP_GRAV = 20, FP_LOOK = .0024, FP_TOUCH_LOOK = .006;
 const FP = { on: false, yaw: 0, pitch: 0, y: 0, vy: 0, fire: false, bob: 0, kick: 0, arms: null };
-const fpWave = n => !ONLINE && n > 0 && n % FP_EVERY === 0;
+const fpWave = n => !ONLINE && !IDLE && n > 0 && n % FP_EVERY === 0;
 const MIN = 8, MAX = 60;
 const SUNZ = new THREE.Vector3(-9, 18, 6).normalize(), SUNX = new THREE.Vector3(0, 1, 0).cross(SUNZ).normalize(), SUNY = SUNZ.clone().cross(SUNX);
 function updateCam() {
@@ -3359,6 +3505,7 @@ function loop(now) {
   if (GUEST) guestFrame(rdt, dt);
   else {
     if (PVP && dt) pvpTick(dt);
+    if (IDLE && dt) idleTick(dt);
     updateWave(dt); updateEnemies(dt, time); updateTowers(dt, rdt, time);
     if (ONLINE) for (const hh of heroes) withPlayer(hh.pl, () => updateHero(dt, rdt, time)); else updateHero(dt, rdt, time);
     updateShots(dt); updateClouds(dt); updateRads(dt, rdt); updateHearts(dt, rdt); updateAnimals(dt); updateDrops(dt, rdt);
@@ -3676,7 +3823,7 @@ C.tx = hero.home.x; C.tz = hero.home.z; clampCam(); updateCam(); C.tz = hero.hom
 if (ONLINE) startNet();
 setTimeout(() => $('load').classList.add('hide'), QS0.has('cont') || S.fresh ? 0 : Math.max(0, 5000 - performance.now()));
 requestAnimationFrame(loop);
-if (location.search.includes('teste')) window.__vd = { FP, fpSet, fpWave, SND, sfx, setMusic, setSfx, S, pads, hearts, dropHeart, PORTALS, PSEED, ET, spawnEnemy, waveList, bossWave, trail, placeTower, startWave, enemies, towers, hero, heroes, NET, MODE, ROLE, ME, CASTLES, act, pget, PS, gE, roomLink, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, heroShootAt, rads, renderShop: () => renderShop(), giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE, pfx, pfxList, FXM, PIXEL, explodeAt, BIOMA, Hjs, HAMP, giants, volcs, SND, sticks, newMapWave, towers, enemies, startWave, HW, TT, birds, heroAttack, hero, animals, drops, dropItem, hurt, buildEnemy };
+if (location.search.includes('teste')) window.__vd = { ID, startIdle, idleFall, autoBuild, get IDLE() { return IDLE; }, FP, fpSet, fpWave, SND, sfx, setMusic, setSfx, S, pads, hearts, dropHeart, PORTALS, PSEED, ET, spawnEnemy, waveList, bossWave, trail, placeTower, startWave, enemies, towers, hero, heroes, NET, MODE, ROLE, ME, CASTLES, act, pget, PS, gE, roomLink, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, heroShootAt, rads, renderShop: () => renderShop(), giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE, pfx, pfxList, FXM, PIXEL, explodeAt, BIOMA, Hjs, HAMP, giants, volcs, SND, sticks, newMapWave, towers, enemies, startWave, HW, TT, birds, heroAttack, hero, animals, drops, dropItem, hurt, buildEnemy };
 </script>
 </body>
 </html>
