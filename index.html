@@ -3084,8 +3084,14 @@ const IUP = {
 };
 const IDLE_MAX_H = 8, IDLE_BACK = 5, IDLE_WAIT = 3, OFF_WAVES_H = 15;
 const ID = (() => { try { return JSON.parse(localStorage.getItem('vd-idle')) || {}; } catch (e) { return {}; } })();
-ID.ess = ID.ess || 0; ID.up = ID.up || {}; ID.best = ID.best || {}; if (!DIFF[ID.diff]) ID.diff = 'normal'; if (ID.auto === undefined) ID.auto = true;
-const saveIdle = () => { try { localStorage.setItem('vd-idle', JSON.stringify(ID)); } catch (e) {} };
+function fixIdle() { ID.ess = ID.ess || 0; ID.up = ID.up || {}; ID.best = ID.best || {}; if (!DIFF[ID.diff]) ID.diff = 'normal'; if (ID.auto === undefined) ID.auto = true; }
+fixIdle();
+// Salva no navegador e avisa o conta.js, que manda para a conta (jogadores.idle) de tempos em tempos.
+const saveIdle = () => {
+  ID.salvo = Date.now();
+  try { localStorage.setItem('vd-idle', JSON.stringify(ID)); } catch (e) {}
+  if (ID.dono) dispatchEvent(new CustomEvent('vd-idle-salvar', { detail: JSON.parse(JSON.stringify(ID)) }));
+};
 const upLv = k => ID.up[k] || 0;
 const upCost = k => Math.round(IUP[k].base * 1.6 ** upLv(k));
 const upMax = k => IUP[k].max && upLv(k) >= IUP[k].max;
@@ -3165,7 +3171,9 @@ $('ups').onclick = e => { const b = e.target.closest('[data-up]'); if (b && !b.d
 $('autoPill').onclick = () => { ID.auto = !ID.auto; saveIdle(); $('autoPill').textContent = ID.auto ? 'Auto ✓' : 'Auto ✕'; toast(ID.auto ? 'As armas voltam a ser montadas sozinhas.' : 'Agora você monta as armas.', 2200); };
 addEventListener('pagehide', () => { if (IDLE) { ID.last = Date.now(); saveIdle(); } });
 // Ao voltar: o que rendeu com o jogo fechado (até IDLE_MAX_H horas)
-(() => {
+let awayDone = false;
+function idleAway() {
+  awayDone = true;
   if (ONLINE || !ID.last || !ID.rate) return;
   const away = Math.min(IDLE_MAX_H * 3600e3, Date.now() - ID.last);
   const gain = Math.floor(offRate() * away / 3600e3);
@@ -3176,7 +3184,24 @@ addEventListener('pagehide', () => { if (IDLE) { ID.last = Date.now(); saveIdle(
   $('awayGain').textContent = gain;
   $('awayOv').classList.add('show');
   $('awayOk').onclick = () => { $('awayOv').classList.remove('show'); renderIdle(); $('idleOv').classList.add('show'); };
-})();
+}
+// A conta chegou (conta.js): usa o progresso mais novo entre o da conta e o do navegador.
+// Progresso de outra conta neste navegador não passa para esta.
+function idleConta(e) {
+  const { id, idle: r } = e.detail || {}; if (!id) return;
+  const meu = ID.dono === id;
+  let usar = null;
+  if (r && !(meu && (ID.salvo || 0) > (r.salvo || 0))) usar = r;
+  else if (!r && ID.dono && !meu) usar = {};
+  if (usar) { for (const k of Object.keys(ID)) delete ID[k]; Object.assign(ID, usar); fixIdle(); }
+  ID.dono = id; saveIdle();
+  if (usar || !awayDone) idleAway();
+  if (IDLE) updateUI();
+}
+addEventListener('vd-idle-conta', idleConta);
+if (window.__idleConta) idleConta({ detail: window.__idleConta });
+addEventListener('vd-idle-sair', () => { for (const k of Object.keys(ID)) delete ID[k]; fixIdle(); try { localStorage.removeItem('vd-idle'); } catch (e) {} });
+setTimeout(() => { if (!awayDone) idleAway(); }, 8000);   // sem conta (ou internet lenta): usa o do navegador
 $('play').onclick = () => { if (!contaOk()) return pedirConta('play'); $('help').classList.remove('show'); S.started = true; if (!ONLINE) dispatchEvent(new Event('vd-jogar')); };
 // Ouro dos votos no TopIdle (conta.js busca no banco quando a partida começa)
 addEventListener('vd-bonus', e => { if (ONLINE || !(e.detail > 0)) return; S.gold += e.detail; bump('gold'); updateUI(); toast(`Obrigado pelo voto no TopIdle! +🪙 ${e.detail}`, 3500); });

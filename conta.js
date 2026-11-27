@@ -48,9 +48,11 @@ function mostrarConta() {
 async function carregarPerfil() {
   const { data: { session } } = await sb.auth.getSession();
   if (!session) { perfil = null; return mostrarConta(); }
-  const { data } = await sb.from('jogadores').select('nick,nome,melhor_onda').eq('id', session.user.id).maybeSingle();
+  const { data } = await sb.from('jogadores').select('nick,nome,melhor_onda,idle').eq('id', session.user.id).maybeSingle();
   perfil = data || { nick: session.user.user_metadata?.nick || 'Jogador', melhor_onda: 0 };
   perfil.id = session.user.id;
+  window.__idleConta = { id: perfil.id, idle: data?.idle || null };   // o jogo lê daqui se ainda não estiver ouvindo
+  dispatchEvent(new CustomEvent('vd-idle-conta', { detail: window.__idleConta }));
   const foi = mostrarConta();
   sb.from('jogadores').update({ ultimo_acesso: new Date().toISOString() }).eq('id', perfil.id).then(() => {});
   return foi;
@@ -119,7 +121,7 @@ for (const b of document.querySelectorAll('#accTabs button')) b.onclick = () => 
 $('accNovo').onsubmit = criarConta;
 $('accEntrar').onsubmit = entrar;
 $('eForgot').onclick = esqueci;
-$('accSair').onclick = async () => { await sb.auth.signOut(); perfil = null; mostrarConta(); $('acc').classList.remove('show'); toastConta('Você saiu da conta.'); };
+$('accSair').onclick = async () => { enviarIdle(); dispatchEvent(new Event('vd-idle-sair')); await sb.auth.signOut(); perfil = null; mostrarConta(); $('acc').classList.remove('show'); toastConta('Você saiu da conta.'); };
 for (const b of document.querySelectorAll('.olho')) b.onclick = () => { const i = $(b.dataset.for); i.type = i.type === 'password' ? 'text' : 'password'; b.textContent = i.type === 'password' ? 'Mostrar' : 'Esconder'; };
 $('fNasc').max = new Date().toISOString().slice(0, 10);
 
@@ -141,6 +143,19 @@ $('accNova').onsubmit = async e => {
   if (!(await carregarPerfil())) abrir('meu'); toastConta('Senha nova salva!');
 };
 carregarPerfil().catch(() => { $('accBtn').hidden = true; });
+
+// Progresso do modo automático (idle) na conta: o jogo avisa a cada salvamento e aqui manda no máximo a cada 15 s.
+const IDLE_ENVIO_MS = 15000;
+let idleT = 0, idlePend = null;
+function enviarIdle() {
+  clearTimeout(idleT); idleT = 0;
+  if (!perfil || !idlePend || idlePend.dono !== perfil.id) return;
+  const d = idlePend; idlePend = null;
+  sb.from('jogadores').update({ idle: d }).eq('id', perfil.id).then(() => {});
+}
+addEventListener('vd-idle-salvar', ev => { idlePend = ev.detail; if (!idleT) idleT = setTimeout(enviarIdle, IDLE_ENVIO_MS); });
+addEventListener('pagehide', enviarIdle);
+document.addEventListener('visibilitychange', () => { if (document.hidden) enviarIdle(); });
 
 // Voto no TopIdle: o link já leva o nick, e cada voto vira ouro na próxima partida.
 const TOPIDLE_JOGO = 'https://topidle.com/jogo/brand-defense-acca3c';
