@@ -229,6 +229,7 @@ body.touch #viewBtn{width:60px;height:60px;border-radius:50%;padding:0;flex-dire
     <div class="row"><button id="musBtn" class="sec"></button><button id="sfxBtn" class="sec"></button></div>
     <button id="gfx" class="sec wide"></button>
     <button id="visBtn" class="sec wide"></button>
+    <button id="fpMenu" class="sec wide"></button>
     </div></div>
   </div>
 </div>
@@ -3005,7 +3006,7 @@ $('helpList').innerHTML = TOUCH
   ? '<li>' + ico('zombie') + ' A partir da onda 5 aparecem os zumbis <b>Chipados</b>. Derrube um e ele solta uma ' + ico('heart') + ': pegue e leve até o castelo para ganhar vida.</li><li>' + ico('shield') + ' Onda 10: o <b>Ogro</b> solta um escudo (1 minuto sem levar dano). ' + ico('bolt') + ' Onda 15: o <b>Mutante</b> solta fôlego para correr mais rápido. ' + ico('dino') + ' Onda 20: chega o <b>Rei Rex</b>! ' + ico('dragon') + ' Da onda 25 em diante: o <b>Dragão</b>, que cospe fogo!</li><li>' + ico('cow') + BICHOS_TXT.replace(/^\S+\s/, '') + ' andam pelo mapa e atrapalham os monstros.</li><li>Ande com o controle redondo à esquerda.</li><li>O herói atira sozinho no monstro mais perto.</li><li>' + ico('bomb') + ' joga uma bomba. ' + ico('cart') + ' abre a loja de armas.</li><li>Toque nas placas de pedra para pôr armas.</li><li>Os monstros vêm de todos os lados e atacam suas armas.</li>'
   : '<li>' + ico('zombie') + ' A partir da onda 5 aparecem os zumbis <b>Chipados</b>. Derrube um e ele solta uma ' + ico('heart') + ': pegue e leve até o castelo para ganhar vida.</li><li>' + ico('shield') + ' Onda 10: o <b>Ogro</b> solta um escudo (1 minuto sem levar dano). ' + ico('bolt') + ' Onda 15: o <b>Mutante</b> solta fôlego para correr mais rápido. ' + ico('dino') + ' Onda 20: chega o <b>Rei Rex</b>! ' + ico('dragon') + ' Da onda 25 em diante: o <b>Dragão</b>, que cospe fogo!</li><li>' + ico('cow') + BICHOS_TXT.replace(/^\S+\s/, '') + ' andam pelo mapa e atrapalham os monstros.</li><li><b>WASD</b> ou setas: anda com o herói.</li><li>O herói atira sozinho quando um monstro chega perto. <b>O mouse escolhe a direção</b>. Clique para atirar também.</li><li><b>Q</b> ou <b>espaço</b>: joga bomba onde o mouse aponta.</li><li>Clique nas placas de pedra para pôr armas.</li><li><b>B</b> ou ' + ico('cart') + ': loja com armas novas.</li><li><b>Enter</b> começa a onda. Arraste para mover a câmera, roda do mouse para zoom.</li>';
 $('bombKey').hidden = TOUCH;
-$('helpList').insertAdjacentHTML('afterbegin', '<li>' + ico('target') + ' Nas ondas <b>5, 10, 15...</b> vem um chefão e o jogo vira <b>primeira pessoa</b>: ' + (TOUCH ? 'arraste a tela para mirar, segure o botão vermelho para atirar e use ▲ para pular' : 'o mouse mira, o clique atira, <b>espaço</b> pula e <b>Q</b> joga bomba') + '. A loja fecha até você vencer a onda. No jogo online, o botão <b>1ª pessoa</b>' + (TOUCH ? '' : ' (ou a tecla <b>V</b>)') + ' troca a visão quando você quiser.</li>');
+$('helpList').insertAdjacentHTML('afterbegin', '<li>' + ico('target') + ' Nas ondas <b>5, 10, 15...</b> vem um chefão e o jogo vira <b>primeira pessoa</b>: ' + (TOUCH ? 'arraste a tela para mirar, segure o botão vermelho para atirar e use ▲ para pular' : 'o mouse mira, o clique atira, <b>espaço</b> pula e <b>Q</b> joga bomba') + '. A loja fecha até você vencer a onda. Em qualquer modo, o botão <b>1ª pessoa</b>' + (TOUCH ? '' : ' (ou a tecla <b>V</b>)') + ' deixa você jogar sempre em primeira pessoa, quando quiser.</li>');
 for (const el of document.querySelectorAll('.hi[data-i]')) el.outerHTML = ico(el.dataset.i, el.className.replace('hi', '').trim());
 function addPower(p) { S.power = Math.round((S.power + p) * 100) / 100; S.dmgMul = 1 + S.power * .5; }
 let shopSig = '';
@@ -3025,7 +3026,7 @@ function renderShop() {
     `${T.desc}. Depois custa 🪙 ${T.cost} cada${pw(S.unlocked.has(T) ? 0 : T.power)}`,
     S.unlocked.has(T) ? '<button class="on" disabled>✓ Liberada</button>' : `<button class="pri" data-unlock="${k}" ${S.gold >= T.unlock ? '' : 'disabled'}>Liberar 🪙 ${T.unlock}</button>`)).join('');
 }
-function openShop() { if (S.over) return; if (document.pointerLockElement) document.exitPointerLock(); if (FP.on && !ONLINE) return toast('Na onda do chefão a loja fica fechada. Vença a onda para comprar!', 2600); closeSheet(); S.shop = true; shopSig = ''; renderShop(); $('shop').classList.add('show'); }
+function openShop() { if (S.over) return; if (document.pointerLockElement) document.exitPointerLock(); if (fpForced()) return toast('Na onda do chefão a loja fica fechada. Vença a onda para comprar!', 2600); closeSheet(); S.shop = true; shopSig = ''; renderShop(); $('shop').classList.add('show'); }
 function closeShop() { S.shop = false; $('shop').classList.remove('show'); updateUI(); }
 $('shopBtn').onclick = openShop;
 $('shopClose').onclick = closeShop;
@@ -3242,6 +3243,9 @@ const C = { tx: 0, tz: 3, dist: 24, pitch: .95, goal: null, follow: true };
 const FP_EVERY = 5, FP_EYE = 1.15, FP_JUMP = 6.5, FP_GRAV = 20, FP_LOOK = .0024, FP_TOUCH_LOOK = .006;
 const FP = { on: false, yaw: 0, pitch: 0, y: 0, vy: 0, fire: false, bob: 0, kick: 0, arms: null };
 const fpWave = n => !ONLINE && !IDLE && n > 0 && n % FP_EVERY === 0;
+// Onda de chefão no jogo sozinho: a primeira pessoa liga sozinha e a loja fecha.
+const fpForced = () => fpWave(S.wave) && !!S.waveActive;
+let fpForcedWas = false;
 const MIN = 8, MAX = 60;
 const SUNZ = new THREE.Vector3(-9, 18, 6).normalize(), SUNX = new THREE.Vector3(0, 1, 0).cross(SUNZ).normalize(), SUNY = SUNZ.clone().cross(SUNX);
 function updateCam() {
@@ -3335,7 +3339,7 @@ const FP_GLOW = { blaster: 0x93c5fd, fogo: 0xff8a1f, raio: 0xfde047, radiacao: 0
 const fpTouch = new Map();
 function fpSet(on) {
   if (FP.on === on) return;
-  FP.on = on; document.body.classList.toggle('fp', on); document.body.classList.toggle('fpSolo', on && !ONLINE); viewBtnUI();
+  FP.on = on; document.body.classList.toggle('fp', on); viewBtnUI();
   if (!FP.arms) FP.arms = makeFpArms();
   FP.arms.visible = on; FP.fire = false; FP.y = FP.vy = 0; fpTouch.clear(); $('fpFire').classList.remove('on');
   ptrs.clear(); drag = null;
@@ -3353,9 +3357,10 @@ function fpSet(on) {
 }
 // No online cada jogador escolhe: primeira pessoa ou normal (fica guardado no aparelho).
 FP.pick = (() => { try { return localStorage.getItem('vd-visao') === '1p'; } catch (e) { return false; } })();
-function viewBtnUI() { const b = $('viewBtn'); b.hidden = !ONLINE; b.classList.toggle('on', FP.pick); b.querySelector('.t').textContent = FP.pick ? (TOUCH ? 'Normal' : 'Visão normal') : '1ª pessoa'; b.setAttribute('aria-label', FP.pick ? 'Voltar para a visão normal' : 'Jogar em primeira pessoa'); }
-function toggleView() { if (!ONLINE) return; FP.pick = !FP.pick; try { localStorage.setItem('vd-visao', FP.pick ? '1p' : 'normal'); } catch (e) {} viewBtnUI(); }
-$('viewBtn').onclick = toggleView; viewBtnUI();
+function viewBtnUI() { const b = $('viewBtn'); b.hidden = fpForced(); fpMenuUI(); b.classList.toggle('on', FP.pick); b.querySelector('.t').textContent = FP.pick ? (TOUCH ? 'Normal' : 'Visão normal') : '1ª pessoa'; b.setAttribute('aria-label', FP.pick ? 'Voltar para a visão normal' : 'Jogar em primeira pessoa'); }
+function fpMenuUI() { $('fpMenu').innerHTML = ico('eye') + (FP.pick ? 'Visão em 1ª pessoa · trocar para normal' : 'Visão normal · trocar para 1ª pessoa'); }
+function toggleView() { if (fpForced()) return; FP.pick = !FP.pick; try { localStorage.setItem('vd-visao', FP.pick ? '1p' : 'normal'); } catch (e) {} viewBtnUI(); }
+$('viewBtn').onclick = toggleView; $('fpMenu').onclick = toggleView; viewBtnUI();
 function fpJump() { if (!FP.on || hero.dead || FP.y > 0) return; FP.vy = FP_JUMP; sfx('step', hero.pos.x, hero.pos.z); }
 function fpPointerDown(e) {
   if (e.pointerType === 'mouse') {
@@ -3387,8 +3392,9 @@ document.addEventListener('pointerlockchange', () => { if (document.pointerLockE
 }
 // Chamado a cada quadro: liga/desliga pela onda, faz o pulo e mexe os bracinhos.
 function fpFrame(rdt, dt) {
-  const want = ONLINE ? FP.pick && !S.over : fpWave(S.wave) && S.waveActive && !S.over;
+  const forced = fpForced(), want = ONLINE ? FP.pick && !S.over : (forced || FP.pick && S.started) && !S.over;
   document.body.classList.toggle('fpWaving', !!S.waveActive);
+  if (forced !== fpForcedWas) { fpForcedWas = forced; document.body.classList.toggle('fpSolo', forced); viewBtnUI(); }
   if (want !== FP.on) fpSet(want);
   if (!FP.on) return;
   hero.g.visible = hero.bar.g.visible = false;
