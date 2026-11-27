@@ -166,6 +166,36 @@ body.touch #viewBtn{width:60px;height:60px;border-radius:50%;padding:0;flex-dire
 #netPill.on{background:#1f7a4a}
 #netPill.off{background:#8a2a2a}
 @media (max-width:420px){#hud{gap:4px}.pill{padding:4px 8px;font-size:14px}button.pill{padding:0 8px;min-width:44px}}
+
+/* Caçada na Mata e Duelo na Mata */
+.box .mata{background:linear-gradient(#3f8f3a,#24502a);color:#fff;font-weight:900;flex-direction:column;line-height:1.1;padding:8px 14px}.box .mata small{display:block;font-weight:600;font-size:12px;opacity:.9;margin-top:2px}
+body.mata #bar,body.mata #inds,body.mata #hud>.pill:not(#menuBtn):not(#musPill):not(#netPill):not(#helpBtn),body.mata #fpHint{display:none!important}
+#mTop,#mBtns,#mAct,#mHit,#scope{display:none}
+body.mata.fp #mTop{position:fixed;left:50%;top:calc(var(--sat) + 52px);transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;z-index:4;width:max-content;max-width:94vw}
+body.mata #toast{top:calc(var(--sat) + 136px)}
+#mGoalRow{display:flex;align-items:center;gap:6px}
+#mGoal{background:var(--card);border-radius:999px;padding:6px 14px;font-size:14px;box-shadow:0 2px 8px #0004;text-align:center}
+#mArrow{width:34px;height:34px;border-radius:50%;background:#ffc93c;color:#2a1a00;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:20px;box-shadow:0 2px 8px #0006}#mArrow[hidden]{display:none}
+#mEye{display:flex;align-items:center;gap:8px;background:var(--card);border-radius:999px;padding:5px 12px 5px 8px;font-size:13px;font-weight:700;box-shadow:0 2px 8px #0004}
+#mEye .bar{width:70px;height:8px;border-radius:5px;background:#0008;overflow:hidden}#mEyeIn{display:block;height:100%;width:0;background:#facc15;transition:width .15s}
+#mEye.look #mEyeIn{background:#facc15}#mEye.alert{background:#7a4b0f}#mEye.alert #mEyeIn{background:#fb923c}#mEye.chase{background:#8f1f1f}#mEye.chase #mEyeIn{background:#ff4d4d}
+body.mata.fp #mBtns{position:fixed;right:calc(var(--sar) + 12px);bottom:calc(var(--sab) + 84px);display:flex;flex-direction:column;gap:10px;z-index:4}
+#mBtns button{min-width:64px;height:56px;border-radius:16px;background:var(--card);box-shadow:0 4px 12px #0006;font-weight:800;font-size:13px;padding:0 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05}
+#mBtns button small{font-size:11px;color:var(--muted);font-weight:700}#mBtns button.on{background:#ffc93c;color:#2a1a00}#mBtns button.on small{color:#2a1a00}
+body:not(.touch) #mZoom,body:not(.touch) #mCrouch{display:none!important}body:not(.touch).mata.fp #mBtns{bottom:calc(var(--sab) + 16px)}
+body.touch.mata #fpBtns{right:calc(var(--sar) + 96px)}
+body.mata.fp #mAct:not([hidden]){position:fixed;left:50%;bottom:calc(var(--sab) + 46px);transform:translateX(-50%);display:flex;align-items:center;gap:6px;padding:0 18px;z-index:4;font-weight:800}
+body.touch.mata.fp #mAct:not([hidden]){bottom:calc(var(--sab) + 190px)}
+#mHit{position:fixed;left:50%;top:50%;width:30px;height:30px;margin:-15px 0 0 -15px;pointer-events:none;z-index:6}
+#mHit::before,#mHit::after{content:"";position:absolute;left:50%;top:0;width:3px;height:100%;margin-left:-1.5px;background:#fff;border-radius:2px;transform:rotate(45deg)}#mHit::after{transform:rotate(-45deg)}
+#mHit.on{display:block}#mHit.head::before,#mHit.head::after{background:#ff3b3b}
+body.scope #scope{display:block;position:fixed;inset:0;pointer-events:none;z-index:3;background:radial-gradient(circle at center,transparent 0 33vmin,#000c 33.4vmin,#000 36vmin)}
+#scope::before,#scope::after{content:"";position:absolute;left:50%;top:50%;background:#000c}#scope::before{width:66vmin;height:2px;margin:-1px 0 0 -33vmin}#scope::after{width:2px;height:66vmin;margin:-33vmin 0 0 -1px}
+#scope i{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:#ff3b3b}
+body.scope #cross{display:none!important}
+#mFade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .35s;z-index:15}#mFade.on{opacity:1}
+.mataBox{max-width:520px;max-height:calc(100vh - 40px);overflow:auto;text-align:left;padding:16px}.mataBox h1{text-align:center;margin:0 0 6px}.mataBox ul{margin:6px 0 12px;padding-left:20px;color:var(--txt);font-size:14px;line-height:1.4}.mataBox li{margin:4px 0}.mataBox p{color:var(--muted);font-size:14px;margin:6px 0}
+.mataBox .novo{color:#ffc93c}
 </style>
 </head>
 <body>
@@ -199,6 +229,10 @@ body.touch #viewBtn{width:60px;height:60px;border-radius:50%;padding:0;flex-dire
 <div id="fpHp" role="progressbar" aria-label="Vida do herói"><i id="fpHpIn"></i></div>
 <div id="fpHint" hidden>Clique na tela para mirar · Esc solta o mouse</div>
 <div id="fpBtns"><button id="fpJump" aria-label="Pular">▲</button><button id="fpFire" aria-label="Atirar (segure)"><span class="hi" data-i="target"></span></button></div>
+<div id="mTop" aria-live="polite"><div id="mGoalRow"><div id="mGoal"></div><span id="mArrow" hidden aria-label="Direção do castelo">⬆</span></div><div id="mEye"><span aria-hidden="true">👁️</span><span class="bar"><i id="mEyeIn"></i></span><span id="mEyeT">Ninguém te viu</span></div></div>
+<div id="mBtns"><button id="mWpn" aria-label="Trocar de arma">🔭 Sniper</button><button id="mZoom" aria-label="Zoom da mira">🔍<small>Zoom</small></button><button id="mCrouch" aria-label="Agachar">🧎<small>Agachar</small></button></div>
+<button id="mAct" class="pri" hidden>🕳️ Entrar no túnel<small id="mActK"> (E)</small></button>
+<div id="mHit" aria-hidden="true"></div><div id="scope" aria-hidden="true"><i></i></div><div id="mFade" aria-hidden="true"></div>
 <div id="bar">
   <button id="viewBtn" hidden><span class="hi" data-i="eye"></span><span class="t">1ª pessoa</span></button>
   <button id="shopBtn" class="round" aria-label="Abrir loja">🛒</button>
@@ -224,6 +258,7 @@ body.touch #viewBtn{width:60px;height:60px;border-radius:50%;padding:0;flex-dire
     <div id="maps" class="maps" role="radiogroup" aria-label="Escolha o mapa"></div>
     <button id="play" class="pri">Jogar</button>
     <button id="idleBtn" class="sec wide idle"><span><span class="hi" data-i="gem"></span>Modo automático (idle)</span><small>O jogo joga sozinho e rende até com ele fechado</small></button>
+    <button id="mataBtn" class="sec wide mata"><span>🌲 Caçada na Mata</span><small>1ª pessoa: cace monstros escondido, com sniper</small></button>
     <button id="online" class="sec wide"><span class="hi" data-i="globe"></span>Jogar online com um amigo</button>
     <button id="voteBtn" class="sec wide vote"><span class="hi" data-i="trophy"></span>Votar no TopIdle · +300 de ouro</button>
     <button id="accBtn" class="sec wide" hidden><span class="hi" data-i="user"></span><span class="t">Criar conta / Entrar</span></button>
@@ -269,6 +304,7 @@ body.touch #viewBtn{width:60px;height:60px;border-radius:50%;padding:0;flex-dire
     <p>Escolha como vocês vão jogar. Depois é só mandar o link.</p>
     <button class="mode" data-m="coop">🤝 Juntos<small>Os dois defendem o mesmo castelo. Dinheiro e armas do campo são dos dois.</small></button>
     <button class="mode" data-m="pvp">⚔️ Um contra o outro<small>Cada um tem seu castelo. Seus monstros atacam o castelo do amigo. Quem derrubar o outro castelo vence.</small></button>
+    <button class="mode" data-m="duelo">🎯 Duelo na Mata<small>1ª pessoa, sem monstro grande. Cada um tem aranhas que caçam o outro. Melhor de 3.</small></button>
     <button id="onlBack" class="sec wide">Voltar</button>
   </div>
 </div>
@@ -321,6 +357,31 @@ body.touch #viewBtn{width:60px;height:60px;border-radius:50%;padding:0;flex-dire
       <button id="accSair" class="sec wide">Sair da conta</button>
     </div>
     <p id="accErr" class="accMsg" role="alert" hidden></p>
+  </div>
+</div>
+<div id="mataOv" class="ov">
+  <div class="box mataBox" role="dialog" aria-labelledby="mataT">
+    <h1 id="mataT">🌲 Caçada na Mata</h1>
+    <p>Monstros andam em grupos pela mata. Abata os alvos sem ser pego e volte ao castelo.</p>
+    <ul>
+      <li>🎯 Alvos: <b>1 Rei Rex</b>, <b>3 Ogros</b> e <b>8 outros monstros</b>.</li>
+      <li>👁️ Eles só veem quem está na frente deles e perto. Pelas costas ou atrás de casa, árvore ou pedra, ninguém te vê. Agachado, na água ou à noite, veem menos ainda.</li>
+      <li>🔫 Se te virem, atiram, e o tiro deles também atravessa o mapa. Os maiores andam mais rápido.</li>
+      <li>🔭 O tiro não tem limite de distância. Abater de longe não te entrega, mas o grupo fica em alerta.</li>
+      <li>🏃 Se te virem, o grupo inteiro corre atrás. Os que estão longe não.</li>
+      <li>🪜 Suba em cabanas, torres e casas na árvore pela escada. Pule para subir em pedras e árvores. 🏠 Nas casas grandes dá para entrar. 🕳️ Túneis levam para outro lugar. 🏊 Dá para nadar.</li>
+    </ul>
+    <p id="mataRec"></p>
+    <button id="mataGo" class="pri wide">Começar a caçada</button>
+    <button id="mataBack" class="sec wide">Voltar ao menu</button>
+  </div>
+</div>
+<div id="mEnd" class="ov">
+  <div class="box mataBox" role="dialog" aria-labelledby="mEndT">
+    <h1 id="mEndT">Fim</h1>
+    <ul id="mEndS"></ul>
+    <button id="mEndAgain" class="pri wide">Jogar de novo</button>
+    <button id="mEndMenu" class="sec wide">Voltar ao menu</button>
   </div>
 </div>
 <div id="over" class="ov">
@@ -527,13 +588,14 @@ addEventListener('pointerdown', audioInit); addEventListener('keydown', audioIni
 const N = 96, HALF = N / 2, C0 = HALF - .5, MS = N / 48;   // MS: quanto o mapa cresceu desde o original (48 casas)
 // Modos: solo, online "juntos" (coop) e online "um contra o outro" (pvp). ?sala=CÓDIGO&modo=coop|pvp (&host=1 para quem criou)
 const QS0 = new URLSearchParams(location.search), ROOM = QS0.get("sala");
-const MODE = ROOM ? (QS0.get("modo") === "pvp" ? "pvp" : "coop") : "solo", ROLE = ROOM ? (QS0.has("host") ? "host" : "guest") : "solo";
+const MODE = ROOM ? ({ pvp: "pvp", duelo: "duelo" }[QS0.get("modo")] || "coop") : "solo", ROLE = ROOM ? (QS0.has("host") ? "host" : "guest") : "solo";
 // Mapas: floresta (o de sempre), deserto, neve e vulcão. O convidado online usa o mapa de quem criou a sala (vem no link).
 const BIOMAS = ['floresta', 'deserto', 'neve', 'vulcao'], BIOMA_NOME = { floresta: '🌳 Floresta', deserto: '🏜️ Deserto', neve: '❄️ Neve', vulcao: '🌋 Vulcão' };
 const BIOMA = (() => { const b = QS0.get('bioma'); if (BIOMAS.includes(b)) return b; if (ROLE !== 'guest') try { const v = localStorage.getItem('vd-bioma'); if (BIOMAS.includes(v)) return v; } catch (e) {} return 'floresta'; })();
 const VUL = BIOMA === 'vulcao';
 const BICHOS_TXT = { floresta: '🐄 Bois, bodes e coelhos', deserto: '🐪 Camelos e coelhos', neve: '🐻‍❄️ Ursos polares, renas e coelhos', vulcao: '🐐 Bodes e coelhos' }[BIOMA];
-const PVP = MODE === "pvp", ONLINE = MODE !== "solo", ME = ROLE === "guest" ? 1 : 0, GUEST = ROLE === "guest";
+const HUNT = MODE === 'solo' && QS0.has('caca'), DUEL = MODE === 'duelo', MATA = HUNT || DUEL;   // modos da mata (só 1ª pessoa)
+const PVP = MODE === "pvp" || DUEL, ONLINE = MODE !== "solo", ME = ROLE === "guest" ? 1 : 0, GUEST = ROLE === "guest";
 let IDLE = false;   // modo automático (idle): liga no botão do menu
 // Castelos (centro em coordenadas de casa). No contra, cada jogador tem o seu: 0 a oeste, 1 a leste.
 const CASTLE_MAX = 500;   // vida do castelo (todos os modos)
@@ -773,7 +835,7 @@ function flowDir(p, out, flow = flows[0], cx = 0, cz = 0, seed = 0) {
 
 // Tudo é sólido: empurra para fora de água, castelo, árvores, pedras e armas.
 const SOLID_R = { [TREE]: .32, [ROCK]: .4 };
-function collide(p, r, swim = false) {
+function collide(p, r, swim = false, high = false) {
   const ci = cellOf(p.x), cj = cellOf(p.z);
   for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
     const i = ci + a, j = cj + b, t = at(i, j);
@@ -784,7 +846,7 @@ function collide(p, r, swim = false) {
       else { const l = p.x - x0, rr = x0 + 1 - p.x, u = p.z - z0, dd = z0 + 1 - p.z, m = Math.min(l, rr, u, dd);
         if (m === l) p.x = x0 - r; else if (m === rr) p.x = x0 + 1 + r; else if (m === u) p.z = z0 - r; else p.z = z0 + 1 + r; }
     } else {
-      let R = SOLID_R[t];
+      let R = high ? 0 : SOLID_R[t];
       if (t === PAD) { const pd = padAt[K(i, j)]; R = pd && pd.t ? .42 : 0; }
       if (!R) continue;
       const dx = p.x - wc(i), dz = p.z - wc(j), d = Math.hypot(dx, dz), m = R + r;
@@ -2128,7 +2190,7 @@ function spawnEnemy(type, x, z, team = 0) {
   const e = { id: ++eid, team, tc: CASTLES[tci], flowF: flows[tci], kind: 'enemy', type, T, g, inner, body, f1, f2, limbs: built.L, bar, hp, maxHp: hp, pos: g.position, r: s * .45, cr: Math.min(s * .45, .48),
     vel: V(), dir: V(), walk: 0, slowT: 0, slowF: 1, flashT: 0, burnT: 0, burnDps: 0, poisonT: 0, poisonDps: 0, think: 0, target: null, atkCd: Math.random(),
     healCd: 2, sumCd: 5, slamCd: 2, ph: Math.random() * 6.28, wf: .4 + Math.random() * .7, wob: .35 + Math.random() * .45,
-    hitY: s * .5, fd: 99, dead: false, sp: T.sp * waveSpeed() * (.9 + Math.random() * .2), px: x, pz: z };
+    hitY: s * .5, top: built.top, fd: 99, dead: false, sp: T.sp * waveSpeed() * (.9 + Math.random() * .2), px: x, pz: z };
   e.pos.set(x, 0, z);
   enemies.push(e);
   return e;
@@ -2152,6 +2214,7 @@ function pickTarget(e) {
 const desired = V(), tmp = V(), tmp2 = V();
 function updateEnemies(dt, time) {
   if (!dt) return;
+  if (MATA) { for (const e of enemies) if (!e.dead && e.hunt) huntStep(e, dt); separateEnemies(dt, time); return; }
   if (PVP) for (const foe of [0, 1]) withPlayer(foe, () => { for (const e of enemies) if (!e.dead && e.team !== foe) stepEnemy(e, dt, time); });
   else for (const e of enemies) if (!e.dead) stepEnemy(e, dt, time);
   separateEnemies(dt, time);
@@ -2249,6 +2312,7 @@ function hurt(e, dmg, flash = true) {
   if (e.dead) return;
   if (IDLE && dmg > 0) dmg *= idleDmg();
   e.hp -= dmg; if (flash) e.flashT = .1; e.bar.g.visible = true;
+  if (e.hunt && dmg > 0) mataHurt(e, e.hp <= 0);
   if (e.hp > 0) return;
   removeEnemy(e);
   if (KILLER) towerHeal(KILLER, e.T.boss ? .8 : .25);
@@ -2279,7 +2343,7 @@ function hitFoeHero(pl, x, z, rad, dmg) { const fh = foeHero(pl); if (fh && !fh.
 // Contra: as armas e o castelo do outro jogador também levam tiro e bomba do herói.
 const PVP_HIT_TOWER = 1, PVP_HIT_CASTLE = .4, CASTLE_R = 2.2;
 function pvpStructs(pl) {
-  if (!PVP) return [];
+  if (!PVP || DUEL) return [];
   const L = [];
   for (const t of towers) if (!t.dead && t.owner !== pl) L.push({ tg: t, x: t.pos.x, z: t.pos.z, r: t.r, k: PVP_HIT_TOWER });
   for (const cs of CASTLES) if (cs.T.pl !== pl) L.push({ tg: cs.T, x: cs.x, z: cs.z, r: CASTLE_R, k: PVP_HIT_CASTLE, box: true });
@@ -2982,14 +3046,15 @@ function moveLocalHero(dt) {
   const ml = Math.hypot(mx, mz); if (ml > 1) { mx /= ml; mz /= ml; }
   if (FP.on) { const sn = Math.sin(FP.yaw), cs = Math.cos(FP.yaw), wx = cs * mx + sn * mz, wz = -sn * mx + cs * mz; mx = wx; mz = wz; } // primeira pessoa: W anda para onde você olha
   const moving = ml > .1 && dt > 0;
-  const run = (hero.sprint && hero.boost > 0) || hero.starT > 0, hsp = 3.6 * (run ? BOOST_MUL : 1);
+  const run = !MATA && ((hero.sprint && hero.boost > 0) || hero.starT > 0), hsp = MATA ? 3.6 * mataSpeed(hero) : 3.6 * (run ? BOOST_MUL : 1);
   if (moving) { hero.pos.x += mx * hsp * dt; hero.pos.z += mz * hsp * dt; hero.walk += hsp * dt; C.follow = true; C.goal = null; if (run) { hero.boost = Math.max(0, hero.boost - dt); if (Math.random() < dt * 14) burst(tmp.set(hero.pos.x, .2, hero.pos.z), 0xfacc15, 1, .6, .07); } }
   for (const e of enemies) {
-    if (e.dead) continue;
+    if (e.dead || (hero.alt || 0) > 1) continue;
     const dx = hero.pos.x - e.pos.x, dz = hero.pos.z - e.pos.z, d = Math.hypot(dx, dz), m = e.r + hero.r;
     if (d < m && d > 1e-4) { hero.pos.x += dx / d * (m - d); hero.pos.z += dz / d * (m - d); }
   }
-  pushOffAnimals(hero.pos, hero.r); collide(hero.pos, hero.r); collide(hero.pos, hero.r);
+  pushOffAnimals(hero.pos, hero.r); const hi = MATA && (hero.alt || 0) + FP.y > .45; collide(hero.pos, hero.r, MATA, hi); collide(hero.pos, hero.r, MATA, hi);
+  if (MATA) mataMove(hero, moving, dt);
   return moving ? Math.atan2(mx, mz) : null;
 }
 // Pernas e braço livre balançam ao andar; parado, volta para a pose de pé. O braço da arma fica apontado e dá coice no tiro.
@@ -3039,9 +3104,15 @@ function updateHero(dt, rdt, time) {
       if (d > HR + e.r || d < .01) continue;
       const a = Math.acos(clamp((dx * aimV.x + dz * aimV.z) / d, -1, 1)) - Math.atan(e.r / d); if (a < bestA) { bestA = a; tgt = e; }
     }
-    if (tgt) aimV.set(tgt.pos.x - hero.pos.x, 0, tgt.pos.z - hero.pos.z).normalize();
+    if (tgt && !MATA) aimV.set(tgt.pos.x - hero.pos.x, 0, tgt.pos.z - hero.pos.z).normalize();
     face = null; hero.g.rotation.y = Math.atan2(aimV.x, aimV.z);
-    if (fpCtl.fire && dt && hero.cd <= 0) { heroAttack(aimV); if (hero.pl === ME) FP.kick = 1; }
+    if (MATA) {
+      // mata: tiro de verdade em 3D (sem ajuda de mira), sai do olho para onde a mira aponta
+      if (fpCtl.fire && dt && hero.cd <= 0) {
+        const mine = hero.pl === ME, pi = clamp(+(mine ? FP.pitch + M_.sy : fpCtl.pi) || 0, -1.2, 1.2), ya = +(mine ? FP.yaw + M_.sx : fpCtl.yaw) || 0;
+        mataFire(hero, ya, pi, mine ? M_.w : fpCtl.w === 'sniper' ? 'sniper' : 'fuzil');
+      }
+    } else if (fpCtl.fire && dt && hero.cd <= 0) { heroAttack(aimV); if (hero.pl === ME) FP.kick = 1; }
   } else if (nearE && dt) {
     if (aimP) {
       aimV.set(aimP.x - hero.pos.x, 0, aimP.z - hero.pos.z).normalize();
@@ -3058,6 +3129,7 @@ function updateHero(dt, rdt, time) {
   }
   if (face !== null) hero.g.rotation.y = lerpAng(hero.g.rotation.y, face, Math.min(1, rdt * 14));
   if (!danger) hero.hp = Math.min(hero.maxHp, hero.hp + 6 * dt);
+  if (hero.hp <= 0 && MATA) { mataHeroDown(hero); return; }
   if (hero.hp <= 0) {
     const back = PVP ? 6 : 8;
     if (hero.pl === ME) sfx('herodie');
@@ -3067,7 +3139,7 @@ function updateHero(dt, rdt, time) {
     if (PVP) withPlayer(1 - hero.pl, () => { S.gold += 200; toast('Você derrubou o herói inimigo! +🪙 200', 3000); bump('gold'); updateUI(); });
     return;
   }
-  setBar(hero.bar, hero.pos.x, 1.75, hero.pos.z, hero.hp / hero.maxHp);
+  setBar(hero.bar, hero.pos.x, 1.75 + (hero.alt || 0), hero.pos.z, hero.hp / hero.maxHp);
 }
 
 // ===== Estado e ondas =====
@@ -3161,7 +3233,7 @@ function showOver() {
   sfx(pv && won ? 'win' : 'over');
   $('ovTitle').textContent = pv ? (won ? 'Você venceu! 🏆' : 'Você perdeu!') : 'O castelo caiu!';
   $('ovSolo').hidden = pv; $('ovPvp').hidden = !pv;
-  $('ovPvp').textContent = won ? 'Você destruiu o castelo do outro jogador.' : 'O outro jogador destruiu seu castelo.';
+  $('ovPvp').textContent = DUEL ? `${won ? 'Você venceu o duelo na mata' : 'O outro jogador venceu o duelo'}: ${M_.duel[ME]} × ${M_.duel[1 - ME]}.` : won ? 'Você destruiu o castelo do outro jogador.' : 'O outro jogador destruiu seu castelo.';
   $('ovWave').textContent = S.wave; $('ovBest').textContent = S.best;
   $('ovNew').hidden = ONLINE || !(S.wave > S.bestAtStart);
   $('over').classList.add('show'); updateUI();
@@ -3175,6 +3247,7 @@ function resetGame() {
   for (const c of coins) scene.remove(c.m);
   enemies.length = shots.length = bolts.length = towers.length = coins.length = 0;
   computeFlow(); for (const hh of heroes) resetHero(hh);
+  if (MATA) mataReset();
   for (const c of clouds) scene.remove(c.m); clouds.length = 0;
   for (const z of rads) for (const o of [z.disk, z.ring, z.ring2]) scene.remove(o); rads.length = 0;
   Object.assign(S, freshPlayer(), { wave: 0, waveActive: false, queue: [], over: false, bestAtStart: S.best, nextT: 10, winner: -1 });
@@ -3503,12 +3576,24 @@ setTimeout(() => { if (!awayDone) idleAway(); }, 8000);   // sem conta (ou inter
 $('play').onclick = () => { if (!contaOk()) return pedirConta('play'); $('help').classList.remove('show'); S.started = true; if (!ONLINE) dispatchEvent(new Event('vd-jogar')); };
 // Ouro dos votos no TopIdle (conta.js busca no banco quando a partida começa)
 addEventListener('vd-bonus', e => { if (ONLINE || !(e.detail > 0)) return; S.gold += e.detail; bump('gold'); updateUI(); toast(`Obrigado pelo voto no TopIdle! +🪙 ${e.detail}`, 3500); });
+$('mataBtn').onclick = () => { if (!contaOk()) return pedirConta('mataBtn'); location.href = location.pathname + '?caca=1&bioma=floresta' + (location.search.includes('teste') ? '&teste' : ''); };
 $('helpBtn').onclick = () => { $('help').classList.add('show'); $('maps').hidden = true; S.started = false; };
 addEventListener('keydown', e => {
   if (e.target.closest && e.target.closest('input,textarea,select')) return; // digitando no cadastro: não mexe no jogo
   if (e.target.closest && e.target.closest('button') && (e.code === 'Space' || e.code === 'Enter')) e.preventDefault();
   keys.add(e.code);
   if (e.code === 'Escape') closeSheet();
+  if (MATA) {
+    // mata: sem loja, sem ondas e sem bomba. Q/1/2 troca a arma, C agacha, E entra no túnel, Z dá zoom
+    if (e.code === 'Space') { e.preventDefault(); fpJump(); }
+    if (!e.repeat && FP.on) {
+      if (e.code === 'KeyQ' || (e.code === 'Digit1' && M_.w !== 'fuzil') || (e.code === 'Digit2' && M_.w !== 'sniper')) mataWeapon();
+      if (e.code === 'KeyC' || e.code === 'ControlLeft') mataCrouch();
+      if (e.code === 'KeyE') mataUseHatch();
+      if (e.code === 'KeyZ') mataZoom();
+    }
+    return;
+  }
   if (e.code === 'Enter') act({ c: 'wave' });
   if (e.code === 'KeyB') { S.shop ? closeShop() : openShop(); }
   if (e.code === 'Escape' && S.shop) closeShop();
@@ -3548,7 +3633,7 @@ const SUNZ = new THREE.Vector3(-9, 18, 6).normalize(), SUNX = new THREE.Vector3(
 function updateCam() {
   // plano de perto acompanha o zoom: com a câmera longe a profundidade fica precisa (sem linhas pretas no chão)
   const nr = FP.on ? .05 : clamp(C.dist * .1, .5, 6); if (Math.abs(cam.near - nr) > .01) { cam.near = nr; cam.updateProjectionMatrix(); PIX.mat.uniforms.uNear.value = nr; }
-  if (FP.on) { cam.position.set(hero.pos.x, Hjs(hero.pos.x, hero.pos.z) + FP_EYE + FP.y, hero.pos.z); cam.rotation.set(FP.pitch, FP.yaw, 0, 'YXZ'); }
+  if (FP.on) { cam.position.set(hero.pos.x, Hjs(hero.pos.x, hero.pos.z) + FP_EYE + FP.y + (MATA ? eyeH(hero) : 0), hero.pos.z); cam.rotation.set(FP.pitch + (MATA ? M_.sy : 0), FP.yaw + (MATA ? M_.sx : 0), 0, 'YXZ'); }
   else { cam.position.set(C.tx, Math.sin(C.pitch) * C.dist, C.tz + Math.cos(C.pitch) * C.dist); cam.lookAt(C.tx, 0, C.tz); }
   cam.updateMatrixWorld();
   // sombra presa na grade da própria sombra: não fica tremendo quando a câmera anda
@@ -3611,7 +3696,7 @@ function pointerEnd(e) {
 }
 canvas.addEventListener('pointerup', pointerEnd);
 canvas.addEventListener('pointercancel', pointerEnd);
-canvas.addEventListener('wheel', e => { e.preventDefault(); if (FP.on) return; C.dist = clamp(C.dist * Math.exp(e.deltaY * .001), MIN, MAX); updateCam(); }, { passive: false });
+canvas.addEventListener('wheel', e => { e.preventDefault(); if (FP.on) { if (MATA && Math.abs(e.deltaY) > 2) { const t = performance.now(); if (t - (M_.wT || 0) > 180) { M_.wT = t; mataZoom(e.deltaY < 0 ? 1 : -1); } } return; } C.dist = clamp(C.dist * Math.exp(e.deltaY * .001), MIN, MAX); updateCam(); }, { passive: false });
 
 // ===== Primeira pessoa (ondas de chefão) =====
 // Bracinhos do herói em blocos com a arma na mão direita. Ficam no mundo, presos à câmera
@@ -3652,8 +3737,8 @@ function fpSet(on) {
   cam.fov = on ? (innerWidth < innerHeight ? FP_FOV_TALL : FP_FOV) : 45; cam.updateProjectionMatrix();
   if (on) {
     closeSheet();
-    FP.yaw = hero.g.rotation.y + Math.PI; FP.pitch = -.06;
-    showToast((ONLINE ? '👁️ Primeira pessoa! ' : '👑 Onda do chefão! Agora você vê pelos olhos do herói. ') + (TOUCH ? 'Arraste a tela para mirar, segure o botão vermelho para atirar.' : 'Clique na tela, mire com o mouse e clique para atirar. Espaço pula.'), 4500);
+    if (!(MATA && M_.begun)) { FP.yaw = hero.g.rotation.y + Math.PI; FP.pitch = -.06; }
+    if (!MATA) showToast((ONLINE ? '👁️ Primeira pessoa! ' : '👑 Onda do chefão! Agora você vê pelos olhos do herói. ') + (TOUCH ? 'Arraste a tela para mirar, segure o botão vermelho para atirar.' : 'Clique na tela, mire com o mouse e clique para atirar. Espaço pula.'), 4500);
   } else {
     if (document.pointerLockElement) document.exitPointerLock();
     hero.g.visible = hero.bar.g.visible = !hero.dead; C.follow = true; C.goal = null;
@@ -3675,7 +3760,7 @@ function fpPointerDown(e) {
   if (e.pointerType === 'mouse') {
     if (document.pointerLockElement !== canvas) { try { canvas.requestPointerLock(); } catch (er) {} return; }
     if (e.button === 0) FP.fire = true;
-    else if (e.button === 2) throwBomb();
+    else if (e.button === 2) MATA ? mataZoom() : throwBomb();
     return;
   }
   try { canvas.setPointerCapture(e.pointerId); } catch (er) {}
@@ -3691,9 +3776,9 @@ function fpPointerEnd(e) {
   if (e.pointerType === 'mouse' && e.button === 0) FP.fire = false;
   return true;
 }
-function fpLook(dx, dy, k) { FP.yaw -= dx * k; FP.pitch = clamp(FP.pitch - dy * k, -1.15, 1.15); }
+function fpLook(dx, dy, k) { if (MATA) k *= cam.fov / (innerWidth < innerHeight ? FP_FOV_TALL : FP_FOV); FP.yaw -= dx * k; FP.pitch = clamp(FP.pitch - dy * k, -1.15, 1.15); }
 document.addEventListener('mousemove', e => { if (FP.on && document.pointerLockElement === canvas) fpLook(e.movementX, e.movementY, FP_LOOK); });
-document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement !== canvas) FP.fire = false; });
+document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement !== canvas) { FP.fire = false; if (HUNT && S.started && !S.over && FP.on) { $('mataOv').classList.add('show'); $('mataGo').textContent = 'Continuar a caçada'; S.started = false; } } });   // Esc na caçada = pausa
 {
   const f = $('fpFire'), on = e => { e.preventDefault(); FP.fire = true; f.classList.add('on'); }, off = () => { FP.fire = false; f.classList.remove('on'); };
   f.addEventListener('pointerdown', on); f.addEventListener('pointerup', off); f.addEventListener('pointercancel', off); f.addEventListener('pointerleave', off);
@@ -3701,7 +3786,7 @@ document.addEventListener('pointerlockchange', () => { if (document.pointerLockE
 }
 // Chamado a cada quadro: liga/desliga pela onda, faz o pulo e mexe os bracinhos.
 function fpFrame(rdt, dt) {
-  const forced = fpForced(), want = ONLINE ? FP.pick && !S.over : (forced || FP.pick && S.started) && !S.over;
+  const forced = fpForced(), want = MATA ? (ONLINE || S.started) && !S.over : ONLINE ? FP.pick && !S.over : (forced || FP.pick && S.started) && !S.over;
   document.body.classList.toggle('fpWaving', !!S.waveActive);
   if (forced !== fpForcedWas) { fpForcedWas = forced; document.body.classList.toggle('fpSolo', forced); viewBtnUI(); }
   if (want !== FP.on) fpSet(want);
@@ -3718,14 +3803,14 @@ function fpFrame(rdt, dt) {
 function fpArmsPose(time) {
   if (!FP.on || !FP.arms) return;
   const g = FP.arms, in_ = g.userData.inner;
-  g.visible = !hero.dead;
+  g.visible = !hero.dead && !document.body.classList.contains('scope');
   g.position.copy(cam.position); g.position.y -= Hjs(cam.position.x, cam.position.z); g.quaternion.copy(cam.quaternion);
   in_.position.set(Math.sin(FP.bob) * .018, -Math.abs(Math.cos(FP.bob)) * .016 + Math.sin(time * 2) * .004 + clamp(-FP.vy * .004, -.03, .03), FP.kick * .07);
   in_.rotation.x = FP.kick * .18;
   // tela em pé (celular) é estreita: os braços chegam mais para o meio para continuarem aparecendo
   const ax = Math.min(.18, Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * cam.aspect * .32 * .78);
   g.userData.L.position.x = -ax; g.userData.R.position.x = ax;
-  g.userData.glow.color.setHex(FP_GLOW[S.hw] || 0x93c5fd);
+  g.userData.glow.color.setHex(MATA ? (M_.w === 'sniper' ? 0xff3b3b : 0xfacc15) : FP_GLOW[S.hw] || 0x93c5fd);
 }
 
 let hinted = false;
@@ -3787,7 +3872,7 @@ function updateBirds(dt, rdt) {
     const cx = wc(b.c.ci), cz = wc(b.c.cj);
     if (b.tg && (b.tg.dead || !enemies.includes(b.tg))) b.tg = null;
     // cada pássaro vai num chefão diferente (se tiver menos chefões que pássaros, eles se dividem)
-    if (!b.tg) { const L = enemies.filter(e => e.T.boss && !e.dead && (!PVP || e.tc === b.c) && Math.max(Math.abs(e.pos.x - cx), Math.abs(e.pos.z - cz)) < 26);
+    if (!b.tg) { const L = MATA ? [] : enemies.filter(e => e.T.boss && !e.dead && (!PVP || e.tc === b.c) && Math.max(Math.abs(e.pos.x - cx), Math.abs(e.pos.z - cz)) < 26);
       if (L.length) { const mine = birds.filter(o => o.c === b.c), cnt = e => mine.filter(o => o.tg === e).length; L.sort((p, q) => cnt(p) - cnt(q) || Math.hypot(p.pos.x - b.g.position.x, p.pos.z - b.g.position.z) - Math.hypot(q.pos.x - b.g.position.x, q.pos.z - b.g.position.z)); b.tg = L[0]; } }
     let tx, ty, tz;
     if (b.tg) { const e = b.tg, an = b.a + time * 2.2; tx = e.pos.x + Math.cos(an) * 1.1; tz = e.pos.z + Math.sin(an) * 1.1; ty = e.T.size * 1.1 + .3 + Math.max(0, Math.sin(time * 3 + b.a)) * 1.3; }
@@ -3841,21 +3926,564 @@ function updateIndicators() {
 }
 
 // ===== Loop =====
+// ===== Caçada na Mata (sozinho) e Duelo na Mata (online): só em primeira pessoa =====
+// Monstros andam em grupos pela mata e só percebem o herói de perto (agachado, na água, atrás de árvore ou à noite, menos ainda).
+// O tiro não tem limite de distância: dá para abater de longe sem ser visto. Quem leva tiro ou vê um amigo cair fica em alerta,
+// mas não sabe de onde veio. Quem vê o herói corre atrás e chama o grupo. Cabanas, torres e casas na árvore têm escada;
+// túneis ligam dois pontos do mapa. No duelo não tem monstro grande: cada jogador solta aranhas que caçam o outro.
+const MC = {
+  view: 13, seeRate: .9, seeNear: 2.6, forget: .45, callR: 16, loseT: 5, alertT: 22, noise: { fuzil: 9, sniper: 6, bomba: 13 },
+  crouch: .55, water: .55, high: .85, tree: .72, back: .5, night: .4, alertMul: 1.45, chaseMul: 1.9,
+  hp: { rapido: 60, zumbi: 120, arqueiro: 80, tanque: 260, ogro: 420, mutante: 520, rex: 2400, aranha: 40 },
+  run: { rapido: 3.3, zumbi: 2.1, arqueiro: 2.3, tanque: 2.1, ogro: 2.8, mutante: 3, rex: 3.4, aranha: 3.2 },
+  atk: 1, archerRange: 13, gunRange: 7, meleeAlt: 1.2,
+  groups: [['rex', 'rapido', 'rapido'], ['ogro', 'zumbi', 'zumbi'], ['ogro', 'arqueiro'], ['ogro', 'tanque'], ['zumbi', 'zumbi', 'rapido'], ['arqueiro', 'arqueiro', 'rapido'], ['mutante', 'zumbi'], ['zumbi', 'rapido', 'rapido']],
+  goal: { rex: 1, ogro: 3, outros: 8 },
+  minionEvery: 16, minionMax: 6, minionView: 9, duelWin: 2,
+  cone: .5, coneAlert: .2,   // só vê quem está na frente: cos do meio-ângulo (60° calmo, 78° em alerta)
+  walkSp: { rapido: 1.3, zumbi: 1.05, arqueiro: 1.05, tanque: 1.15, ogro: 1.5, mutante: 1.6, rex: 1.8, aranha: 1.5 },
+  gun: { rapido: [5, 1.5], zumbi: [7, 1.7], arqueiro: [10, 1.2], tanque: [11, 1.2], ogro: [16, 1.4], mutante: [15, 1], rex: [28, 1.9], aranha: [4, 1.7] },   // [dano, segundos entre tiros]
+  monShotSp: 55, monSpread: .018, monHead: 1.5, rockH: .55, treeH: 2.3,
+  walk: 3.6, crouchSp: .5, swimSp: .55, climbSp: 2.6, grav: 18, eyeCrouch: .45, eyeSwim: .55,
+};
+const WP = {
+  fuzil: { n: 'Fuzil', cd: .2, dmg: 26, sp: 150, drop: 3, spread: .006, zoom: [1, 1.8] },
+  sniper: { n: 'Sniper', cd: 1.25, dmg: 170, sp: 260, drop: 1.2, spread: 0, zoom: [1, 4, 8] },
+};
+const fin = (v, d = 0) => typeof v === 'number' && Number.isFinite(v) ? v : d;
+const HEAD_MUL = 2.5, HERO_HIT_MUL = .6;
+const M_ = { w: 'sniper', zoom: 0, sx: 0, sy: 0, act: null, actCd: 0, fade: 0, t0: 0, kills: 0, stealth: 0, longest: 0, done: { rex: 0, ogro: 0, outros: 0 }, spotted: false, see: 0, mt: 0, duel: [0, 0] };
+const mshots = [], plats = [], hatches = [];
+const mataG = new THREE.Group(); if (MATA) scene.add(mataG);
+const mrnd = (() => { let s = (PSEED ^ 0x2c1b3c6d) | 0; return () => { s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; })();
+
+// --- Lugares: cabanas, torres de vigia, casas na árvore e túneis (iguais nos dois aparelhos: sorteio pela semente do mapa)
+function mataFree(i, j, r) {
+  for (let a = -r; a <= r; a++) for (let b = -r; b <= r; b++) if (at(i + a, j + b) !== GRASS) return false;
+  if (castleDist(i, j) < 7 || near(i, j, r + 1, t => t === WATER || t === PORTAL || t === CASTLE)) return false;
+  return ![...plats, ...hatches, ...mataSpots].some(p => Math.hypot(p.x - wc(i), p.z - wc(j)) < 7 + r);
+}
+const mataSpots = [], walls = [];
+// Paredes das casas grandes (caixas): batem no herói, nos monstros e no tiro, e tapam a visão
+function wallPush(pos, r, alt = 0) {
+  for (const w of walls) {
+    if (alt >= w.h) continue;
+    const dx = pos.x - w.x, dz = pos.z - w.z, mx = w.hw + r, mz = w.hd + r;
+    if (Math.abs(dx) >= mx || Math.abs(dz) >= mz) continue;
+    if (mx - Math.abs(dx) < mz - Math.abs(dz)) pos.x = w.x + Math.sign(dx || 1) * mx; else pos.z = w.z + Math.sign(dz || 1) * mz;
+  }
+}
+const inWall = (x, z, y) => walls.some(w => y < w.h && Math.abs(x - w.x) < w.hw && Math.abs(z - w.z) < w.hd);
+// Árvore encostada (para subir pulando)
+function treeNear(x, z, R) {
+  const ci = cellOf(x), cj = cellOf(z);
+  for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) if (at(ci + a, cj + b) === TREE && Math.hypot(x - wc(ci + a), z - wc(cj + b)) < R) return { x: wc(ci + a), z: wc(cj + b) };
+  return null;
+}
+// Linha de visão: casa, parede, tronco, pedra ou castelo no meio tapa (alturas medidas do chão)
+// Segmento (a→b, no chão) contra caixa: devolve onde entra (0..1) ou -1
+function segBox(ax, az, bx, bz, cx, cz, hw, hd) {
+  let t0 = 0, t1 = 1; const dx = bx - ax, dz = bz - az;
+  for (const [p, d, lo, hi] of [[ax, dx, cx - hw, cx + hw], [az, dz, cz - hd, cz + hd]]) {
+    if (Math.abs(d) < 1e-9) { if (p < lo || p > hi) return -1; continue; }
+    let u0 = (lo - p) / d, u1 = (hi - p) / d; if (u0 > u1) [u0, u1] = [u1, u0];
+    t0 = Math.max(t0, u0); t1 = Math.min(t1, u1); if (t0 > t1) return -1;
+  }
+  return t0;
+}
+// Linha de visão: casa, parede, tronco, pedra, morro ou castelo no meio tapa (alturas medidas do chão de cada ponta)
+function mataLOS(ax, az, ay, bx, bz, by) {
+  const ga = Hjs(ax, az) + ay, gb = Hjs(bx, bz) + by, yAt = u => ga + (gb - ga) * u;
+  for (const w of walls) { const u = segBox(ax, az, bx, bz, w.x, w.z, w.hw, w.hd); if (u >= 0 && u < 1 && yAt(u) - Hjs(ax + (bx - ax) * u, az + (bz - az) * u) < w.h) return false; }
+  for (const p of plats) { const u = segBox(ax, az, bx, bz, p.x, p.z, p.sw, p.sw); if (u >= 0 && u < 1 && yAt(u) - Hjs(ax + (bx - ax) * u, az + (bz - az) * u) < p.sh) return false; }
+  const L = Math.hypot(bx - ax, bz - az), n = Math.ceil(L / .25);
+  for (let k = 1; k < n; k++) {
+    const u = k / n, x = ax + (bx - ax) * u, z = az + (bz - az) * u, y = yAt(u) - Hjs(x, z);
+    if (Math.hypot(x - bx, z - bz) < .45) break;
+    if (y < -.05) return false;   // morro no meio
+    const i = cellOf(x), j = cellOf(z), t = at(i, j);
+    if (t === HOUSE || t === CASTLE || t === MOUNT || t === GIANT) return false;
+    if ((t === TREE && y < 3.2 && Math.hypot(x - wc(i), z - wc(j)) < .45) || (t === ROCK && y < MC.rockH + .15 && Math.hypot(x - wc(i), z - wc(j)) < .5)) return false;
+  }
+  return true;
+}
+const monEye = e => (e.top || e.T.size * 2) * .85;
+const heroBody = h => (h.alt || 0) + (h.crouch ? .55 : 1.05) - (h.swim ? .5 : 0);
+function mataSpot(r) { for (let k = 0; k < 400; k++) { const i = 4 + Math.floor(mrnd() * (N - 8)), j = 4 + Math.floor(mrnd() * (N - 8)); if (mataFree(i, j, r)) return [i, j]; } return null; }
+function ladder(x, z, h, side, g) {   // escada encostada no lado +z (side 1) ou -z (side -1)
+  const zz = z + side * .06;
+  for (const s of [-1, 1]) box(mat.woodD, .07, h, .07, x + s * .24, h / 2, zz, g);
+  for (let y = .3; y < h; y += .32) box(mat.wood, .5, .05, .06, x, y, zz, g);
+}
+function mataWorld() {
+  const W = mat.wood, D = mat.woodD, L = new THREE.MeshLambertMaterial({ color: 0x3f8f3a }), L2 = new THREE.MeshLambertMaterial({ color: 0x4fa244 }), ROOF = new THREE.MeshLambertMaterial({ color: 0x8a5a33 });
+  const add = (kind, n, r, fn) => { for (let k = 0; k < n; k++) { const s = mataSpot(r); if (s) { mataSpots.push({ x: wc(s[0]), z: wc(s[1]) }); fn(wc(s[0]), wc(s[1])); } } };
+  // casa grande: dá para entrar pela porta; paredes de verdade, janelas, mesa, cama e telhado
+  add('casa', Math.round(2 * MS), 3, (x, z) => {
+    const g = new THREE.Group(); g.position.set(x, 0, z); mataG.add(g);
+    const H = 2.6, A = 3.2, B = 2.6, t = .16, WL = new THREE.MeshLambertMaterial({ color: 0xd9c7a5 }), rot = Math.floor(mrnd() * 4) * Math.PI / 2;
+    g.rotation.y = rot; const c = Math.cos(rot), sn = Math.sin(rot);
+    const wall = (cx, cz, sx, sz) => { box(WL, sx, H, sz, cx, H / 2, cz, g); const wx = cx * c + cz * sn, wz = -cx * sn + cz * c, q = Math.abs(sn) > .5; walls.push({ x: x + wx, z: z + wz, hw: (q ? sz : sx) / 2, hd: (q ? sx : sz) / 2, h: H }); };
+    wall(0, -B, A * 2 + t, t); wall(-A, 0, t, B * 2); wall(A, 0, t, B * 2);
+    wall(-2.05, B, 2.3, t); wall(2.05, B, 2.3, t);       // frente com a porta no meio
+    box(WL, 1.8, .6, t, 0, H - .3, B, g);
+    box(D, 6.9, .12, .2, 0, .06, B, g);
+    for (const sx of [-1, 1]) { box(mat.dark, .06, .6, .9, sx * (A + .02), 1.45, -.6, g); box(D, .08, .08, 1, sx * (A + .04), 1.12, -.6, g); }
+    box(mat.dark, .9, .6, .06, -1.6, 1.45, -B - .02, g); box(mat.dark, .9, .6, .06, 1.6, 1.45, -B - .02, g);
+    box(W, 1.3, .08, .8, -1.6, .75, -1.5, g); for (const a of [-.55, .55]) for (const b of [-.3, .3]) box(D, .07, .75, .07, -1.6 + a, .37, -1.5 + b, g);   // mesa
+    box(mat.red, 1, .3, 1.9, 2.2, .2, -1.4, g); box(mat.white, .9, .12, .45, 2.2, .4, -2.15, g);   // cama
+    box(mat.stoneD, .9, 1.1, .5, -2.6, .55, .6, g); box(mat.orange, .5, .25, .3, -2.6, .3, .82, g);   // lareira
+    box(ROOF, A * 2 + .7, .16, B * 2 + .7, 0, H + .08, 0, g); box(ROOF, A * 2 + .3, .5, B * 2 - .6, 0, H + .4, 0, g);
+  });
+  // cabana: paredes de madeira e telhado reto onde dá para ficar em pé
+  add('cabana', Math.round(3 * MS), 2, (x, z) => {
+    const h = 2.1, g = new THREE.Group(); g.position.set(x, 0, z); mataG.add(g);
+    for (const [a, b, sx, sz] of [[0, -1.05, 2.2, .12], [0, 1.05, 2.2, .12], [-1.05, 0, .12, 2.2], [1.05, 0, .12, 2.2]]) box(W, sx, h, sz, a, h / 2, b, g);
+    box(D, .5, 1.2, .14, .45, .6, 1.07, g);   // porta
+    box(mat.dark, .4, .35, .14, -.5, 1.3, 1.07, g); box(mat.dark, .14, .35, .4, 1.07, 1.3, 0, g);   // janelas
+    box(ROOF, 2.5, .14, 2.5, 0, h + .07, 0, g);
+    for (const [a, b, sx, sz] of [[0, -1.2, 2.5, .08], [-1.2, 0, .08, 2.5], [1.2, 0, .08, 2.5]]) box(D, sx, .35, sz, a, h + .3, b, g);
+    ladder(-.6, 1.15, h + .1, 1, g);
+    plats.push({ x, z, hw: 1.2, h: h + .14, sw: 1.12, sh: h - .2, lx: x - .6, lz: z + 1.55, ox: 0, oz: -.6, nome: 'cabana' });
+  });
+  // torre de vigia: alta, com quatro pernas e grade em volta
+  add('torre', Math.round(2 * MS), 2, (x, z) => {
+    const h = 4.2, g = new THREE.Group(); g.position.set(x, 0, z); mataG.add(g);
+    for (const a of [-.7, .7]) for (const b of [-.7, .7]) box(D, .14, h, .14, a, h / 2, b, g);
+    for (const y of [1.3, 2.7]) { box(W, 1.5, .08, .08, 0, y, -.7, g); box(W, .08, .08, 1.5, -.7, y, 0, g); box(W, .08, .08, 1.5, .7, y, 0, g); }
+    box(W, 1.9, .14, 1.9, 0, h, 0, g);
+    for (const [a, b, sx, sz] of [[0, -.95, 1.9, .07], [-.95, 0, .07, 1.9], [.95, 0, .07, 1.9]]) box(D, sx, .45, sz, a, h + .3, b, g);
+    for (const a of [-.85, .85]) for (const b of [-.85, .85]) box(D, .08, 1.1, .08, a, h + .6, b, g);
+    box(ROOF, 2.1, .1, 2.1, 0, h + 1.2, 0, g);
+    ladder(0, .78, h, 1, g);
+    plats.push({ x, z, hw: .95, h: h + .07, sw: .8, sh: h - .2, lx: x, lz: z + 1.15, ox: 0, oz: -.4, nome: 'torre' });
+  });
+  // casa na árvore: tronco grosso, copa, deck em volta e casinha em cima
+  add('arvore', Math.round(2 * MS), 2, (x, z) => {
+    const h = 3.3, g = new THREE.Group(); g.position.set(x, 0, z); mataG.add(g);
+    box(mat.woodD, .7, 6.2, .7, 0, 3.1, 0, g);
+    for (const [a, y, b, s] of [[0, 6.3, 0, 2.6], [.9, 5.6, .4, 1.8], [-.8, 5.8, -.5, 1.9], [.2, 7.1, -.3, 1.7], [-.4, 5.3, .9, 1.5]]) box(s > 1.8 ? L : L2, s, s * .75, s, a, y, b, g);
+    box(W, 2.8, .14, 2.8, 0, h, 0, g);
+    for (const [a, b] of [[-1.3, -1.3], [1.3, -1.3], [-1.3, 1.3], [1.3, 1.3]]) box(D, .1, h, .1, a, h / 2, b, g);
+    box(W, 1.4, 1.2, .1, -.6, h + .6, -1.3, g); box(W, .1, 1.2, 1.4, -1.3, h + .6, -.6, g); box(ROOF, 1.7, .1, 1.7, -.6, h + 1.25, -.6, g);
+    for (const [a, b, sx, sz] of [[.6, -1.4, 1.4, .07], [1.4, 0, .07, 2.8]]) box(D, sx, .45, sz, a, h + .3, b, g);
+    ladder(.6, 1.42, h, 1, g);
+    plats.push({ x, z, hw: 1.4, h: h + .07, sw: .36, sh: 6.2, lx: x + .6, lz: z + 1.8, ox: .6, oz: .6, nome: 'casa na árvore' });
+  });
+  // túneis: pares de alçapões longe um do outro
+  for (let k = 0; k < Math.round(1.5 * MS); k++) {
+    const a = mataSpot(1); if (!a) break;
+    let b = null; for (let t = 0; t < 60 && !b; t++) { const s = mataSpot(1); if (s && Math.hypot(s[0] - a[0], s[1] - a[1]) > 28) b = s; }
+    if (!b) break;
+    const A = { x: wc(a[0]), z: wc(a[1]) }, B = { x: wc(b[0]), z: wc(b[1]) }; A.to = B; B.to = A;
+    for (const h of [A, B]) {
+      const g = new THREE.Group(); g.position.set(h.x, 0, h.z); mataG.add(g);
+      box(D, 1.1, .1, 1.1, 0, .05, 0, g); box(mat.dark, .8, .12, .8, 0, .06, 0, g);
+      box(D, .08, 1.1, .08, .7, .55, .7, g); box(W, .5, .3, .05, .7, 1.05, .7, g);
+      h.g = g; hatches.push(h);
+    }
+  }
+}
+// Plataforma onde o herói pode ficar (pega a mais alta embaixo dele)
+function floorAt(x, z, alt) {
+  let f = 0;
+  for (const p of plats) if (Math.abs(x - p.x) < p.hw && Math.abs(z - p.z) < p.hw && alt >= p.h - .4 && p.h > f) f = p.h;
+  const ci = cellOf(x), cj = cellOf(z);
+  for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+    const t = at(ci + a, cj + b), dd = Math.hypot(x - wc(ci + a), z - wc(cj + b));
+    if (t === ROCK && dd < .62 && alt >= MC.rockH - .35 && MC.rockH > f) f = MC.rockH;
+    if (t === TREE && dd < .72 && alt >= MC.treeH - .4 && MC.treeH > f) f = MC.treeH;
+  }
+  return f;
+}
+// Empurra para fora das paredes/troncos (o telhado e o deck ficam livres para andar em cima)
+function structPush(pos, r, alt = 0) {
+  for (const p of plats) {
+    if (alt >= p.sh) continue;
+    const dx = pos.x - p.x, dz = pos.z - p.z, m = p.sw + r;
+    if (Math.abs(dx) >= m || Math.abs(dz) >= m) continue;
+    if (m - Math.abs(dx) < m - Math.abs(dz)) pos.x = p.x + Math.sign(dx || 1) * m; else pos.z = p.z + Math.sign(dz || 1) * m;
+  }
+  wallPush(pos, r, alt);
+}
+// Movimento local do herói: escada, cair do telhado, nadar e não atravessar parede
+function mataMove(hh, moving, dt) {
+  if (!dt) return;
+  hh.alt = hh.alt || 0; hh.vy = hh.vy || 0;
+  const me = hh.pl === ME, jy = me ? FP.y : 0;
+  hh.swim = at(cellOf(hh.pos.x), cellOf(hh.pos.z)) === WATER && hh.alt < .2 && jy < .2;
+  if (!hh.climb && moving) {
+    for (const p of plats) if (hh.alt < p.h - .05 && Math.hypot(hh.pos.x - p.lx, hh.pos.z - p.lz) < .6) { hh.climb = { x: p.lx, z: p.lz, h: p.h, cx: p.x + p.ox, cz: p.z + p.oz, msg: `🪜 Você subiu na ${p.nome}. Ande para a beirada para descer.` }; break; }
+    // pulou encostado numa árvore: sobe até a copa
+    if (!hh.climb && jy > .15 && hh.alt < MC.treeH - .1) { const t = treeNear(hh.pos.x, hh.pos.z, hh.r + .6); if (t) hh.climb = { x: hh.pos.x, z: hh.pos.z, h: MC.treeH, cx: t.x, cz: t.z, msg: '🌳 Você subiu na árvore. Ande para fora dela para descer.' }; }
+  }
+  if (hh.climb) {
+    const c = hh.climb; hh.alt = Math.min(c.h, hh.alt + jy + MC.climbSp * dt); hh.vy = 0; if (me) { FP.y = 0; FP.vy = 0; }
+    hh.pos.x += (c.x - hh.pos.x) * Math.min(1, dt * 8); hh.pos.z += (c.z - hh.pos.z) * Math.min(1, dt * 8);
+    if (hh.alt >= c.h - .01) { hh.alt = c.h; hh.pos.x = c.cx; hh.pos.z = c.cz; hh.climb = null; if (me) showToast(c.msg, 2200); }
+  } else {
+    const f = floorAt(hh.pos.x, hh.pos.z, hh.alt + jy);
+    if (me && jy > 0 && f > hh.alt && hh.alt + jy >= f) { hh.alt = f; FP.y = 0; FP.vy = 0; }   // pulo caiu em cima da pedra
+    else if (hh.alt > f) { hh.vy -= MC.grav * dt; hh.alt = Math.max(f, hh.alt + hh.vy * dt); if (hh.alt === f) hh.vy = 0; }
+    else { hh.alt = f; hh.vy = 0; }
+  }
+  structPush(hh.pos, hh.r, hh.alt + jy);
+}
+const mataSpeed = hh => MC.walk / 3.6 * (hh.swim ? MC.swimSp : hh.crouch ? MC.crouchSp : 1);
+const eyeH = hh => (hh.alt || 0) - (hh.crouch ? MC.eyeCrouch : 0) - (hh.swim ? MC.eyeSwim : 0);
+
+// --- Monstros: grupos na mata (caçada) e aranhas de cada jogador (duelo)
+function mataPrey(e) { return DUEL ? heroes[1 - e.team] : hero; }
+function mataEnemy(type, x, z, team, home, grp) {
+  const e = spawnEnemy(type, x, z, team);
+  e.hp = e.maxHp = MC.hp[type] || e.maxHp; e.bar.g.visible = false;
+  e.top = Math.max(.5, new THREE.Box3().setFromObject(e.inner).max.y);
+  e.hunt = { hx: home.x, hz: home.z, st: 'calm', see: 0, alertT: 0, wx: x, wz: z, wait: mrnd() * 3, lost: 0, grp, ax: x, az: z, lx: x, lz: z, cd: 1 + Math.random() };
+  return e;
+}
+function mataSpawn() {
+  const centers = [];
+  for (const [n, list] of MC.groups.entries()) {
+    let c = null;
+    for (let k = 0; k < 500 && !c; k++) {
+      const i = 3 + Math.floor(mrnd() * (N - 6)), j = 3 + Math.floor(mrnd() * (N - 6));
+      if (at(i, j) !== GRASS || castleDist(i, j) < (n === 0 ? 34 : 18) || centers.some(q => Math.hypot(q.x - wc(i), q.z - wc(j)) < 12)) continue;
+      c = { x: wc(i), z: wc(j) };
+    }
+    if (!c) continue;
+    centers.push(c);
+    list.forEach((t, k) => mataEnemy(t, c.x + Math.cos(k * 2.1) * 1.6, c.z + Math.sin(k * 2.1) * 1.6, 0, c, n));
+  }
+}
+function mataView(e, tg, d) {
+  const H = e.hunt;
+  let v = (DUEL ? MC.minionView : MC.view) * (e.T.boss ? 1.25 : 1);
+  if (tg.crouch) v *= MC.crouch;
+  if (tg.swim) v *= MC.water;
+  if ((tg.alt || 0) > 1.5) v *= MC.high;
+  if (near(cellOf(tg.pos.x), cellOf(tg.pos.z), 1, t => t === TREE)) v *= MC.tree;
+  v *= 1 - MC.night * HORA.noite;
+  if (H.st === 'alert') v *= MC.alertMul; else if (H.st === 'chase') v *= MC.chaseMul;
+  return v;
+}
+function mataSay(pl, msg, ms = 2200) { if (pl === ME) showToast(msg, ms); else if (NET.host) NET.send({ t: 'toast', msg, ms }); }
+function mataSpotted(e, tg) {
+  const was = enemies.some(o => !o.dead && o.hunt && o.hunt.st === 'chase' && mataPrey(o) === tg);
+  for (const o of enemies) if (o.hunt && !o.dead && (o === e || (o.hunt.grp === e.hunt.grp && o.team === e.team && Math.hypot(o.pos.x - e.pos.x, o.pos.z - e.pos.z) < MC.callR))) { o.hunt.st = 'chase'; o.hunt.see = 1; o.hunt.lost = 0; }
+  if (!was) { if (tg.pl === ME) sfx('alarm'); mataSay(tg.pl, DUEL ? '🕷️ As aranhas do outro te acharam!' : `👁️ Te viram! ${e.T.name} e o grupo dele estão vindo.`, 2600); }
+}
+// Barulho (tiro, bomba): quem está perto vai olhar o lugar, mas não sabe quem foi
+function mataNoise(x, z, r, chaseOf = null) {
+  for (const e of enemies) {
+    if (!e.hunt || e.dead || Math.hypot(e.pos.x - x, e.pos.z - z) > r) continue;
+    if (e.hunt.st === 'calm') { e.hunt.st = 'alert'; e.hunt.alertT = MC.alertT; e.hunt.ax = x; e.hunt.az = z; e.hunt.wx = x; e.hunt.wz = z; }
+  }
+}
+// Levou tiro ou viu um amigo cair: fica em alerta procurando em volta (sem saber de onde veio)
+function mataHurt(e, killed) {
+  const H = e.hunt;
+  if (!killed) { if (H.st !== 'chase') { H.st = 'alert'; H.alertT = MC.alertT; H.ax = e.pos.x; H.az = e.pos.z; H.wx = e.pos.x + (Math.random() - .5) * 6; H.wz = e.pos.z + (Math.random() - .5) * 6; } return; }
+  for (const o of enemies) if (o !== e && o.hunt && !o.dead && o.team === e.team && Math.hypot(o.pos.x - e.pos.x, o.pos.z - e.pos.z) < MC.callR && o.hunt.st === 'calm') { o.hunt.st = 'alert'; o.hunt.alertT = MC.alertT; o.hunt.ax = e.pos.x; o.hunt.az = e.pos.z; o.hunt.wx = e.pos.x; o.hunt.wz = e.pos.z; }
+  if (HUNT) {
+    M_.kills++; if (H.st !== 'chase') M_.stealth++;
+    const k = e.type === 'rex' ? 'rex' : e.type === 'ogro' ? 'ogro' : 'outros'; M_.done[k]++;
+    if (mataGoalOk() && !M_.goalSaid) { M_.goalSaid = true; sfx('win'); showToast('🏆 Alvos abatidos! Agora volte ao castelo para sair da mata.', 4000); }
+  }
+}
+const mataMaxAlt = () => plats.reduce((m, p) => Math.max(m, p.h), MC.treeH) + 1.2;   // o mais alto que dá para estar (com pulo)
+const mataGoalOk = () => Object.keys(MC.goal).every(k => M_.done[k] >= MC.goal[k]);
+function huntStep(e, dt) {
+  const H = e.hunt, T = e.T, tg = mataPrey(e);
+  e.slowT -= dt; e.flashT -= dt;
+  if (e.burnT > 0) { e.burnT -= dt; hurt(e, e.burnDps * dt, false); if (e.dead) return; }
+  e.px = e.pos.x; e.pz = e.pos.z;
+  const ok = tg && !tg.dead, d = ok ? Math.hypot(tg.pos.x - e.pos.x, tg.pos.z - e.pos.z) : 1e9;
+  if (ok) {
+    const v = mataView(e, tg, d);
+    // só vê quem está na frente (perseguindo, ele vira para você) e sem casa, árvore ou pedra no meio
+    if ((H.losT = (H.losT || 0) - dt) <= 0) {
+      H.losT = .18 + Math.random() * .1;
+      const fx = Math.sin(e.g.rotation.y), fz = Math.cos(e.g.rotation.y), dot = ((tg.pos.x - e.pos.x) * fx + (tg.pos.z - e.pos.z) * fz) / (d || 1);
+      H.vis = d < v && (H.st === 'chase' || dot > (H.st === 'alert' ? MC.coneAlert : MC.cone)) && mataLOS(e.pos.x, e.pos.z, monEye(e), tg.pos.x, tg.pos.z, heroBody(tg));
+    }
+    if (H.vis) H.see = Math.min(1.5, H.see + dt * (MC.seeRate + MC.seeNear * (1 - d / v))); else H.see = Math.max(0, H.see - dt * MC.forget);
+    if (H.see >= 1 && H.st !== 'chase') mataSpotted(e, tg);
+    if (H.st === 'chase') {
+      if (H.vis) { H.lx = tg.pos.x; H.lz = tg.pos.z; H.lost = 0; } else H.lost += dt;
+      if (H.lost > MC.loseT) { H.st = 'alert'; H.alertT = MC.alertT; H.see = .4; H.ax = H.wx = H.lx; H.az = H.wz = H.lz; }
+    }
+  } else if (H.st === 'chase') { H.st = 'alert'; H.alertT = MC.alertT; }
+  let gx, gz, sp, act = false;
+  const walk = MC.walkSp[e.type] || e.T.sp * 1.35;
+  if (H.st === 'chase') {
+    gx = H.lx; gz = H.lz; sp = MC.run[e.type] || walk * 1.5;
+    const reach = e.r + (tg ? tg.r : 0) + .35;
+    if (ok && d < reach && (tg.alt || 0) < MC.meleeAlt) { act = true; damageTarget(tg, (T.atk || 8) * dt * MC.atk); e.inner.position.z = Math.max(0, Math.sin(time * 12 + e.ph)) * .12; if (T.slam && (e.slamCd -= dt) <= 0) { e.slamCd = 2.5; slam(e); } }
+    // todos atiram quando te enxergam; o tiro voa pelo mapa inteiro
+    const G = MC.gun[e.type] || MC.gun.rapido;
+    if (ok && H.vis && (H.cd -= dt) <= 0) { H.cd = G[1] * (.8 + Math.random() * .4); mataMonFire(e, tg, G[0]); }
+    if (T.kind === 'ranged' && H.vis && d < 9) act = true;   // arqueiro fica longe e atira
+    if (ok && (tg.alt || 0) >= MC.meleeAlt && d < reach + .6) act = true;   // herói lá em cima: espera embaixo
+  } else if (H.st === 'alert') {
+    H.alertT -= dt; sp = walk * 1.4;
+    if (Math.hypot(H.wx - e.pos.x, H.wz - e.pos.z) < .8) { H.wait -= dt; if (H.wait <= 0) { H.wait = .6 + Math.random() * 1.5; H.wx = H.ax + (Math.random() - .5) * 10; H.wz = H.az + (Math.random() - .5) * 10; } }
+    gx = H.wx; gz = H.wz;
+    if (H.alertT <= 0) { H.st = 'calm'; H.see = 0; }
+  } else {
+    sp = walk * .5;
+    if (Math.hypot(H.wx - e.pos.x, H.wz - e.pos.z) < .6) { H.wait -= dt; act = true; if (H.wait <= 0) { H.wait = 1.5 + Math.random() * 4; const a = Math.random() * 6.28, r = 2 + Math.random() * (DUEL ? 9 : 5); H.wx = H.hx + Math.cos(a) * r; H.wz = H.hz + Math.sin(a) * r; } }
+    gx = H.wx; gz = H.wz;
+    // aranhas do duelo: de tempos em tempos escolhem outro lugar do lado do inimigo para procurar
+    if (DUEL && (H.re = (H.re || 0) - dt) <= 0) { H.re = 10; const c = CASTLES[1 - e.team]; H.hx = clamp(c.x + (Math.random() - .5) * 30, -HALF + 3, HALF - 3); H.hz = clamp(c.z + (Math.random() - .5) * 40, -HALF + 3, HALF - 3); }
+  }
+  if (!act) {
+    desired.set(gx - e.pos.x, 0, gz - e.pos.z);
+    const L0 = desired.length();
+    if (L0 > .05) {
+      desired.multiplyScalar(1 / L0);
+      if ((e.unstuck || 0) > 0) { const s = e.side || 1; desired.set(desired.x * .3 - desired.z * s, 0, desired.z * .3 + desired.x * s).normalize(); e.unstuck -= dt; }
+      e.dir.lerp(desired, Math.min(1, dt * 6));
+      const L = e.dir.length() || 1, s2 = sp * (e.slowT > 0 ? e.slowF : 1);
+      e.pos.x += e.dir.x / L * s2 * dt; e.pos.z += e.dir.z / L * s2 * dt; e.walk += s2 * dt;
+      e.g.rotation.y = lerpAng(e.g.rotation.y, Math.atan2(e.dir.x, e.dir.z), Math.min(1, dt * 8));
+      e.stT = (e.stT || 0) + dt;
+      if (e.stT > 1.2) { if (Math.hypot(e.pos.x - (e.stX ?? 1e9), e.pos.z - (e.stZ ?? 1e9)) < .3 * s2) { e.unstuck = 1.2; e.side = Math.random() < .5 ? -1 : 1; if (H.st === 'calm') H.wait = 0, H.wx = e.pos.x, H.wz = e.pos.z; } e.stT = 0; e.stX = e.pos.x; e.stZ = e.pos.z; }
+    }
+  } else if (ok && H.st === 'chase') e.g.rotation.y = lerpAng(e.g.rotation.y, Math.atan2(tg.pos.x - e.pos.x, tg.pos.z - e.pos.z), Math.min(1, dt * 8));
+  if (!act) e.inner.position.z = 0;
+  structPush(e.pos, e.cr);
+}
+
+// --- Tiro: sai do olho para onde a mira aponta, voa até atravessar o mapa (com leve queda)
+const mhv = V(), mhd = V();
+function mataEye(hh, out) { return out.set(hh.pos.x, Hjs(hh.pos.x, hh.pos.z) + FP_EYE + eyeH(hh) + (hh.pl === ME ? FP.y : 0), hh.pos.z); }
+function mataFire(hh, yaw, pitch, w) {
+  const W = WP[w] || WP.fuzil; hh.cd = W.cd; hh.recoil = 1;
+  const o = mataEye(hh, V()), cp = Math.cos(pitch);
+  const sp = W.spread * (hh.crouch ? .5 : 1);
+  const d = V(-Math.sin(yaw) * cp + (Math.random() - .5) * sp, Math.sin(pitch) + (Math.random() - .5) * sp, -Math.cos(yaw) * cp + (Math.random() - .5) * sp).normalize();
+  o.addScaledVector(d, .5);
+  const m = new THREE.Mesh(BULLET, heroShotMat); m.scale.set(1, 1, w === 'sniper' ? 4 : 2.5); scene.add(m);
+  const s = { m, p: o, v: d.multiplyScalar(W.sp), life: 2.4, dmg: W.dmg, pl: hh.pl, o: o.clone(), w, drop: W.drop };
+  mshots.push(s); placeShot(s);
+  sfx(w === 'sniper' ? 'tshot' : 'shot', hh.pos.x, hh.pos.z);
+  mataNoise(hh.pos.x, hh.pos.z, MC.noise[w] || 8, hh);
+  if (hh.pl === ME) FP.kick = w === 'sniper' ? 1.6 : 1;
+}
+function mataMonFire(e, tg, dmg) {
+  const o = V(e.pos.x, Hjs(e.pos.x, e.pos.z) + monEye(e) * .8, e.pos.z), d = Math.hypot(tg.pos.x - e.pos.x, tg.pos.z - e.pos.z);
+  const sp = MC.monShotSp, spr = MC.monSpread * (1 + d / 20) * d;
+  const dir = V(tg.pos.x - o.x + (Math.random() - .5) * spr, Hjs(tg.pos.x, tg.pos.z) + heroBody(tg) - .2 - o.y, tg.pos.z - o.z + (Math.random() - .5) * spr).normalize();
+  o.addScaledVector(dir, e.r + .25);
+  const m = new THREE.Mesh(BULLET, bulletMat); m.scale.set(1.6, 1.6, 2.6); scene.add(m);
+  const s = { m, p: o, v: dir.multiplyScalar(sp), life: 5, dmg, mon: e.team, pl: -1, o: o.clone(), drop: 0 };
+  mshots.push(s); placeShot(s); sfx('tshot', e.pos.x, e.pos.z);
+}
+function placeShot(s) { s.m.position.set(s.p.x, s.p.y - Hjs(s.p.x, s.p.z), s.p.z); s.m.lookAt(mhv.copy(s.m.position).add(s.v)); }
+function mataTargets(pl) {
+  const L = enemies.filter(e => !e.dead && !(DUEL && e.team === pl));
+  if (DUEL) { const fh = heroes[1 - pl]; if (fh && !fh.dead) L.push(fh); }
+  return L;
+}
+function updateMataShots(dt) {
+  if (!dt) return;
+  for (const s of mshots) {
+    const a = s.p, b = mhv.copy(a).addScaledVector(s.v, dt);
+    s.v.y -= s.drop * dt;
+    // primeiro o que estiver no caminho: monstro / herói (cilindro em pé) ou chão / parede
+    let best = null, bt = 1;
+    const dx = b.x - a.x, dz = b.z - a.z, L2 = dx * dx + dz * dz || 1e-9;
+    const TGS = s.mon !== undefined ? heroes : enemies;
+    for (let ti = 0, tn = TGS.length + (s.mon === undefined && DUEL ? 1 : 0); ti < tn; ti++) {
+      const t = ti < TGS.length ? TGS[ti] : heroes[1 - s.pl];
+      if (!t || t.dead || (s.mon !== undefined ? DUEL && t.pl === s.mon : t.kind !== 'hero' && DUEL && t.team === s.pl)) continue;
+      const r = Math.max(.28, t.kind === 'hero' ? .3 : t.r), u = clamp(((t.pos.x - a.x) * dx + (t.pos.z - a.z) * dz) / L2, 0, 1);
+      const px = a.x + dx * u - t.pos.x, pz = a.z + dz * u - t.pos.z; if (px * px + pz * pz > r * r || u >= bt) continue;
+      const gy = Hjs(t.pos.x, t.pos.z) + (t.alt || 0), hgt = t.kind === 'hero' ? (t.crouch ? 1.15 : 1.65) - (t.swim ? .6 : 0) : (t.top || t.T.size * 2) * 1.05, y = a.y + (b.y - a.y) * u;
+      if (y < gy || y > gy + hgt) continue;
+      best = { t, head: y > gy + hgt * .8 }; bt = u;
+    }
+    // chão e paredes (amostra no meio do caminho)
+    let wu = 1;   // parede fina e plataforma: teste exato (a bala anda vários metros por quadro)
+    const bx0 = Math.min(a.x, b.x), bx1 = Math.max(a.x, b.x), bz0 = Math.min(a.z, b.z), bz1 = Math.max(a.z, b.z), far = (cx, cz, h) => cx + h < bx0 || cx - h > bx1 || cz + h < bz0 || cz - h > bz1;
+    for (const w of walls) { if (far(w.x, w.z, Math.max(w.hw, w.hd))) continue; const u = segBox(a.x, a.z, b.x, b.z, w.x, w.z, w.hw, w.hd); if (u >= 0 && u < wu && a.y + (b.y - a.y) * u - Hjs(a.x + dx * u, a.z + dz * u) < w.h) wu = u; }
+    for (const p of plats) { if (far(p.x, p.z, p.sw)) continue; const u = segBox(a.x, a.z, b.x, b.z, p.x, p.z, p.sw, p.sw); if (u >= 0 && u < wu && a.y + (b.y - a.y) * u - Hjs(a.x + dx * u, a.z + dz * u) < p.sh) wu = u; }
+    if (wu < bt) { best = null; bt = wu; s.life = 0; const x = a.x + dx * wu, z = a.z + dz * wu; burst(tmp.set(x, a.y + (b.y - a.y) * wu - Hjs(x, z), z), 0xb8a888, 5, 1.4, .07); }
+    const nS = Math.max(4, Math.ceil(Math.sqrt(L2) / .3));
+    for (let k = 1; k <= nS && !best && s.life > 0; k++) {
+      const u = k / nS; if (u >= bt) break;
+      const x = a.x + dx * u, z = a.z + dz * u, y = a.y + (b.y - a.y) * u, gy = Hjs(x, z);
+      if (y < gy + .02 || (hitsSolid(x, z) && y < gy + 3.2) ) { s.life = 0; burst(tmp.set(x, y - gy + .05, z), 0xb8a888, 5, 1.4, .07); break; }
+    }
+    if (best) {
+      const t = best.t, dist = Math.hypot(t.pos.x - s.o.x, t.pos.z - s.o.z), dmg = s.dmg * (best.head ? HEAD_MUL : 1);
+      s.life = 0;
+      burst(tmp.set(t.pos.x, (t.kind === 'hero' ? .9 : t.hitY) + (t.alt || 0), t.pos.z), best.head ? 0xff4040 : 0xffd0a0, best.head ? 12 : 6, 2, .08);
+      if (s.mon !== undefined) { damageTarget(t, s.dmg * (best.head ? MC.monHead : 1)); continue; }
+      if (t.kind === 'hero') { damageTarget(t, dmg * HERO_HIT_MUL); mataSay(s.pl, `${best.head ? '🎯 Na cabeça! ' : ''}Acertou o outro a ${Math.round(dist)} m`, 1800); }
+      else {
+        const wasDead = t.dead; hurt(t, dmg);
+        if (!wasDead && t.dead) { if (HUNT) M_.longest = Math.max(M_.longest, dist); mataSay(s.pl, `${best.head ? '🎯 Na cabeça! ' : ''}${t.T.name} abatido a ${Math.round(dist)} m`, 2200); }
+      }
+      if (s.pl === ME) mataHitMark(best.head);
+      else if (NET.host) NET.send({ t: 'hm', h: best.head ? 1 : 0 });
+    }
+    if (s.life > 0) { a.copy(b); s.life -= dt; if (Math.abs(a.x) > HALF + 4 || Math.abs(a.z) > HALF + 4) s.life = 0; placeShot(s); }
+  }
+  for (let k = mshots.length - 1; k >= 0; k--) if (mshots[k].life <= 0) { scene.remove(mshots[k].m); mshots.splice(k, 1); }
+}
+let hmT = 0;
+function mataHitMark(head) { const h = $('mHit'); h.classList.toggle('head', !!head); h.classList.add('on'); clearTimeout(hmT); hmT = setTimeout(() => h.classList.remove('on'), 160); sfx('hit'); }
+
+// --- Herói caiu: na caçada acaba; no duelo o outro marca ponto (melhor de 3)
+function mataHeroDown(hh) {
+  hh.dead = true; hh.g.visible = hh.bar.g.visible = false;
+  burst(tmp.set(hh.pos.x, .5, hh.pos.z), HERO_COL[hh.pl][0], 16, 2.5, .12); pfx('herodie', hh.pos.x, 0, hh.pos.z);
+  if (hh.pl === ME) sfx('herodie');
+  for (const e of enemies) if (e.hunt && mataPrey(e) === hh && e.hunt.st === 'chase') { e.hunt.st = 'alert'; e.hunt.alertT = 8; }
+  if (HUNT) { S.over = true; S.winner = -1; setTimeout(() => mataEnd(false), 1200); return; }
+  const w = 1 - hh.pl; M_.duel[w]++;
+  if (M_.duel[w] >= MC.duelWin) { S.over = true; S.winner = w; showOver(); return; }
+  hh.respawnT = 4; hh.alt = 0;
+  mataSay(w, `🎯 Você derrubou o outro! Placar ${M_.duel[w]} × ${M_.duel[1 - w]}`, 3000);
+  mataSay(hh.pl, `Você caiu! Placar ${M_.duel[hh.pl]} × ${M_.duel[w]}. Volta em 4 segundos.`, 3000);
+}
+
+// --- A cada quadro (quem roda o jogo): aranhas do duelo, vitória da caçada, altura dos heróis
+let minionT = 6;
+function mataTick(dt) {
+  for (const hh of heroes) {
+    if (hh.pl !== ME && NET.inp && NET.inp.life === hh.life) { hh.alt = Math.min(NET.inp.alt || 0, floorAt(hh.pos.x, hh.pos.z, 99) + 1.2, mataMaxAlt()); hh.crouch = !!NET.inp.cr; hh.swim = !!NET.inp.sw; }
+    // pulou para longe de repente = usou um túnel: quem perseguia perde o rastro
+    if (hh.lx !== undefined && Math.hypot(hh.pos.x - hh.lx, hh.pos.z - hh.lz) > 8) for (const e of enemies) if (e.hunt && mataPrey(e) === hh && e.hunt.st === 'chase') { e.hunt.st = 'alert'; e.hunt.alertT = MC.alertT; e.hunt.ax = e.hunt.wx = hh.lx; e.hunt.az = e.hunt.wz = hh.lz; e.hunt.see = 0; }
+    hh.lx = hh.pos.x; hh.lz = hh.pos.z;
+    hh.pos.y = hh.alt || 0;
+  }
+  if (!dt) return;
+  M_.mt += dt;
+  if (DUEL && !M_.ctlSaid) { M_.ctlSaid = true; for (const pl of [0, 1]) mataSay(pl, '🎯 Duelo na mata: ' + (pl === ME ? mataCtl() : 'derrube o outro 2 vezes. Suas aranhas caçam ele.'), 6000); }
+  if (DUEL && (minionT -= dt) <= 0) {
+    minionT = MC.minionEvery;
+    for (const pl of [0, 1]) {
+      if (enemies.filter(e => !e.dead && e.team === pl).length >= MC.minionMax) continue;
+      const c = CASTLES[pl], side = pl ? -1 : 1;
+      for (let k = 0; k < 2; k++) mataEnemy('aranha', c.x + side * 3.5, c.z + (k - .5) * 1.4, pl, { x: c.x + side * 12, z: c.z }, 100 + pl);
+      mataSay(pl, '🕷️ Duas aranhas suas saíram para caçar o outro jogador.', 2000);
+    }
+  }
+  if (HUNT && !S.over && mataGoalOk() && !hero.dead && Math.hypot(hero.pos.x - CASTLES[0].x, hero.pos.z - CASTLES[0].z) < 3.6) { S.over = true; S.winner = 0; mataEnd(true); }
+  // quanto te viram (para o olho no canto da tela)
+  M_.sv = heroes.map(hh => enemies.reduce((m, e) => e.hunt && !e.dead && mataPrey(e) === hh ? Math.max(m, e.hunt.st === 'chase' ? 2 : e.hunt.st === 'alert' ? Math.max(1, e.hunt.see) : e.hunt.see) : m, 0));
+}
+function mataGuest(rdt) {
+  for (const hh of heroes) hh.pos.y = hh.alt || 0;
+  // o tiro é do host; aqui só o som e o coice para o convidado sentir na hora
+  hero.gcd = (hero.gcd || 0) - rdt;
+  if (FP.on && FP.fire && !hero.dead && hero.gcd <= 0 && NET.live) { hero.gcd = WP[M_.w].cd; FP.kick = M_.w === 'sniper' ? 1.6 : 1; sfx(M_.w === 'sniper' ? 'tshot' : 'shot'); }
+}
+// Snapshot: placar do duelo, quanto cada um foi visto e a altura de cada herói (telhado, torre)
+const mataSnap = () => ({ d: M_.duel, sv: (M_.sv || []).map(v => Math.round(v * 100) / 100), al: heroes.map(hh => Math.round((hh.alt || 0) * 100) / 100), cr: heroes.map(hh => hh.crouch ? 1 : 0) });
+function mataApply(m) {
+  if (!m) return;
+  if (Array.isArray(m.d)) M_.duel = m.d.slice(0, 2).map(v => v | 0);
+  if (Array.isArray(m.sv)) M_.sv = m.sv.slice(0, 2).map(v => clamp(fin(v), 0, 2));
+  if (Array.isArray(m.al)) heroes.forEach((hh, k) => { if (k !== ME) hh.alt = clamp(fin(m.al[k]), 0, 8); });
+}
+function mataReset() { M_.duel = [0, 0]; minionT = 6; for (const s of mshots) scene.remove(s.m); mshots.length = 0; for (const hh of heroes) { hh.alt = 0; hh.vy = 0; } }
+
+// --- Tela: placar/alvos, olho, arma, zoom, mira de sniper, botões de toque e túnel
+function mataZoom(step = 1) {
+  const Z = WP[M_.w].zoom; M_.zoom = (M_.zoom + step + Z.length) % Z.length;
+  sfx('step');
+}
+function mataWeapon() { M_.w = M_.w === 'sniper' ? 'fuzil' : 'sniper'; M_.zoom = 0; sfx('up'); showToast(M_.w === 'sniper' ? '🔭 Sniper: tiro forte e lento. Mire com zoom.' : '🔫 Fuzil: tiro rápido, mais fraco.', 1800); }
+function mataCrouch() { hero.crouch = !hero.crouch; sfx('step'); }
+function mataUseHatch() {
+  const h = M_.act; if (!h || M_.actCd > 0 || hero.dead) return;
+  M_.actCd = 2; $('mFade').classList.add('on'); sfx('spawn');
+  setTimeout(() => {
+    const to = h.to; hero.pos.set(to.x + 1.1, 0, to.z + 1.1); hero.alt = 0; collide(hero.pos, hero.r); structPush(hero.pos, hero.r);
+    FP.yaw += Math.PI; setTimeout(() => $('mFade').classList.remove('on'), 250);
+    showToast('🕳️ Você saiu do outro lado do túnel.', 1800);
+  }, 450);
+}
+function mataFrame(rdt) {
+  if (!MATA) return;
+  const Z = WP[M_.w].zoom, z = Z[Math.min(M_.zoom, Z.length - 1)] || 1;
+  const base = innerWidth < innerHeight ? FP_FOV_TALL : FP_FOV, fov = base / z;
+  if (FP.on && Math.abs(cam.fov - fov) > .01) { cam.fov += (fov - cam.fov) * Math.min(1, rdt * 14); if (Math.abs(cam.fov - fov) < .05) cam.fov = fov; cam.updateProjectionMatrix(); }
+  // mira balança com zoom (menos agachado, mais andando)
+  const moving = Math.abs(joy.x) + Math.abs(joy.y) > .2 || ['KeyW', 'KeyA', 'KeyS', 'KeyD'].some(k => keys.has(k));
+  const amp = z > 1.5 ? .0035 * (hero.crouch ? .35 : 1) * (moving ? 3 : 1) * Math.sqrt(z / 4) : 0;
+  M_.sx = Math.sin(time * 1.3) * amp + Math.sin(time * 2.9) * amp * .4; M_.sy = Math.cos(time * 1.7) * amp * .8;
+  document.body.classList.toggle('scope', z > 1.5 && M_.w === 'sniper' && FP.on && !hero.dead);
+  M_.actCd -= rdt;
+  M_.act = !hero.dead && (hero.alt || 0) < .3 ? hatches.find(h => Math.hypot(h.x - hero.pos.x, h.z - hero.pos.z) < .9) : null;
+  $('mAct').hidden = !M_.act;
+  if ((M_.ht = (M_.ht || 0) - rdt) > 0) return;
+  M_.ht = .15;
+  const see = (M_.sv || [])[ME] || 0, eye = $('mEye');
+  eye.className = see >= 2 ? 'chase' : see >= 1 ? 'alert' : see > .05 ? 'look' : '';
+  $('mEyeIn').style.width = Math.min(100, see * 100) + '%';
+  $('mEyeT').textContent = see >= 2 ? 'Te viram! Fuja ou se esconda' : see >= 1 ? 'Eles estão procurando' : see > .05 ? 'Alguém está desconfiado…' : hero.crouch ? 'Escondido (agachado)' : 'Ninguém te viu';
+  $('mWpn').innerHTML = (M_.w === 'sniper' ? '🔭 Sniper' : '🔫 Fuzil') + (z > 1 ? ` · ${z}x` : '');
+  $('mCrouch').classList.toggle('on', !!hero.crouch);
+  if (HUNT) {
+    const g = MC.goal, d = M_.done, ok = mataGoalOk();
+    $('mGoal').innerHTML = ok ? `🏰 Volte ao castelo · <b>${Math.round(Math.hypot(hero.pos.x - CASTLES[0].x, hero.pos.z - CASTLES[0].z))} m</b>`
+      : `🎯 Rex <b>${Math.min(d.rex, g.rex)}/${g.rex}</b> · Ogros <b>${Math.min(d.ogro, g.ogro)}/${g.ogro}</b> · Outros <b>${Math.min(d.outros, g.outros)}/${g.outros}</b>`;
+    const ar = $('mArrow'); ar.hidden = !ok;
+    if (ok) { const a = Math.atan2(CASTLES[0].x - hero.pos.x, CASTLES[0].z - hero.pos.z), rel = a - (FP.yaw + Math.PI); ar.style.transform = `rotate(${-rel}rad)`; }
+  } else $('mGoal').innerHTML = `⚔️ Você <b>${M_.duel[ME]}</b> × <b>${M_.duel[1 - ME]}</b> Amigo · vence quem fizer ${MC.duelWin}`;
+}
+function mataRec() { let r = {}; try { r = JSON.parse(localStorage.getItem('vd-caca') || '{}') || {}; } catch (e) {} return { t: Math.max(0, fin(+r.t)) | 0, longe: Math.max(0, fin(+r.longe)) | 0 }; }
+function mataEnd(won) {
+  const t = Math.round(M_.mt), mm = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
+  const rec = mataRec();
+  const novo = won && (!rec.t || t < rec.t);
+  if (won) { rec.t = novo ? t : rec.t; rec.longe = Math.max(rec.longe || 0, Math.round(M_.longest)); try { localStorage.setItem('vd-caca', JSON.stringify(rec)); } catch (e) {} }
+  $('mEndT').textContent = won ? '🏆 Você saiu da mata!' : '💀 Você foi pego!';
+  $('mEndS').innerHTML = `<li>Tempo: <b>${mm}:${ss}</b>${novo ? ' · <b class="novo">novo recorde!</b>' : rec.t ? ` (recorde ${Math.floor(rec.t / 60)}:${String(rec.t % 60).padStart(2, '0')})` : ''}</li>
+    <li>Monstros abatidos: <b>${M_.kills}</b> · sem ser visto: <b>${M_.stealth}</b></li><li>Tiro mais longe: <b>${Math.round(M_.longest)} m</b></li>`;
+  sfx(won ? 'win' : 'over'); if (document.pointerLockElement) document.exitPointerLock();
+  $('mEnd').classList.add('show');
+}
+const mataCtl = () => TOUCH ? 'Arraste para mirar · ▲ pula · 🔭 troca a arma · 🔍 zoom · 🧎 agacha' : 'Clique para mirar · botão direito ou roda = zoom · C agacha · Espaço pula · 1/2 troca a arma · E entra no túnel';
+function mataStart() {
+  $('mataOv').classList.remove('show'); S.started = true;
+  if (!TOUCH) try { canvas.requestPointerLock(); } catch (e) {}
+  if (M_.begun) return; M_.begun = true; M_.mt = 0;
+  dispatchEvent(new Event('vd-jogar'));
+  showToast(mataCtl(), 5000);
+}
+if (MATA) {
+  document.body.classList.add('mata');
+  mataWorld();
+  if (HUNT) { mataSpawn(); $('help').classList.remove('show'); $('mataOv').classList.add('show'); const r = mataRec(); $('mataRec').textContent = r.t ? `🏆 Seu recorde: ${Math.floor(r.t / 60)}:${String(r.t % 60).padStart(2, '0')} · tiro mais longe ${r.longe} m` : ''; }
+  if (DUEL) M_.begun = true;
+  $('mWpn').onclick = mataWeapon; $('mZoom').onclick = () => mataZoom(); $('mCrouch').onclick = mataCrouch; $('mAct').onclick = mataUseHatch;
+  $('mataGo').onclick = () => { if (!contaOk()) return pedirConta('mataGo'); mataStart(); };
+  $('mEndAgain').onclick = () => { location.href = location.pathname + '?caca=1&bioma=' + BIOMA + (TESTE ? '&teste' : ''); };
+  $('helpBtn').onclick = () => { if (DUEL) return showToast(mataCtl(), 6000); if (HUNT && !S.over) { $('mataGo').textContent = 'Continuar a caçada'; $('mataOv').classList.add('show'); S.started = false; if (document.pointerLockElement) document.exitPointerLock(); } };
+  $('mEndMenu').onclick = $('mataBack').onclick = () => { location.href = location.pathname + (TESTE ? '?teste' : ''); };
+}
+
 let last = performance.now(), time = 0, slowTick = 0, snapT = 0, stepT = 0;
 function loop(now) {
   requestAnimationFrame(loop);
   const rdt = Math.min(.05, (now - last) / 1000); last = now; time += rdt;
   const run = ONLINE ? NET.live : S.started && !S.shop;
   const dt = S.over || !run ? 0 : rdt * S.speed;
-  if (GUEST) guestFrame(rdt, dt);
+  if (GUEST) { guestFrame(rdt, dt); if (MATA) mataGuest(rdt); }
   else {
-    if (PVP && dt) pvpTick(dt);
+    if (PVP && dt && !MATA) pvpTick(dt);
     if (IDLE && dt) idleTick(dt);
-    updateWave(dt); updateEnemies(dt, time); updateTowers(dt, rdt, time);
+    if (!MATA) updateWave(dt); updateEnemies(dt, time); updateTowers(dt, rdt, time);
     if (ONLINE) for (const hh of heroes) withPlayer(hh.pl, () => updateHero(dt, rdt, time)); else updateHero(dt, rdt, time);
+    if (MATA) { mataTick(dt); updateMataShots(dt); }
     updateShots(dt); updateClouds(dt); updateRads(dt, rdt); updateHearts(dt, rdt); updateAnimals(dt); updateDrops(dt, rdt);
   }
-  updateParticles(rdt); updatePfx(rdt); updateBossTags(); updateTension(); updateBirds(dt, rdt); updateSticks(dt);
+  updateParticles(rdt); updatePfx(rdt); if (!MATA) { updateBossTags(); updateTension(); } updateBirds(dt, rdt); updateSticks(dt);
   for (const hh of heroes) heroExtras(hh, GUEST ? 0 : dt, time);
   if (SND.ac && SND.sfxOn && dt && (stepT -= rdt) <= 0) {
     stepT = .26;
@@ -3885,13 +4513,13 @@ function loop(now) {
     cs.g.position.x = Math.sin(time * 70) * .06 * cs.shake;
   }
   if (NET.host && NET.live && (snapT += rdt) >= .05) { NET.send(makeSnap(snapT)); snapT = 0; }
-  fpFrame(rdt, dt);
+  fpFrame(rdt, dt); mataFrame(rdt);
   if (C.follow && !hero.dead && !FP.on) { const f = Math.min(1, rdt * 5); C.tx += (hero.pos.x - C.tx) * f; C.tz += (hero.pos.z - C.tz) * f; clampCam(); }
   if (C.goal !== null) { C.tz += (C.goal - C.tz) * Math.min(1, rdt * 8); if (Math.abs(C.goal - C.tz) < .01) C.goal = null; }
   updateCam(); fpArmsPose(time);
   if (!FP.on && !TOUCH && mouse.ok && groundAt(mouse.sx, mouse.sy, mouse.p)) { aimMark.visible = !hero.dead; aimMark.position.set(mouse.p.x, .06, mouse.p.z); } else aimMark.visible = false;
   updateHUD();
-  if ((slowTick += rdt) > .2) { slowTick = 0; refreshSheet(); updateIndicators(); waveText(); if (ONLINE) { updateUI(); if (S.shop) renderShop(); } }
+  if ((slowTick += rdt) > .2) { slowTick = 0; refreshSheet(); if (!MATA) updateIndicators(); waveText(); if (ONLINE) { updateUI(); if (S.shop) renderShop(); } }
   drawFrame();
 }
 // ===== Online: o que o host manda e o convidado desenha =====
@@ -3910,7 +4538,8 @@ function makeSnap(sdt) {
     e: enemies.filter(e => !e.dead).map(e => [e.id, ETK.indexOf(e.type), e.team, r2(e.pos.x), r2(e.pos.z), r2(e.g.rotation.y), Math.ceil(e.hp), e.maxHp, e.bar.g.visible ? 1 : 0, tint(e), r2(e.inner.position.z), r2(e.walk)]),
     tw: towers.map(t => [t.pad.n, TTK.indexOf(t.type), t.lv, Math.ceil(t.hp), t.owner, t.aim ? r2(t.aim.rotation.y) : 0, t.bar.g.visible ? 1 : 0,
       t.beam && t.beam.visible ? [t.beam.position.x, t.beam.position.y, t.beam.position.z, t.beam.rotation.x, t.beam.rotation.y, t.beam.rotation.z, t.beam.scale.x, t.beam.scale.z].map(r2) : 0]),
-    s: shots.map(s => {
+    mt: MATA ? mataSnap() : undefined,
+    s: (MATA ? shots.concat(mshots) : shots).map(s => {
       const k = vkOf(s.m); if (k < 0) return null;
       const p = s.m.position, v = s.lp ? tmp.subVectors(p, s.lp).multiplyScalar(1 / sdt) : s.dir ? tmp.copy(s.dir).multiplyScalar(s.sp) : tmp.set(0, 0, 0);
       s.lp = p.clone(); return [k, r2(p.x), r2(p.y), r2(p.z), r2(v.x), r2(v.y), r2(v.z)];
@@ -3924,6 +4553,7 @@ const gE = new Map(); let gShots = [], gClouds = [], gLastSnap = 0;
 function applySnap(m) {
   const now = performance.now(), sdt = gLastSnap ? Math.min(.3, (now - gLastSnap) / 1000) : .05; gLastSnap = now;
   const me = m.me;
+  if (MATA) mataApply(m.mt);
   Object.assign(S, { gold: me.g, castle: me.c, hw: me.hw, owned: new Set(me.ow), unlocked: new Set(me.un.map(k => TT[k])), power: me.pw, wave: m.w, waveActive: m.wa, qn: m.q, nextT: m.nt });
   foeCastleV = m.foe;
   CASTLES.forEach((c, k) => { c.shake = Math.max(c.shake, m.cs[k] || 0); });
@@ -4028,19 +4658,29 @@ function guestFrame(rdt, dt) {
   for (const an of animals) { if (an.tx === undefined) continue; an.pos.x += (an.tx - an.pos.x) * f; an.pos.z += (an.tz - an.pos.z) * f; an.g.rotation.y = lerpAng(an.g.rotation.y, an.try, f); an.walk += (an.tw - an.walk) * f; animAnimal(an); }
   if (NET.live && (inT += rdt) >= .05) {
     inT = 0; const hh = heroes[ME];
-    NET.send({ t: 'i', x: r2(hh.pos.x), z: r2(hh.pos.z), life: hh.life, sp: hh.sprint ? 1 : 0, aim: !FP.on && !TOUCH && mouse.ok ? [r2(mouse.p.x), r2(mouse.p.z)] : null, fp: FP.on ? 1 : 0, yaw: Math.round(FP.yaw * 1000) / 1000, fire: FP.fire ? 1 : 0 });
+    NET.send({ t: 'i', x: r2(hh.pos.x), z: r2(hh.pos.z), life: hh.life, sp: hh.sprint ? 1 : 0, aim: !FP.on && !TOUCH && mouse.ok ? [r2(mouse.p.x), r2(mouse.p.z)] : null, fp: FP.on ? 1 : 0, yaw: Math.round((FP.yaw + (MATA ? M_.sx : 0)) * 1000) / 1000, fire: FP.fire ? 1 : 0,
+      ...(MATA ? { pi: Math.round((FP.pitch + M_.sy) * 1000) / 1000, w: M_.w, alt: Math.round((hh.alt || 0) * 100) / 100, cr: hh.crouch ? 1 : 0, sw: hh.swim ? 1 : 0 } : {}) });
   }
+}
+// Input do convidado: só números finitos e dentro do mapa (altura limitada ao que dá para subir)
+function cleanInp(m) {
+  const lim = HALF + 2, A = m.aim;
+  const o = { t: 'i', x: clamp(fin(m.x), -lim, lim), z: clamp(fin(m.z), -lim, lim), life: fin(m.life) | 0, sp: m.sp ? 1 : 0, fp: m.fp ? 1 : 0, fire: m.fire ? 1 : 0,
+    yaw: fin(m.yaw) % 100, aim: Array.isArray(A) && A.length === 2 ? [clamp(fin(A[0]), -lim, lim), clamp(fin(A[1]), -lim, lim)] : null };
+  if (MATA) Object.assign(o, { pi: clamp(fin(m.pi), -1.2, 1.2), w: m.w === 'sniper' ? 'sniper' : 'fuzil', alt: clamp(fin(m.alt), 0, mataMaxAlt()), cr: m.cr ? 1 : 0, sw: m.sw ? 1 : 0 });
+  return o;
 }
 function onNet(m) {
   if (!m || typeof m !== 'object') return;
   NET.last = performance.now();
   if (m.t === 'bye') return NET.drop && NET.drop();
   if (NET.host) {
-    if (m.t === 'i') NET.inp = m;
+    if (m.t === 'i') NET.inp = cleanInp(m);
     else if (m.t === 'c') withPlayer(1, () => applyCmd(m));
   } else {
     if (m.t === 's') { const t0 = performance.now(); applySnap(m); NET.snapMs += performance.now() - t0; NET.snaps++; }
     else if (m.t === 'toast') showToast(m.msg, m.ms);
+    else if (m.t === 'hm' && MATA) mataHitMark(!!m.h);
     else if (m.t === 'hi' && m.mode !== MODE) location.replace(roomLink(m.mode) + (TESTE ? '&teste' : ''));
   }
 }
@@ -4065,7 +4705,7 @@ $('onl').addEventListener('click', ev => {
 $('netMenu').onclick = $('ovMenu').onclick = () => { location.href = menuUrl(); };
 $('netGo').onclick = () => $('net').classList.remove('show');
 $('netPill').onclick = () => {
-  if (NET.live) netPanel('Partida online', MODE === 'pvp' ? 'Vocês estão jogando um contra o outro.' : 'Vocês estão jogando juntos.', { share: false, go: true });
+  if (NET.live) netPanel('Partida online', DUEL ? 'Vocês estão no duelo na mata.' : MODE === 'pvp' ? 'Vocês estão jogando um contra o outro.' : 'Vocês estão jogando juntos.', { share: false, go: true });
   else $('net').classList.add('show');
 };
 $('copyLink').onclick = async () => {
@@ -4117,7 +4757,7 @@ async function startNet() {
   if (NET.host) {
     $('netLink').value = roomLink();
     netStatus('', '⏳ aguardando amigo');
-    netPanel('Sala criada!', `Modo: ${PVP ? '⚔️ um contra o outro' : '🤝 juntos'}. Mande este link para seu amigo. O jogo começa quando ele entrar.`, { share: true });
+    netPanel('Sala criada!', `Modo: ${DUEL ? '🎯 duelo na mata' : PVP ? '⚔️ um contra o outro' : '🤝 juntos'}. Mande este link para seu amigo. O jogo começa quando ele entrar.`, { share: true });
   } else {
     netStatus('', '⏳ conectando');
     netPanel('Entrando na sala…', 'Conectando com seu amigo. Isso leva alguns segundos.');
@@ -4170,7 +4810,7 @@ C.tx = hero.home.x; C.tz = hero.home.z; clampCam(); updateCam(); C.tz = hero.hom
 if (ONLINE) startNet();
 setTimeout(() => $('load').classList.add('hide'), QS0.has('cont') || S.fresh ? 0 : Math.max(0, 5000 - performance.now()));
 requestAnimationFrame(loop);
-if (location.search.includes('teste')) window.__vd = { ID, startIdle, idleFall, autoBuild, get IDLE() { return IDLE; }, FP, fpSet, fpWave, SND, sfx, setMusic, setSfx, S, pads, hearts, dropHeart, PORTALS, PSEED, ET, spawnEnemy, waveList, bossWave, trail, placeTower, startWave, enemies, towers, hero, heroes, NET, MODE, ROLE, ME, CASTLES, act, pget, PS, gE, roomLink, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, heroShootAt, rads, renderShop: () => renderShop(), giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE, pfx, pfxList, FXM, PIXEL, explodeAt, BIOMA, Hjs, HAMP, giants, volcs, SND, sticks, newMapWave, towers, enemies, startWave, HW, TT, birds, heroAttack, hero, animals, drops, dropItem, hurt, buildEnemy, HORA, WIND, dayUpdate };
+if (location.search.includes('teste')) window.__vd = { mataLOS, walls, floorAt, M_, MC, WP, plats, hatches, mshots, mataFire, mataStart, HUNT, DUEL, MATA, ID, startIdle, idleFall, autoBuild, get IDLE() { return IDLE; }, FP, fpSet, fpWave, SND, sfx, setMusic, setSfx, S, pads, hearts, dropHeart, PORTALS, PSEED, ET, spawnEnemy, waveList, bossWave, trail, placeTower, startWave, enemies, towers, hero, heroes, NET, MODE, ROLE, ME, CASTLES, act, pget, PS, gE, roomLink, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, heroShootAt, rads, renderShop: () => renderShop(), giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE, pfx, pfxList, FXM, PIXEL, explodeAt, BIOMA, Hjs, HAMP, giants, volcs, SND, sticks, newMapWave, towers, enemies, startWave, HW, TT, birds, heroAttack, hero, animals, drops, dropItem, hurt, buildEnemy, HORA, WIND, dayUpdate };
 </script>
 </body>
 </html>
