@@ -151,7 +151,7 @@ function enviarIdle() {
   clearTimeout(idleT); idleT = 0;
   if (!perfil || !idlePend || idlePend.dono !== perfil.id) return;
   const d = idlePend; idlePend = null;
-  sb.from('jogadores').update({ idle: d }).eq('id', perfil.id).then(() => {});
+  sb.from('jogadores').update({ idle: d }).eq('id', perfil.id).then(({ error }) => { if (error) console.warn('progresso do modo automático não foi salvo', error.message); });
 }
 addEventListener('vd-idle-salvar', ev => { idlePend = ev.detail; if (!idleT) idleT = setTimeout(enviarIdle, IDLE_ENVIO_MS); });
 addEventListener('pagehide', enviarIdle);

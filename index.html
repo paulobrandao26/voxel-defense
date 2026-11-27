@@ -22,6 +22,7 @@
 html,body{margin:0;height:100%;overflow:hidden;color:var(--txt);background:linear-gradient(#7ec4ee,#d6eefc 70%);
 font:700 15px/1.25 Nunito,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;user-select:none;-webkit-user-select:none;overscroll-behavior:none}
 #c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#stars{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:0}
 body:not(.touch) #c{cursor:crosshair}
 #hud{position:fixed;top:calc(var(--sat) + 8px);left:calc(var(--sal) + 8px);right:calc(var(--sar) + 8px);display:flex;gap:6px;flex-wrap:wrap;justify-content:center;pointer-events:none}
 .pill{background:var(--card);border-radius:999px;padding:6px 12px;display:flex;gap:6px;align-items:center;min-height:36px;box-shadow:0 2px 8px #0004}
@@ -230,6 +231,7 @@ body.touch #viewBtn{width:60px;height:60px;border-radius:50%;padding:0;flex-dire
     <button id="gfx" class="sec wide"></button>
     <button id="visBtn" class="sec wide"></button>
     <button id="fpMenu" class="sec wide"></button>
+    <button id="horaBtn" class="sec wide"></button>
     </div></div>
   </div>
 </div>
@@ -351,9 +353,10 @@ addEventListener('error', () => {
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 </script>
 <script type="module" src="conta.js"></script>
-<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 // Ícones próprios em pixel art (no lugar dos emojis). Cada letra é uma cor; '.' é transparente.
 const ICO_COR = { K: '#1b1b24', Y: '#ffc93c', O: '#e08a1e', W: '#ffffff', R: '#e23b3b', r: '#9c1f2b', G: '#5cc35a', g: '#2e7d32', B: '#8b5a2b', S: '#a9b2bc', s: '#5c6670', C: '#9be7ff', c: '#3a8fd8', P: '#b07bff', p: '#ff8fb3', L: '#ff6a00' };
 const ICO = {
@@ -770,11 +773,11 @@ function flowDir(p, out, flow = flows[0], cx = 0, cz = 0, seed = 0) {
 
 // Tudo é sólido: empurra para fora de água, castelo, árvores, pedras e armas.
 const SOLID_R = { [TREE]: .32, [ROCK]: .4 };
-function collide(p, r) {
+function collide(p, r, swim = false) {
   const ci = cellOf(p.x), cj = cellOf(p.z);
   for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
     const i = ci + a, j = cj + b, t = at(i, j);
-    if (t < 0 || SOLIDBOX.has(t)) {
+    if (t < 0 || SOLIDBOX.has(t) && !(swim && t === WATER)) {
       const x0 = i - HALF, z0 = j - HALF, qx = clamp(p.x, x0, x0 + 1), qz = clamp(p.z, z0, z0 + 1), dx = p.x - qx, dz = p.z - qz, d2 = dx * dx + dz * dz;
       if (d2 >= r * r) continue;
       if (d2 > 1e-8) { const d = Math.sqrt(d2), k = (r - d) / d; p.x += dx * k; p.z += dz * k; }
@@ -800,15 +803,15 @@ function hitsSolid(x, z) {
 
 // ===== Cena =====
 const canvas = $('c');
-const dpr = Math.min(devicePixelRatio || 1, 3);
+const dpr = Math.min(devicePixelRatio || 1, TOUCH ? 2 : 3);   // celular: até 2x (tela nítida sem pesar)
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: dpr < 1.5, alpha: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(dpr);
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = TOUCH ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 const cam = new THREE.PerspectiveCamera(45, 1, .5, 220);
 const SKY = { floresta: [0xcfe6f5, 0x5a6b3a, '#7ec4ee', '#d6eefc'], deserto: [0xf4e2bb, 0x9a7a45, '#f2c27a', '#fbe9c6'], neve: [0xe6eef6, 0x8796a8, '#a9c3dc', '#eef4fa'], vulcao: [0x6b3a2c, 0x4a2418, '#3b1a16', '#a5492a'] }[BIOMA];
 scene.fog = new THREE.Fog(SKY[0], VUL ? 50 : 60, VUL ? 115 : 130);
-scene.add(new THREE.HemisphereLight(VUL ? 0xffd2b8 : 0xe2f2ff, SKY[1], 1.7));
+const hemi = new THREE.HemisphereLight(VUL ? 0xffd2b8 : 0xe2f2ff, SKY[1], 1.7); scene.add(hemi);
 document.documentElement.style.background = document.body.style.background = `linear-gradient(${SKY[2]},${SKY[3]} 70%)`;
 const sun = new THREE.DirectionalLight(VUL ? 0xffbf8f : 0xfff1d6, 2.3);
 sun.castShadow = true; const SHM = Math.min(2048, renderer.capabilities.maxTextureSize); sun.shadow.mapSize.set(SHM, SHM);   // mesma sombra no PC e no celular (4096 deixava lento)
@@ -816,11 +819,68 @@ Object.assign(sun.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20, n
 sun.shadow.bias = -.0008; sun.shadow.normalBias = .03;
 scene.add(sun, sun.target);
 
+// ===== Hora do dia: manhãzinha, dia, pôr do sol e noite =====
+// Um dia inteiro leva DAY_S segundos e segue o relógio: os dois jogadores online veem a mesma hora.
+// Cada momento tem cor de céu (fundo da página), neblina, luz do céu e do sol (à noite vira a lua).
+// No menu dá para deixar sempre de dia. ?hora=0.6 fixa a hora (teste).
+const DAY_S = 480;
+const DAYK = [   // t, céu em cima, céu embaixo, neblina, luz do céu, força do céu, cor do sol, força do sol, altura do sol (0 baixo, 1 alto)
+  [0, '#7a86c8', '#ffb9a0', 0xf0c0b4, 0xffd0cc, 1.2, 0xffa080, 1.45, .12],
+  [.07, '#8cc4ec', '#fde2c2', 0xdde6ee, 0xf1f4ff, 1.55, 0xffdcb4, 2.0, .55],
+  [.14, null, null, null, null, 1.7, null, 2.3, 1],
+  [.44, null, null, null, null, 1.7, null, 2.3, 1],
+  [.52, '#5b62a6', '#ff9858', 0xe6a07c, 0xffc39c, 1.25, 0xff8442, 1.8, .14],
+  [.585, '#262a52', '#7c4c74', 0x3c3a62, 0x8a8ed0, .85, 0x9fb4ff, .7, .45],
+  [.64, '#060a1e', '#1b2646', 0x121c38, 0x6a80cc, .58, 0x9ab6ff, .55, .8],
+  [.9, '#060a1e', '#1b2646', 0x121c38, 0x6a80cc, .58, 0x9ab6ff, .55, .8],
+  [.96, '#2b305e', '#a66e7c', 0x6c5872, 0xc4aacb, 1, 0xffa088, .95, .05],
+  [1, '#7a86c8', '#ffb9a0', 0xf0c0b4, 0xffd0cc, 1.2, 0xffa080, 1.45, .12],
+];
+const DAY_BASE = [SKY[2], SKY[3], SKY[0], VUL ? 0xffd2b8 : 0xe2f2ff, 1.7, VUL ? 0xffbf8f : 0xfff1d6, 2.3, 1];
+const HORA = { fixa: (() => { const h = new URLSearchParams(location.search).get('hora'); return h !== null && isFinite(+h) ? ((+h % 1) + 1) % 1 : null; })(),
+  sempreDia: (() => { try { return localStorage.getItem('vd-hora') === 'dia'; } catch (e) { return false; } })(), t: .25, noite: 0 };
+const dcA = new THREE.Color(), dcB = new THREE.Color(), dcSky = new THREE.Color(), dcSun = new THREE.Color(), dcTop = new THREE.Color(), dcBot = new THREE.Color();
+const SUN_DIR = new THREE.Vector3(-9, 18, 6);
+let skyCss = '';
+// estrelas: pontinhos de luz desenhados uma vez no fundo
+{
+  const st = document.createElement('div'); st.id = 'stars'; document.body.prepend(st);
+  const dots = []; for (let k = 0; k < 90; k++) { const a = (k * 0.618034) % 1, b = (k * 0.7548777 + .13) % 1, r = .6 + ((k * 37) % 10) / 9; dots.push(`radial-gradient(${r.toFixed(1)}px ${r.toFixed(1)}px at ${(a * 100).toFixed(1)}% ${(b * 62).toFixed(1)}%, #fff ${k % 7 ? 60 : 99}%, transparent)`); }
+  st.style.background = dots.join(',');
+}
+// tom do vulcão: o ciclo pesa a metade, a fumaça laranja continua
+const DAY_MIX = VUL ? .5 : 1;
+function dayKey(k, i) { const v = DAYK[k][i + 1]; return v === null ? DAY_BASE[i] : v; }
+function dayMixC(out, a, b, f, base) { dcA.set(a); dcB.set(b); out.copy(dcA).lerp(dcB, f); if (DAY_MIX < 1) out.lerp(dcA.set(base), 1 - DAY_MIX); return out; }
+function dayUpdate() {
+  const t = HORA.sempreDia ? .25 : HORA.fixa !== null ? HORA.fixa : (Date.now() / 1000 / DAY_S + .02) % 1;
+  HORA.t = t;
+  let k = 0; while (k < DAYK.length - 2 && DAYK[k + 1][0] <= t) k++;
+  const f0 = (t - DAYK[k][0]) / (DAYK[k + 1][0] - DAYK[k][0]), f = f0 * f0 * (3 - 2 * f0);
+  const num = i => { const v = dayKey(k, i) + (dayKey(k + 1, i) - dayKey(k, i)) * f; return v + (DAY_BASE[i] - v) * (1 - DAY_MIX); };
+  dayMixC(dcTop, dayKey(k, 0), dayKey(k + 1, 0), f, DAY_BASE[0]); dayMixC(dcBot, dayKey(k, 1), dayKey(k + 1, 1), f, DAY_BASE[1]);
+  dayMixC(scene.fog.color, dayKey(k, 2), dayKey(k + 1, 2), f, DAY_BASE[2]);
+  dayMixC(hemi.color, dayKey(k, 3), dayKey(k + 1, 3), f, DAY_BASE[3]); hemi.intensity = num(4);
+  dayMixC(sun.color, dayKey(k, 5), dayKey(k + 1, 5), f, DAY_BASE[5]); sun.intensity = num(6);
+  const lum = hemi.intensity / 1.7;
+  hemi.groundColor.set(SKY[1]).multiplyScalar(.45 + .55 * lum);
+  // noite: 0 de dia, 1 no meio da noite (estrelas, janelas acesas, lanterna do herói)
+  HORA.noite = clamp((1.4 - hemi.intensity) / .65, 0, 1) * DAY_MIX;
+  // sol anda de leste a oeste; à noite a lua faz o mesmo caminho
+  const el = num(7), dayF = t < .55 ? t / .55 : t > .95 ? (t - .95) / .05 * .05 : (t - .55) / .4, az = -1.7 + dayF * 2.6;
+  const elev = .3 + el * .72, R0 = 21;
+  SUN_DIR.set(Math.sin(az) * Math.cos(elev) * R0, Math.sin(elev) * R0, Math.cos(az) * Math.cos(elev) * R0 * .5 + 4);
+  SUNZ.copy(SUN_DIR).normalize(); SUNX.set(0, 1, 0).cross(SUNZ).normalize(); SUNY.copy(SUNZ).cross(SUNX);
+  const css = `linear-gradient(#${dcTop.getHexString()},#${dcBot.getHexString()} 70%)`;
+  if (css !== skyCss) { skyCss = css; document.documentElement.style.background = document.body.style.background = css; }
+  const st = $('stars'); if (st) st.style.opacity = (HORA.noite * HORA.noite).toFixed(2);
+}
+
 // ===== Visual pixel art =====
 // A cena é desenhada numa imagem pequena (cada "pixel" vale 3 pontos da tela) e depois ampliada
 // sem borrar, com um contorno escuro só em volta de cada objeto (onde a distância muda de repente).
 // Parece pixel art de camadas empilhadas, sem mudar o jogo. Dá para voltar ao visual normal no menu.
-const PIXEL = (() => { const q = new URLSearchParams(location.search); if (q.has('pixel')) return true; if (q.has('normal')) return false; try { return localStorage.getItem('vd-visual') !== 'normal'; } catch (e) { return true; } })();
+const PIXEL = (() => { const q = new URLSearchParams(location.search); if (q.has('pixel')) return true; if (q.has('normal')) return false; try { return localStorage.getItem('vd-visual') === 'pixel'; } catch (e) { return false; } })();   // padrão: visual nítido (o pixel art é opcional no menu)
 const PIX = { px: 3, F: 3, S: 1, w: 1, h: 1, d0: 20, rt: null, quad: null, cam: null, scene: null, mat: null };
 // Contra a tremedeira: cada pixel grande é a média de até 3x3 pontos (menos chiado) e a câmera anda presa na grade dos pixels,
 // com o resto do passo feito deslizando a imagem pronta. Assim o cenário não pisca quando o herói anda.
@@ -886,7 +946,8 @@ function drawFrame() {
   renderer.setRenderTarget(null); renderer.render(PIX.scene, PIX.cam);
 }
 
-const BOX = new THREE.BoxGeometry(1, 1, 1);
+const BOX = new THREE.BoxGeometry(1, 1, 1), RBOX = new RoundedBoxGeometry(1, 1, 1, 2, .22);
+let BOXG = BOX;   // bichos, aves e monstros grandes usam RBOX (quinas arredondadas)
 const M = (c, e) => new THREE.MeshLambertMaterial(e ? { color: c, emissive: e } : { color: c });
 const mat = {
   stone: M(0xbdb8ae), stoneD: M(0x8f8a80), wood: M(0xa0703f), woodD: M(0x6e4a2a), red: M(0xd0453a), dark: M(0x2a2a33),
@@ -896,7 +957,7 @@ const mat = {
   glow: M(0x93c5fd, 0x2563eb), zshirt: M(0x4a5f8a), chip: M(0x39ff14, 0x39ff14), toxic: M(0xa3e635, 0x3f6212), laserM: M(0xff6b6b, 0xdc2626), pad: M(0xd9cfb4), moss: M(0x5f8f3a), rex: M(0x5f7d3a), rexD: M(0x3f5726), rexB: M(0xd2bf84),
 };
 function box(m, sx, sy, sz, x, y, z, p) {
-  const o = new THREE.Mesh(BOX, m); o.scale.set(sx, sy, sz); o.position.set(x, y, z);
+  const o = new THREE.Mesh(BOXG, m); o.scale.set(sx, sy, sz); o.position.set(x, y, z);
   o.castShadow = o.receiveShadow = true; p && p.add(o); return o;
 }
 const CONE = new THREE.ConeGeometry(1, 1, 4).rotateY(Math.PI / 4);
@@ -1313,6 +1374,19 @@ const AOK = [.42, .62, .82, 1];
 const FD = [[1, 0, 0, 0, 1, 0, 0, 0, 1], [-1, 0, 0, 0, 0, 1, 0, 1, 0], [0, 1, 0, 0, 0, 1, 1, 0, 0], [0, -1, 0, 1, 0, 0, 0, 0, 1], [0, 0, 1, 1, 0, 0, 0, 1, 0], [0, 0, -1, 0, 1, 0, 1, 0, 0]];
 const visFace = (x, y, z, f) => f !== 3 && !(f === 2 && y < Y0) && !solidV(x + FD[f][0], y + FD[f][1], z + FD[f][2]);
 const voxMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+// Vento: um sopro que vai e volta, com rajadas. Mexe nas folhas, na grama, na água, nas nuvens e nas folhas voando.
+const WIND = { t: { value: 0 }, s: { value: .5 } };
+const LEAFSET = new Set([LEAF, AUTUMN, [PINE], [PINEL], [BIRCHL], [FROND], [TUFT]].flat(2));
+voxMat.onBeforeCompile = sh => {
+  sh.uniforms.uWT = WIND.t; sh.uniforms.uWS = WIND.s;
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aWind; uniform float uWT, uWS;')
+    .replace('#include <begin_vertex>', `#include <begin_vertex>
+    { float w = aWind * uWS * ${(R * .1).toFixed(2)}, ph = (position.x + position.z) * ${(.35 / R).toFixed(4)};
+      transformed.x += (sin(uWT * 1.6 + ph) * .8 + sin(uWT * 4.1 + position.y * ${(.4 / R).toFixed(4)} + ph * 3.) * .3) * w;
+      transformed.z += (cos(uWT * 1.2 + ph * 1.3) * .45 + sin(uWT * 3.7 + ph * 2.) * .2) * w;
+      transformed.y += sin(uWT * 5.3 + ph * 4.) * .12 * w; }`);
+};
+voxMat.customProgramCacheKey = () => 'vox-vento';
 let voxFaces = 0;
 function meshRegion(x0, x1, z0, z1, skip) {
   let nf = 0;
@@ -1323,7 +1397,7 @@ function meshRegion(x0, x1, z0, z1, skip) {
   }
   if (!nf) return null;
   voxFaces += nf;
-  const pos = new Int16Array(nf * 12), nor = new Int8Array(nf * 12), cl = new Uint16Array(nf * 12);
+  const pos = new Int16Array(nf * 12), nor = new Int8Array(nf * 12), cl = new Uint16Array(nf * 12), wd = new Uint8Array(nf * 4);
   const idx = nf * 4 > 65535 ? new Uint32Array(nf * 6) : new Uint16Array(nf * 6), ao = [0, 0, 0, 0];
   let q = 0;
   for (let x = x0; x < x1; x++) for (let z = z0; z < z1; z++) {
@@ -1331,7 +1405,7 @@ function meshRegion(x0, x1, z0, z1, skip) {
     const t = vtop[x * VX + z], b = (x * VX + z) * VH;
     for (let y = 0; y < t; y++) {
       const c = vox[b + y]; if (!c) continue;
-      const cr = LIN[c >> 10 & 31], cg = LIN[c >> 5 & 31], cb = LIN[c & 31];
+      const cr = LIN[c >> 10 & 31], cg = LIN[c >> 5 & 31], cb = LIN[c & 31], wv = LEAFSET.has(c) ? Math.min(255, 55 + Math.max(0, y - Y0) * (200 / (R * 1.6))) : 0;
       for (let f = 0; f < 6; f++) {
         if (!visFace(x, y, z, f)) continue;
         const d = FD[f], nx = x + d[0], ny = y + d[1], nz = z + d[2];
@@ -1344,7 +1418,7 @@ function meshRegion(x0, x1, z0, z1, skip) {
           const o = (q * 4 + k) * 3, m = AOK[a] * 65535;
           pos[o] = bx + cu * d[3] + cv * d[6]; pos[o + 1] = by + cu * d[4] + cv * d[7]; pos[o + 2] = bz + cu * d[5] + cv * d[8];
           nor[o] = d[0] * 127; nor[o + 1] = d[1] * 127; nor[o + 2] = d[2] * 127;
-          cl[o] = cr * m; cl[o + 1] = cg * m; cl[o + 2] = cb * m;
+          cl[o] = cr * m; cl[o + 1] = cg * m; cl[o + 2] = cb * m; wd[q * 4 + k] = wv;
         }
         const v = q * 4, io = q * 6;
         if (ao[0] + ao[2] < ao[1] + ao[3]) { idx[io] = v + 1; idx[io + 1] = v + 2; idx[io + 2] = v + 3; idx[io + 3] = v + 1; idx[io + 4] = v + 3; idx[io + 5] = v; }
@@ -1357,6 +1431,7 @@ function meshRegion(x0, x1, z0, z1, skip) {
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setAttribute('normal', new THREE.BufferAttribute(nor, 3, true));
   g.setAttribute('color', new THREE.BufferAttribute(cl, 3, true));
+  g.setAttribute('aWind', new THREE.BufferAttribute(wd, 1, true));
   g.setIndex(new THREE.BufferAttribute(idx, 1));
   g.computeBoundingSphere();
   const m = new THREE.Mesh(g, voxMat); m.scale.setScalar(1 / R); m.position.set(-HALF, -Y0 / R, -HALF);
@@ -1437,7 +1512,21 @@ for (let x = 0; x < WS; x++) for (let z = 0; z < WS; z++) {
 const wtex = new THREE.DataTexture(wdata, WS, WS, THREE.RGBAFormat);
 Object.assign(wtex, { colorSpace: THREE.SRGBColorSpace, magFilter: THREE.NearestFilter, minFilter: THREE.LinearMipmapLinearFilter, generateMipmaps: true, wrapS: THREE.RepeatWrapping, wrapT: THREE.RepeatWrapping, needsUpdate: true });
 wtex.repeat.set(N * R / WS, N * R / WS);
-const waterMesh = new THREE.Mesh(cellQuads(isWet), new THREE.MeshLambertMaterial({ map: wtex, emissive: VUL ? 0xb03200 : BIOMA === 'neve' ? 0x22384a : 0x0b3550 }));
+const waterU = { value: 0 };
+const waterMat = new THREE.MeshPhongMaterial({ map: wtex, emissive: VUL ? 0xb03200 : BIOMA === 'neve' ? 0x22384a : 0x0b3550, specular: VUL ? 0x663300 : 0xcfeaff, shininess: VUL ? 20 : 70 });
+// ondas: o brilho do sol mexe com várias ondinhas cruzadas (só no desenho, a água continua reta)
+waterMat.onBeforeCompile = sh => {
+  sh.uniforms.uWT = waterU; sh.uniforms.uWS = WIND.s;
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.)).xyz;');
+  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; uniform float uWT, uWS;')
+    .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+    { vec2 q = vWP.xz; float t = uWT;
+      float a = sin(q.x * 2.1 + t * 1.7) + sin(q.y * 2.7 - t * 1.3) + .5 * sin((q.x + q.y) * 4.3 + t * 2.3) + .3 * sin((q.x - q.y) * 7.1 - t * 3.1);
+      float b = cos(q.x * 2.6 - t * 1.1) + cos(q.y * 1.9 + t * 1.9) + .5 * cos((q.x - q.y) * 3.9 - t * 2.) + .3 * cos((q.x + q.y) * 6.7 + t * 2.7);
+      float k = .04 + uWS * .07; normal = normalize(normal + (viewMatrix * vec4(a * k, 0., b * k, 0.)).xyz);
+      diffuseColor.rgb *= .93 + .07 * a; }`);
+};
+const waterMesh = new THREE.Mesh(cellQuads(isWet), waterMat);
 waterMesh.position.y = -.22; waterMesh.receiveShadow = true; scene.add(waterMesh);
 box(mat.soil, N, 1.2, N, 0, -1.6, 0, scene);
 box(mat.soilD, N - .4, .8, N - .4, 0, -2.6, 0, scene);
@@ -1462,10 +1551,60 @@ cloudMesh.frustumCulled = false; scene.add(cloudMesh);
 function updateClouds3(rdt) {
   let n = 0;
   for (const c of clouds3) {
-    c.x += c.sp * rdt; if (c.x > HALF + 26) c.x = -HALF - 26;
+    c.x += c.sp * rdt * (.5 + WIND.s.value * 1.4); if (c.x > HALF + 26) c.x = -HALF - 26;
     for (const [dx, dy, dz, sx, sy, sz] of c.parts) setInst(cloudMesh, n++, c.x + dx, c.y + dy, c.z + dz, sx, sy, sz);
   }
   cloudMesh.instanceMatrix.needsUpdate = true;
+}
+
+// Folhas (neve na neve, areia no deserto, cinzas no vulcão) levadas pelo vento perto da câmera
+const FLY_N = TOUCH ? 36 : 60, flyM = new THREE.InstancedMesh(BOX, new THREE.MeshLambertMaterial({ color: 0xffffff }), FLY_N);
+const FLYC = { floresta: [0x5f9e3a, 0x8bbf45, 0xd98b2b, 0xc2552d], deserto: [0xe9d3a0, 0xd8bc84], neve: [0xffffff, 0xeaf4ff], vulcao: [0x6b6560, 0x3d3936, 0xff7a2a] }[BIOMA];
+const flies = Array.from({ length: FLY_N }, (_, k) => ({ x: 0, y: -99, z: 0, ph: k * 1.7, sp: .7 + (k % 5) * .15, life: 0 }));
+flies.forEach((f, k) => flyM.setColorAt(k, col.setHex(FLYC[k % FLYC.length])));
+flyM.frustumCulled = false; flyM.castShadow = false; scene.add(flyM);
+const flyMx = new THREE.Matrix4(), flyQ = new THREE.Quaternion(), flyE = new THREE.Euler(), flyP = new THREE.Vector3(), flyS = new THREE.Vector3();
+function updateFlies(rdt) {
+  const ws = WIND.s.value, R0 = FP.on ? 7 : clamp(C.dist * .55, 6, 18), cx = FP.on ? hero.pos.x : C.tx, cz = FP.on ? hero.pos.z : C.tz;
+  const snow = BIOMA === 'neve', sz = snow ? .06 : BIOMA === 'floresta' ? .09 : .045;
+  flies.forEach((f, k) => {
+    f.life -= rdt;
+    if (f.life <= 0 || Math.abs(f.x - cx) > R0 * 1.3 || Math.abs(f.z - cz) > R0 * 1.3 || f.y < 0) {
+      f.x = cx + (Math.random() - .5) * 2 * R0 - 3; f.z = cz + (Math.random() - .5) * 2 * R0; f.y = 1 + Math.random() * 4.5; f.life = 4 + Math.random() * 6;
+    }
+    f.ph += rdt * (2 + ws * 3);
+    f.x += (ws * 2.6 * f.sp + Math.sin(f.ph * .7) * .5) * rdt; f.z += (Math.cos(f.ph * .5) * .5 + ws * .6) * rdt;
+    f.y -= (snow ? .45 : .3 + Math.sin(f.ph) * .4) * rdt;
+    const on = snow || ws > .32 || k < FLY_N * .25;
+    flyE.set(f.ph, f.ph * .7, f.ph * 1.3); flyQ.setFromEuler(flyE); flyP.set(f.x, f.y, f.z); flyS.set(on ? sz : 0, on ? sz * (snow ? 1 : .25) : 0, on ? sz * .7 : 0);
+    flyM.setMatrixAt(k, flyMx.compose(flyP, flyQ, flyS));
+  });
+  flyM.instanceMatrix.needsUpdate = true;
+}
+// Luzes da noite: janelas das casas e tochas do castelo brilham; o herói leva uma lanterna
+const glowTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, 'rgba(255,236,190,1)'); g.addColorStop(.25, 'rgba(255,190,90,.55)'); g.addColorStop(1, 'rgba(255,150,40,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+const glowMat = new THREE.PointsMaterial({ map: glowTex, size: 1.5, sizeAttenuation: true, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0, fog: false });
+const glowPos = [];   // todas as luzes num desenho só
+function addGlow(x, y, z) { glowPos.push(x, y + Hjs(x, z), z); }
+for (const h of houses) { const c = houseCells(h), x = c.reduce((a, q) => a + wc(q[0]), 0) / c.length, z = c.reduce((a, q) => a + wc(q[1]), 0) / c.length; addGlow(x, .55, z); }
+for (const cs of CASTLES) for (const [a, b] of [[-1.1, 1.9], [1.1, 1.9], [-2.4, -2.4], [2.4, -2.4], [-2.4, 2.4], [2.4, 2.4]]) addGlow(cs.x + a, a && Math.abs(b) < 2 ? 1 : 3.4, cs.z + b);
+const glows = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(glowPos, 3)), glowMat);
+glows.visible = false; glows.frustumCulled = false; scene.add(glows);
+const lantern = new THREE.PointLight(0xffc27a, 0, 9, 1.4); scene.add(lantern);
+const cloudBase = new THREE.Color(0xffffff), cloudEm = new THREE.Color(0x9aa7b5);
+function nightTick(rdt) {
+  const n = HORA.noite, on = n > .05;
+  glowMat.opacity = n * (.85 + Math.sin(time * 9) * .05 + Math.sin(time * 23) * .04);
+  glows.visible = on;
+  const hh = (typeof heroes !== 'undefined' && heroes[ME]) || hero;
+  lantern.intensity = n * 9; lantern.position.set(hh.pos.x, Hjs(hh.pos.x, hh.pos.z) + 1.6, hh.pos.z);
+  const cm = cloudMesh.material, d = .18 + .82 * (1 - n); cm.color.copy(cloudBase).lerp(scene.fog.color, .35 * (1 - d) + .15).multiplyScalar(d); cm.emissive.copy(cloudEm).multiplyScalar(d);
+}
+// vento com rajadas que chegam e passam
+function windTick(rdt) {
+  WIND.t.value += rdt * (.8 + WIND.s.value * .9);
+  const t = time; WIND.s.value = clamp(.35 + .22 * Math.sin(t * .11) + .28 * Math.max(0, Math.sin(t * .37 + Math.sin(t * .05) * 3)) ** 3 + .06 * Math.sin(t * 1.3), .12, 1);
 }
 
 // Cada castelo é um grupo próprio (treme quando apanha) com bandeira que balança
@@ -1667,6 +1806,152 @@ function setBar(b, x, y, z, p) {
   if (!b.fixed) b.fg.material = barCols[p > .6 ? 0 : p > .3 ? 1 : 2];
 }
 
+// ===== Gente e monstros com corpo de verdade =====
+// Ombro, cotovelo, mão, joelho, pé com sapato, olhos com pupila, nariz, boca, orelhas e cabelo.
+// Cada parte que mexe (tronco com cabeça, braço, antebraço com mão, coxa, canela com sapato) vira UMA malha
+// com cor por vértice, montada uma vez por tipo e reaproveitada por todos: um boneco detalhado custa ~9 desenhos.
+const HG = { sph: new THREE.SphereGeometry(1, 14, 10), box: new THREE.BoxGeometry(1, 1, 1), cyl: new THREE.CylinderGeometry(1, 1, 1, 10), cone: new THREE.ConeGeometry(1, 1, 10) };
+const capG = (() => { const c = new Map(); return (r, l) => { const k = r.toFixed(4) + '_' + l.toFixed(4); if (!c.has(k)) c.set(k, new THREE.CapsuleGeometry(r, Math.max(.001, l), 3, 10)); return c.get(k); }; })();
+const _hm = new THREE.Matrix4(), _hq = new THREE.Quaternion(), _he = new THREE.Euler(), _hv = new THREE.Vector3(), _hs = new THREE.Vector3(), _hc = new THREE.Color();
+// Junta pedaços [forma, cor, posição, escala, giro] numa geometria só, com a cor em cada vértice
+function mergeParts(parts) {
+  let n = 0;
+  const gs = parts.map(([g, c, p, sc = [1, 1, 1], r = [0, 0, 0]]) => {
+    const q = g.index ? g.toNonIndexed() : g.clone();
+    _hm.compose(_hv.set(p[0], p[1], p[2]), _hq.setFromEuler(_he.set(r[0], r[1], r[2])), _hs.set(sc[0], sc[1], sc[2])); q.applyMatrix4(_hm);
+    n += q.attributes.position.count; return [q, c];
+  });
+  const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), cl = new Float32Array(n * 3);
+  let o = 0;
+  for (const [q, c] of gs) {
+    const cnt = q.attributes.position.count; pos.set(q.attributes.position.array, o * 3); nor.set(q.attributes.normal.array, o * 3);
+    _hc.set(c); for (let k = 0; k < cnt; k++) { cl[(o + k) * 3] = _hc.r; cl[(o + k) * 3 + 1] = _hc.g; cl[(o + k) * 3 + 2] = _hc.b; }
+    o += cnt; q.dispose();
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('color', new THREE.BufferAttribute(cl, 3));
+  g.computeBoundingSphere(); return g;
+}
+// Aparência de cada tipo: pele, roupa, calça, sapato, cabelo, olhos e enfeites (o resto vem do tamanho s)
+// w: largura do corpo, th: altura do tronco, hs: tamanho da cabeça, limb: grossura dos membros, al: comprimento dos braços
+const HUMAN_LOOK = {
+  hero: { skin: 0xf1c7a0, shirt: 0x2f6fd6, pants: 0x1f4a91, shoe: 0x3b2a1e, hair: 0x5a3a1e, eye: 0x2b5fa8, helmet: 0xd5dde6, belt: 0xffc93c, w: 1, smile: true },
+  hero1: { skin: 0xe9b98f, shirt: 0xe0482f, pants: 0x9a2a1a, shoe: 0x3b2a1e, hair: 0x2b1b12, eye: 0x3a2a1a, helmet: 0xd5dde6, belt: 0xffc93c, w: 1, smile: true },
+  rapido: { skin: 0xd99a6c, shirt: 0xe8553d, pants: 0x3a3a46, shoe: 0x1e1e24, hair: 0x1b1b1b, eye: 0x111111, band: 0xffffff, w: .85, limb: .9, angry: true },
+  tanque: { skin: 0x9c86b8, shirt: 0x7d5ba6, pants: 0x4a3566, shoe: 0x26222e, hair: 0x2a2233, eye: 0xffd23c, w: 1.5, th: 1.15, limb: 1.45, hs: .85, helmet: 0x6b6f78, angry: true, armor: 0x8f8a80 },
+  arqueiro: { skin: 0xe8b48a, shirt: 0x3f8f4a, pants: 0x5b4632, shoe: 0x3b2a1e, hair: 0x6b4a2a, eye: 0x1f3d1f, hood: 0x2f6b38, angry: true },
+  bomba: { skin: 0xc69c7a, shirt: 0x33333a, pants: 0x22222a, shoe: 0x111111, hair: 0x111111, eye: 0x111111, mask: 0x1b1b1b, angry: true },
+  zumbi: { skin: 0x8fbf6f, shirt: 0x4a5f8a, pants: 0x3e3a33, shoe: 0x2a2520, hair: 0x2a3320, eye: 0xd9f99d, w: 1.05, arms: 'zombie', teeth: true, chip: true },
+  cura: { skin: 0xf0c8a8, shirt: 0xeeeeee, pants: 0xd8d8d8, shoe: 0x8b6a4a, hair: 0xb8b8b8, eye: 0x2b5fa8, robe: true, cross: 0x2f9e44, smile: true },
+  bruxo: { skin: 0xb8a2c8, shirt: 0x5b2a86, pants: 0x3b1a5a, shoe: 0x1e1030, hair: 0xd8d8e8, eye: 0xff2a2a, robe: true, hat: 0x8b5cf6, beard: 0xe5e5f0, staff: true, angry: true },
+  ogro: { skin: 0x8fa060, shirt: 0x6e4a2a, pants: 0x5a3d22, shoe: 0x3b2a1e, hair: 0x2a2a1a, eye: 0xffd23c, w: 1.45, th: 1.1, limb: 1.5, hs: 1.05, eyes: 1, tusks: true, earsPt: true, club: true, angry: true, bodySkin: true },
+  golem: { skin: 0x7b7f88, shirt: 0x7b7f88, pants: 0x5e626b, shoe: 0x4a4d55, hair: 0x5f8f3a, eye: 0xff3b1f, w: 1.5, th: 1.15, limb: 1.6, hs: .8, rock: true, bodySkin: true, angry: true, arms: 4 },
+  mutante: { skin: 0xc2552d, shirt: 0x8a3a1e, pants: 0x5a2a16, shoe: 0x2a1a12, hair: 0x39ff14, eye: 0x39ff14, w: 1.3, th: 1.1, limb: 1.2, eyes: 3, arms: 5, bodySkin: true, angry: true, spikes: 0x39ff14 },
+};
+// Monta as geometrias (uma vez por tipo)
+function humanGeo(look, s) {
+  const L = look, w = L.w ?? 1, lm = L.limb ?? 1, hs = L.hs ?? 1, sk = L.skin, shirt = L.shirt, pants = L.pants;
+  const footH = s * .06, shinL = s * .21, thighL = s * .23, hipY = footH + shinL + thighL;
+  const torsoH = s * .3 * (L.th ?? 1), chestR = s * .12 * w, shY = hipY + s * .08 + torsoH;
+  const hr = s * .135 * hs, hy = shY + s * .07 + hr, hipX = s * .085 * w;
+  const T = [];
+  // tronco: quadril, barriga, peito, cinto, pescoço
+  T.push([HG.sph, pants, [0, hipY + s * .04, 0], [chestR * 1.05, s * .085, chestR * .78]]);
+  T.push([capG(1, 1), shirt, [0, hipY + s * .06 + torsoH * .5, 0], [chestR * 1.15, torsoH / 3 * 1.15, chestR * .82]]);
+  T.push([HG.sph, shirt, [0, shY - s * .03, 0], [chestR * 1.3, s * .075, chestR * .85]]);
+  T.push([HG.cyl, L.belt ?? shade(pants, .6), [0, hipY + s * .085, 0], [chestR * 1.12, s * .035, chestR * .86]]);
+  if (L.belt) T.push([HG.box, 0xd9a520, [0, hipY + s * .085, chestR * .86], [s * .06, s * .045, s * .02]]);
+  T.push([HG.cyl, sk, [0, shY + s * .04, 0], [s * .045 * w, s * .08, s * .045 * w]]);
+  if (L.robe) T.push([HG.cone, shirt, [0, hipY - s * .02, 0], [chestR * 1.45, hipY * .95, chestR * 1.2], [Math.PI, 0, 0]]);
+  if (L.armor) for (const sx of [-1, 1]) T.push([HG.sph, L.armor, [sx * chestR * 1.25, shY + s * .01, 0], [s * .1 * w * .7, s * .07, s * .1]]);
+  if (L.cross) { T.push([HG.box, L.cross, [0, shY - torsoH * .35, chestR * .82], [s * .1, s * .03, s * .02]]); T.push([HG.box, L.cross, [0, shY - torsoH * .35, chestR * .82], [s * .03, s * .1, s * .02]]); }
+  if (L.mask) { T.push([HG.sph, 0x111111, [0, shY - s * .02, -chestR * .9], [s * .17, s * .17, s * .17]]); T.push([HG.cyl, 0xf97316, [0, shY + s * .17, -chestR * .9], [s * .012, s * .08, s * .012]]); }
+  if (L.rock) for (let k = 0; k < 7; k++) T.push([HG.sph, k % 2 ? 0x8d929b : 0x6a6e77, [Math.sin(k * 2.4) * chestR * .9, hipY + s * .1 + (k / 7) * torsoH, Math.cos(k * 2.4) * chestR * .6], [s * .07, s * .06, s * .06]]);
+  if (L.rock) T.push([HG.sph, 0x5f8f3a, [0, shY + s * .02, 0], [chestR * 1.2, s * .03, chestR * .9]]);
+  if (L.spikes) for (let k = 0; k < 4; k++) T.push([HG.cone, L.spikes, [(k - 1.5) * s * .06, shY - s * .02, -chestR * .75], [s * .025, s * .08, s * .025], [-.6, 0, 0]]);
+  // cabeça e rosto (olhando para +z)
+  T.push([HG.sph, sk, [0, hy, 0], [hr, hr * 1.06, hr * .98]]);
+  T.push([HG.sph, sk, [0, hy - hr * .55, hr * .2], [hr * .62, hr * .42, hr * .6]]);   // queixo
+  const ne = L.eyes ?? 2;
+  for (let k = 0; k < ne; k++) {
+    const x = ne === 1 ? 0 : (k / (ne - 1) - .5) * hr * (ne === 3 ? 1 : .72), ez = hr * .84, ey = hy + hr * .12, big = ne === 1 ? 1.5 : 1;
+    T.push([HG.sph, 0xffffff, [x, ey, ez], [hr * .2 * big, hr * .23 * big, hr * .12]]);
+    T.push([HG.sph, L.eye, [x, ey - hr * .01, ez + hr * .085], [hr * .11 * big, hr * .12 * big, hr * .05]]);
+    T.push([HG.sph, 0x0a0a0a, [x, ey - hr * .01, ez + hr * .115], [hr * .055 * big, hr * .06 * big, hr * .03]]);
+    T.push([HG.sph, 0xffffff, [x + hr * .04, ey + hr * .04, ez + hr * .13], [hr * .022, hr * .022, hr * .012]]);   // brilho no olho
+    if (ne === 2) T.push([HG.box, L.hair, [x, ey + hr * .3, ez + hr * .02], [hr * .34, hr * .07, hr * .08], [0, 0, (x < 0 ? -1 : 1) * (L.angry ? -.32 : .12)]]);   // sobrancelha
+  }
+  T.push([HG.sph, shade(sk, .86), [0, hy - hr * .1, hr * .98], [hr * .11, hr * .17, hr * .13]]);   // nariz
+  T.push([HG.sph, shade(sk, .8), [0, hy - hr * .22, hr * .96], [hr * .14, hr * .06, hr * .08]]);   // ponta do nariz
+  if (L.smile) T.push([HG.box, 0x9a2f2f, [0, hy - hr * .42, hr * .86], [hr * .36, hr * .06, hr * .06], [0, 0, 0]]), T.push([HG.box, 0x9a2f2f, [hr * .19, hy - hr * .38, hr * .84], [hr * .08, hr * .05, hr * .06], [0, 0, .7]]), T.push([HG.box, 0x9a2f2f, [-hr * .19, hy - hr * .38, hr * .84], [hr * .08, hr * .05, hr * .06], [0, 0, -.7]]);
+  else T.push([HG.box, 0x5a1a1a, [0, hy - hr * .44, hr * .85], [hr * .42, hr * .09, hr * .07]]);   // boca
+  if (L.teeth || L.tusks) for (const sx of L.tusks ? [-1, 1] : [-1, 0, 1]) T.push([L.tusks ? HG.cone : HG.box, 0xf5f1e6, [sx * hr * (L.tusks ? .22 : .1), hy - hr * (L.tusks ? .3 : .42), hr * .9], L.tusks ? [hr * .07, hr * .25, hr * .07] : [hr * .07, hr * .08, hr * .04]]);
+  for (const sx of [-1, 1]) {   // orelhas
+    if (L.earsPt) T.push([HG.cone, sk, [sx * hr * 1.05, hy + hr * .1, 0], [hr * .14, hr * .5, hr * .1], [0, 0, -sx * 1.1]]);
+    else if (!L.helmet && !L.hood && !L.hat || L.hat) { T.push([HG.sph, sk, [sx * hr * .97, hy, -hr * .05], [hr * .12, hr * .24, hr * .17]]); T.push([HG.sph, shade(sk, .78), [sx * hr * 1.02, hy, -hr * .03], [hr * .05, hr * .14, hr * .09]]); }
+  }
+  // cabelo, capacete, capuz, chapéu
+  if (L.helmet) { T.push([HG.sph, L.helmet, [0, hy + hr * .22, -hr * .06], [hr * 1.1, hr * .9, hr * 1.08]]); T.push([HG.box, shade(L.helmet, .7), [0, hy + hr * .45, hr * .86], [hr * 1.5, hr * .12, hr * .3]]); if (L.belt) T.push([HG.box, 0xd0453a, [0, hy + hr * 1.12, 0], [hr * .16, hr * .3, hr * .9]]); }
+  else if (L.hood) { T.push([HG.sph, L.hood, [0, hy + hr * .12, -hr * .12], [hr * 1.18, hr * 1.15, hr * 1.12]]); T.push([HG.cone, L.hood, [0, hy + hr * .5, -hr * .9], [hr * .5, hr * .9, hr * .4], [-1.9, 0, 0]]); }
+  else if (!L.rock) T.push([HG.sph, L.hair, [0, hy + hr * .45, -hr * .18], [hr * 1.08, hr * .66, hr * 1.0]]);
+  if (L.rock) for (let k = 0; k < 5; k++) T.push([HG.sph, 0x5f8f3a, [Math.sin(k * 1.3) * hr * .6, hy + hr * .85, Math.cos(k * 1.3) * hr * .5 - hr * .1], [hr * .3, hr * .15, hr * .3]]);
+  if (L.band) T.push([HG.cyl, L.band, [0, hy + hr * .5, -hr * .1], [hr * 1.02, hr * .14, hr * .98]]);
+  if (L.hood) for (let k = 0; k < 2; k++) T.push([HG.cyl, 0x6b4a2a, [-s * .04 + k * s * .05, shY - torsoH * .4, -chestR * 1.05], [s * .03, s * .32, s * .03], [.3, 0, .1]]);   // aljava com flechas
+  if (L.hood) T.push([HG.cyl, 0x8b5a2b, [0, shY - torsoH * .45, -chestR * .95], [s * .06, s * .22, s * .06], [.3, 0, 0]]);
+  if (L.chip) { T.push([HG.box, 0x2a2a33, [0, hy + hr * .95, 0], [hr * .7, hr * .2, hr * .6]]); T.push([HG.box, 0x39ff14, [0, hy + hr * 1.08, 0], [hr * .3, hr * .1, hr * .3]]); }
+  if (L.hat) { T.push([HG.cyl, L.hat, [0, hy + hr * .62, 0], [hr * 1.6, hr * .08, hr * 1.6]]); T.push([HG.cone, L.hat, [0, hy + hr * 1.5, -hr * .1], [hr * .85, hr * 1.8, hr * .85], [-.12, 0, 0]]); }
+  if (L.beard) T.push([HG.cone, L.beard, [0, hy - hr * .9, hr * .55], [hr * .5, hr * .9, hr * .3], [Math.PI + .25, 0, 0]]);
+  const top = hy + hr * (L.hat ? 2.4 : L.chip ? 1.2 : 1.05);
+  // braços: ombro (bola), braço, cotovelo, antebraço, mão com dedão
+  const uaL = s * .19 * (L.al ?? 1), faL = s * .17 * (L.al ?? 1), ar = s * .05 * lm, sleeve = L.bodySkin ? sk : shirt, fore = L.robe || L.rock ? sleeve : sk;
+  const mkUA = () => mergeParts([[HG.sph, sleeve, [0, 0, 0], [ar * 1.45, ar * 1.35, ar * 1.35]], [capG(ar, uaL - ar), sleeve, [0, -uaL / 2, 0]], [HG.sph, shade(sleeve, .9), [0, -uaL, 0], [ar * 1.05, ar * 1.05, ar * 1.05]]]);
+  const mkFA = (tool) => {
+    const P = [[capG(ar * .88, faL - ar), fore, [0, -faL / 2, 0]], [HG.sph, sk, [0, -faL - ar * .5, ar * .15], [ar * 1.15, ar * 1.25, ar * .9]], [HG.sph, sk, [ar * .8, -faL - ar * .2, ar * .5], [ar * .38, ar * .55, ar * .38]]];
+    if (L.robe) P.push([HG.cyl, shade(shirt, .8), [0, -faL * .85, 0], [ar * 1.35, ar * .5, ar * 1.35]]);
+    // arma do herói: o braço fica apontado para a frente, então o cano segue o antebraço (-y) e "para cima" é +z
+    if (tool === 'gun') P.push([HG.box, 0x4a525c, [0, -faL - ar * 3.2, ar * 1.3], [ar * 1.5, ar * 6, ar * 1.6]], [HG.box, 0x2f343b, [0, -faL - ar * .7, ar * .3], [ar * 1.1, ar * 1.3, ar * 1.9]], [HG.box, 0x93c5fd, [0, -faL - ar * 6.4, ar * 1.3], [ar * 1.1, ar * .5, ar * 1.1]], [HG.box, 0x93c5fd, [0, -faL - ar * 3.2, ar * 2.15], [ar * .4, ar * 3.6, ar * .25]], [capG(ar * .45, ar * 4), 0x2f343b, [0, -faL - ar * 3.5, ar * .2]]);
+    if (tool === 'bow') { for (let k = -3; k <= 3; k++) P.push([HG.box, 0x6e4a2a, [0, -faL - ar * .5 + k * s * .06, s * .05 + (1 - Math.abs(k) / 3) ** .5 * s * .1], [s * .025, s * .07, s * .025], [-k * .22, 0, 0]]); P.push([HG.cyl, 0xeeeeee, [0, -faL - ar * .5, s * .05], [s * .004, s * .38, s * .004]]); }
+    if (tool === 'staff') P.push([HG.cyl, 0x5b3a1e, [0, -faL, 0], [s * .025, s * .9, s * .025]], [HG.sph, 0x8b5cf6, [0, -faL + s * .47, 0], [s * .08, s * .08, s * .08]]);
+    if (tool === 'club') P.push([HG.cyl, 0x6e4a2a, [0, -faL - s * .2, s * .05], [s * .045, s * .5, s * .045], [.2, 0, 0]], [HG.sph, 0x5a3d22, [0, -faL - s * .48, s * .1], [s * .11, s * .16, s * .11]]);
+    return mergeParts(P);
+  };
+  const thR = s * .066 * lm, shoe = L.shoe;
+  const TH = mergeParts([[capG(thR, thighL - thR), pants, [0, -thighL / 2, 0]], [HG.sph, shade(pants, .92), [0, -thighL, 0], [thR * 1.05, thR * 1.05, thR * 1.05]]]);
+  const SH = mergeParts([[capG(thR * .85, shinL - thR), L.robe ? pants : pants, [0, -shinL / 2, 0]],
+    [HG.sph, shoe, [0, -shinL - footH * .3, thR * .55], [thR * 1.1, footH * .8, thR * 1.75]], [HG.box, shade(shoe, .6), [0, -shinL - footH * .92, thR * .55], [thR * 1.8, footH * .22, thR * 3.1]], [HG.sph, shade(shoe, 1.25), [0, -shinL - footH * .1, thR * 1.6], [thR * .7, footH * .4, thR * .5]],
+    [HG.cyl, shade(pants, .75), [0, -shinL + footH * .2, 0], [thR * .95, footH * .4, thR * .95]]]);
+  const na = typeof L.arms === 'number' ? L.arms : 2;
+  return { torso: mergeParts(T), UA: mkUA(), FA: mkFA(null), FAtool: mkFA(L.hood ? 'bow' : L.staff ? 'staff' : L.club ? 'club' : null), FAgun: mkFA('gun'), TH, SH,
+    hipY, hipX, shY, chestR, hy, hr, top, uaL, faL, thighL, na };
+}
+const HUMC = new Map();
+// Coloca um boneco dentro de "inner" e devolve as juntas que mexem (o mesmo formato dos membros antigos)
+function makeHuman(inner, key, s, m, o = {}) {
+  const look = HUMAN_LOOK[key];
+  const ck = key + '_' + s; let G = HUMC.get(ck); if (!G) { G = humanGeo(look, s); HUMC.set(ck, G); }
+  const mesh = (geo, p) => { const x = new THREE.Mesh(geo, m); x.castShadow = true; x.receiveShadow = true; p.add(x); return x; };
+  mesh(G.torso, inner);
+  const L = [], joints = {};
+  for (const sx of [-1, 1]) {
+    const hip = new THREE.Group(); hip.position.set(sx * G.hipX, G.hipY, 0); inner.add(hip); mesh(G.TH, hip);
+    const knee = new THREE.Group(); knee.position.y = -G.thighL; hip.add(knee); mesh(G.SH, knee);
+    const ph = sx > 0 ? Math.PI : 0;
+    L.push({ o: hip, ph, amp: .55, bx: 0, ax: 'x' }, { o: knee, ph: ph - 1.4, amp: .38, bx: .4, ax: 'x' });
+  }
+  const zombie = look.arms === 'zombie';
+  for (let k = 0; k < G.na; k++) {
+    const odd = G.na % 2 && k === G.na - 1, side = odd ? 0 : (k % 2 ? 1 : -1), row = odd ? 0 : Math.floor(k / 2);
+    const sh = new THREE.Group(); sh.position.set(side * (G.chestR * 1.3 + s * .02), G.shY - s * .03 - row * s * .13, odd ? G.chestR * .8 : 0); sh.rotation.z = side * (.1 + row * .5); inner.add(sh); mesh(G.UA, sh);
+    const el = new THREE.Group(); el.position.y = -G.uaL; sh.add(el);
+    const right = side > 0 && row === 0, tool = right && o.gun ? G.FAgun : right ? G.FAtool : G.FA;
+    mesh(tool, el);
+    if (right && o.gun) { joints.gunArm = sh; joints.gunEl = el; continue; }   // o herói segura a arma apontada para frente
+    const ph = side > 0 ? 0 : Math.PI;
+    L.push({ o: sh, ph: ph + row, amp: odd ? .3 : .5, bx: odd ? -2.2 : zombie ? -1.4 : o.abx || 0, ax: 'x' }, { o: el, ph: ph + .6, amp: .2, bx: zombie ? -.1 : -.35, ax: 'x' });
+  }
+  return { L, top: G.top, hy: G.hy, hs: G.hr * 2, joints };
+}
+
 // ===== Monstros =====
 // ===== Corpo dos monstros e bichos: pernas, braços, cabeça e rabo que mexem ao andar =====
 // limb: um membro preso numa "junta" (o ponto de cima), que balança para frente e para trás
@@ -1697,13 +1982,14 @@ function biped(inner, s, body, dark, band, o = {}) {
   return { L, top: hy + hs / 2, hy, hs };
 }
 // Quadrúpede (bichos do mapa): corpo deitado, 4 pernas, cabeça na frente
+const SPH_EYE = new THREE.SphereGeometry(1, 10, 8);
 function quad(inner, s, body, dark, o = {}) {
   const L = [], legH = s * (o.legH ?? .4), bl = s * (o.l ?? 1), bw = s * (o.w ?? .5), bh = s * (o.h ?? .45);
   for (const [a, b, ph] of [[-1, 1, 0], [1, 1, Math.PI], [-1, -1, Math.PI], [1, -1, 0]]) L.push(limb(dark, s * .14, legH, s * .14, a * bw * .32, legH, b * bl * .36, inner, ph, .55));
   box(body, bw, bh, bl, 0, legH + bh / 2, 0, inner);
   const hs = s * (o.hs ?? .34), hy = legH + bh * (o.hup ?? .95);
   box(o.head || body, hs * .9, hs, hs * 1.1, 0, hy, bl / 2 + hs * .35, inner);
-  for (const sx of [-1, 1]) box(mat.black, .035, .035, .02, sx * hs * .3, hy + hs * .15, bl / 2 + hs * .91, inner);
+  for (const sx of [-1, 1]) { const ew = new THREE.Mesh(SPH_EYE, mat.white); ew.scale.setScalar(hs * .11); ew.position.set(sx * hs * .3, hy + hs * .15, bl / 2 + hs * .86); inner.add(ew); const pu = new THREE.Mesh(SPH_EYE, mat.black); pu.scale.setScalar(hs * .065); pu.position.set(sx * hs * .3, hy + hs * .15, bl / 2 + hs * .94); inner.add(pu); }
   return { L, legH, bl, bw, bh, hy, hs };
 }
 function animLimbs(e) {
@@ -1712,6 +1998,7 @@ function animLimbs(e) {
 }
 // Monta o corpo de cada tipo de monstro e devolve as partes que mexem e a altura do topo
 function buildEnemy(type, T, s, inner, body, band) {
+  if (HUMAN_LOOK[type]) { const h = makeHuman(inner, type, s, body); if (PVP) box(band, s * .5, s * .07, s * .5, 0, h.top + s * .12, 0, inner); return { L: h.L, top: h.top }; }
   const dark = T.dmat;
   if (type === 'aranha') {
     const L = [];
@@ -1830,9 +2117,9 @@ const waveSpeed = () => Math.min(2, 1.35 + Math.floor(Math.max(0, S.wave - 1) / 
 function spawnEnemy(type, x, z, team = 0) {
   const T = ET[type], s = T.size, g = new THREE.Group(), inner = new THREE.Group(), band = PVP ? TEAM_MAT[team] : T.dmat;
   g.add(inner);
-  const body = M(T.color, 0x000000);
+  const body = HUMAN_LOOK[type] ? new THREE.MeshLambertMaterial({ vertexColors: true }) : M(T.color, 0x000000);
   let f1 = null, f2 = null;
-  const built = buildEnemy(type, T, s, inner, body, band);
+  let built; BOXG = RBOX; try { built = buildEnemy(type, T, s, inner, body, band); } finally { BOXG = BOX; }
   if (T.boss && type !== 'rex' && type !== 'dragao') { const ty = built.top; box(mat.gold, s * .5, .1, s * .5, 0, ty + .05, 0, inner); for (const a of [-1, 1]) for (const b of [-1, 1]) box(mat.gold, .1, .18, .1, a * s * .2, ty + .18, b * s * .2, inner); }
   const bar = makeBar(Math.max(.5, s * 1.1));
   scene.add(g);
@@ -1948,7 +2235,7 @@ function separateEnemies(dt, time) {
 function updateEnemyBars() {
   for (const e of enemies) if (!e.dead && e.bar.g.visible) setBar(e.bar, e.pos.x, e.T.size * 1.05 + (e.T.boss ? .9 : .45), e.pos.z, e.hp / e.maxHp);
 }
-function removeEnemy(e) { e.dead = true; scene.remove(e.g, e.bar.g); }
+function removeEnemy(e) { e.dead = true; scene.remove(e.g, e.bar.g); e.body?.dispose(); }   // o material é só deste monstro
 // Arma que matou o monstro ganha vida: +25% por monstro, +80% por chefão
 let KILLER = null;
 function towerHeal(t, f) {
@@ -2361,15 +2648,10 @@ const homeOf = pl => PVP ? V(CASTLES[pl].x, 0, CASTLES[pl].z + 3.6) : V(ONLINE ?
 function makeHero(pl) {
   const hh = { kind: 'hero', pl, home: homeOf(pl), life: 0, g: new THREE.Group(), r: .25, hp: 150, maxHp: 150, cd: 0, bombCd: 0, walk: 0, dead: false, respawnT: 0, hurtT: 0, recoil: 0, hitY: .6, vel: V(), fd: 1 };
   hh.pos = hh.g.position;
-  const g = hh.g, [c1, c2, c3] = HERO_COL[pl], skin = M(0xf1c7a0), blue = M(c1), blueD = M(c2), steel = M(0xd5dde6);
-  hh.legs = [box(blueD, .14, .26, .16, -.09, .13, 0, g), box(blueD, .14, .26, .16, .09, .13, 0, g)];
-  hh.bodyMat = blue;
-  box(blue, .38, .36, .24, 0, .44, 0, g); box(mat.gold, .4, .05, .26, 0, .3, 0, g);
-  box(skin, .26, .24, .24, 0, .74, 0, g); box(steel, .3, .12, .28, 0, .88, 0, g); box(mat.red, .05, .14, .2, 0, 1, 0, g);
-  for (const sx of [-1, 1]) box(mat.black, .05, .05, .02, sx * .06, .75, .125, g);
-  box(blue, .1, .26, .12, -.25, .45, 0, g);
-  hh.gun = new THREE.Group(); hh.gun.position.set(.25, .5, .05); g.add(hh.gun);
-  box(blue, .1, .22, .12, 0, 0, 0, hh.gun); box(mat.iron, .1, .12, .42, 0, -.05, .2, hh.gun); box(mat.glow, .07, .07, .08, 0, -.04, .44, hh.gun);
+  const g = hh.g, [c1, c2, c3] = HERO_COL[pl];
+  hh.bodyMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const hb = makeHuman(g, pl ? 'hero1' : 'hero', .82, hh.bodyMat, { gun: true });
+  hh.limbs = hb.L; hh.joints = hb.joints; hh.joints.gunArm.rotation.x = -1.45;
   const ring = new THREE.Mesh(new THREE.RingGeometry(.3, .36, 24).rotateX(-Math.PI / 2), basic(c3, .9));
   ring.position.y = .03; g.add(ring);
   hh.bar = makeBar(.6, new THREE.MeshBasicMaterial({ color: c3, depthTest: false, transparent: true }));
@@ -2395,7 +2677,7 @@ const animals = [];
 {
   const arnd = (() => { let s2 = (PSEED ^ 0x5bd1e995) | 0; return () => { s2 = s2 + 0x6D2B79F5 | 0; let t = Math.imul(s2 ^ s2 >>> 15, 1 | s2); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; })();
   const cow = M(0xf4f1ea), cowS = M(0x2b2b2b), cowD = M(0x3a3330), goat = M(BIOMA === 'neve' ? 0xe9e4da : 0x9c8a74), goatD = M(0x5b4c3d), bun = M(BIOMA === 'neve' ? 0xffffff : BIOMA === 'deserto' ? 0xc8a37a : 0xa8896a), bunD = M(0x7a6046), pink = M(0xf4a3b4), horn = M(0xe8dcc0);
-  const total = Math.round(7 * MS * MS * (VUL ? .6 : 1));
+  const total = Math.round(7 * MS * MS * (VUL ? .6 : 1)); BOXG = RBOX;
   for (let k = 0, tries = 0; animals.length < total && tries < 4000; tries++) {
     const i = 2 + Math.floor(arnd() * (N - 4)), j = 2 + Math.floor(arnd() * (N - 4));
     if (!free(i, j) || castleDist(i, j) < 7 || at(i, j) === PAD) continue;
@@ -2432,23 +2714,25 @@ const animals = [];
       box(mat.white, s * .2, s * .2, s * .2, 0, q.legH + q.bh * .6, -q.bl / 2, inner);
     }
     g.position.set(wc(i), 0, wc(j)); g.rotation.y = arnd() * 6.28; scene.add(g);
-    animals.push({ type, T: A, g, inner, limbs: q.L, pos: g.position, r: A.r, walk: 0, goal: null, wait: arnd() * 4, kind: 'animal' });
+    animals.push({ type, T: A, g, inner, limbs: q.L, pos: g.position, r: A.r, walk: 0, goal: null, wait: arnd() * 4, kind: 'animal', wet: 0, dive: 2 + arnd() * 4 });
   }
+  BOXG = BOX;
 }
 function updateAnimals(dt) {
   if (!dt) return;
   for (const a of animals) {
+    swimAnimal(a, dt);
     if (a.wait > 0) { a.wait -= dt; continue; }
     if (!a.goal) {
       const i = cellOf(a.pos.x) + Math.round((Math.random() - .5) * 10), j = cellOf(a.pos.z) + Math.round((Math.random() - .5) * 10);
-      if (!free(i, j) || castleDist(i, j) < 5) { a.wait = .5; continue; }
+      if (!(free(i, j) || at(i, j) === WATER) || castleDist(i, j) < 5) { a.wait = .5; continue; }
       a.goal = V(wc(i), 0, wc(j)); a.stuck = 0;
     }
     const dx = a.goal.x - a.pos.x, dz = a.goal.z - a.pos.z, d = Math.hypot(dx, dz);
     if (d < .2 || a.stuck > 4) { a.goal = null; a.wait = 1.5 + Math.random() * 5; continue; }
     const sp = a.T.sp * dt, ox = a.pos.x, oz = a.pos.z;
     a.pos.x += dx / d * sp; a.pos.z += dz / d * sp;
-    collide(a.pos, a.r);
+    collide(a.pos, a.r, true);
     if (Math.hypot(a.pos.x - ox, a.pos.z - oz) < sp * .3) a.stuck += dt;
     a.walk += sp; a.g.rotation.y = lerpAng(a.g.rotation.y, Math.atan2(dx, dz), Math.min(1, dt * 5));
     animAnimal(a);
@@ -2456,7 +2740,19 @@ function updateAnimals(dt) {
 }
 function animAnimal(a) {
   animLimbs(a);
-  a.inner.position.y = a.T.hop ? Math.abs(Math.sin(a.walk * 5)) * .18 : Math.abs(Math.sin(a.walk * a.T.stride)) * .03;
+  if (a.wet < .05) a.inner.position.y = a.T.hop ? Math.abs(Math.sin(a.walk * 5)) * .18 : Math.abs(Math.sin(a.walk * a.T.stride)) * .03;
+}
+// Na água o bicho afunda até o pescoço, boia, e de vez em quando mergulha inteiro e volta (com respingo)
+function swimAnimal(a, dt) {
+  const inW = at(cellOf(a.pos.x), cellOf(a.pos.z)) === WATER, was = a.wet > .5;
+  a.wet = clamp(a.wet + (inW ? dt : -dt) * 2.5, 0, 1);
+  if (inW !== was && (inW ? a.wet > .5 : a.wet < .5)) burst(tmp.set(a.pos.x, -.1, a.pos.z), 0x9fd8ff, 8, 1.6, .07);
+  if (a.wet <= 0) return;
+  a.dive -= dt;
+  let under = 0; if (a.dive < 0) { under = Math.sin(Math.min(1, -a.dive / 2.4) * Math.PI); if (a.dive < -2.4) { a.dive = 3 + Math.random() * 5; burst(tmp.set(a.pos.x, -.1, a.pos.z), 0x9fd8ff, 10, 2, .08); } }
+  const sink = a.T.s * (.55 + under * .9), bob = Math.sin(time * 2.4 + a.pos.x) * .04;
+  a.inner.position.y = -a.wet * sink + bob;
+  a.inner.rotation.x = -under * .45 * a.wet;
 }
 // os bichos não saem do lugar quando um monstro esbarra: quem é empurrado é o monstro
 function pushOffAnimals(p, r) {
@@ -2696,10 +2992,13 @@ function moveLocalHero(dt) {
   pushOffAnimals(hero.pos, hero.r); collide(hero.pos, hero.r); collide(hero.pos, hero.r);
   return moving ? Math.atan2(mx, mz) : null;
 }
+// Pernas e braço livre balançam ao andar; parado, volta para a pose de pé. O braço da arma fica apontado e dá coice no tiro.
+function heroPose(hh, moving) {
+  if (moving) animLimbs(hh); else for (const l of hh.limbs) l.o.rotation[l.ax] += (l.bx - l.o.rotation[l.ax]) * .25;
+  hh.joints.gunArm.rotation.x = -1.45 + hh.recoil * .35;
+}
 function animHero(hh, moving) {
-  const sw = moving ? Math.sin(hh.walk * 5) * .08 : 0;
-  hh.legs[0].position.z = sw; hh.legs[1].position.z = -sw;
-  hh.gun.position.z = .05 - hh.recoil * .08;
+  heroPose(hh, moving);
   hh.bodyMat.emissive.setHex(hh.hurtT > 0 ? 0x993333 : 0x000000);
 }
 function updateHero(dt, rdt, time) {
@@ -2720,9 +3019,7 @@ function updateHero(dt, rdt, time) {
       hero.pos.set(inp.x, 0, inp.z); if (inp.aim) aimP = tmp2.set(inp.aim[0], 0, inp.aim[1]);
     }
   }
-  const sw = moving ? Math.sin(hero.walk * 5) * .08 : 0;
-  hero.legs[0].position.z = sw; hero.legs[1].position.z = -sw;
-  hero.gun.position.z = .05 - hero.recoil * .08;
+  heroPose(hero, moving);
   hero.bodyMat.emissive.setHex(hero.hurtT > 0 ? 0x993333 : 0x000000);
 
   const HR = HW[S.hw].range, TG = heroTargets(hero.pl); let nearE = null, nd = HR, danger = false;
@@ -3247,7 +3544,7 @@ const fpWave = n => !ONLINE && !IDLE && n > 0 && n % FP_EVERY === 0;
 const fpForced = () => fpWave(S.wave) && !!S.waveActive;
 let fpForcedWas = false;
 const MIN = 8, MAX = 60;
-const SUNZ = new THREE.Vector3(-9, 18, 6).normalize(), SUNX = new THREE.Vector3(0, 1, 0).cross(SUNZ).normalize(), SUNY = SUNZ.clone().cross(SUNX);
+const SUNZ = new THREE.Vector3(-9, 18, 6).normalize(), SUNX = new THREE.Vector3(0, 1, 0).cross(SUNZ).normalize(), SUNY = SUNZ.clone().cross(SUNX);   // mudam com a hora (dayUpdate)
 function updateCam() {
   // plano de perto acompanha o zoom: com a câmera longe a profundidade fica precisa (sem linhas pretas no chão)
   const nr = FP.on ? .05 : clamp(C.dist * .1, .5, 6); if (Math.abs(cam.near - nr) > .01) { cam.near = nr; cam.updateProjectionMatrix(); PIX.mat.uniforms.uNear.value = nr; }
@@ -3258,7 +3555,7 @@ function updateCam() {
   const SC = sun.shadow.camera, tex = (SC.right - SC.left) / sun.shadow.mapSize.x;
   const a = C.tx * SUNX.x + C.tz * SUNX.z, b = C.tx * SUNY.x + C.tz * SUNY.z, da = Math.round(a / tex) * tex - a, db = Math.round(b / tex) * tex - b;
   const gx = C.tx + da * SUNX.x + db * SUNY.x, gy = da * SUNX.y + db * SUNY.y, gz = C.tz + da * SUNX.z + db * SUNY.z;
-  sun.position.set(gx - 9, gy + 18, gz + 6); sun.target.position.set(gx, gy, gz); sun.target.updateMatrixWorld();
+  sun.position.set(gx + SUN_DIR.x, gy + SUN_DIR.y, gz + SUN_DIR.z); sun.target.position.set(gx, gy, gz); sun.target.updateMatrixWorld();
 }
 function clampCam() { C.tx = clamp(C.tx, -HALF, HALF); C.tz = clamp(C.tz, -HALF, HALF + 4); }
 function fitDist() { const t = 2 * Math.tan(THREE.MathUtils.degToRad(45 / 2)), a = innerWidth / innerHeight; return clamp(Math.max(14 / (t * a), 17 / t), MIN, MAX); }
@@ -3319,14 +3616,23 @@ canvas.addEventListener('wheel', e => { e.preventDefault(); if (FP.on) return; C
 // ===== Primeira pessoa (ondas de chefão) =====
 // Bracinhos do herói em blocos com a arma na mão direita. Ficam no mundo, presos à câmera
 // (o relevo do mapa sobe tudo no shader, então descontamos a altura do chão aqui).
+// Braço em primeira pessoa: manga arredondada, punho, mão com dedos e dedão (aponta para -z)
+function fpArm(P, sleeve, cuff, skin) {
+  const add = (geo, m, x, y, z, sx, sy, sz, rx = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.scale.set(sx, sy, sz); o.rotation.x = rx; P.add(o); return o; };
+  add(capG(.065, .3), sleeve, 0, 0, 0, 1, 1, 1, Math.PI / 2);
+  add(HG.cyl, cuff, 0, 0, -.19, .072, .06, .072, Math.PI / 2);
+  add(HG.sph, skin, 0, 0, -.27, .058, .05, .075);
+  for (let k = 0; k < 4; k++) add(capG(.013, .05), skin, (k - 1.5) * .024, -.012, -.335, 1, 1, 1, Math.PI / 2 + .25);
+  add(capG(.015, .045), skin, .055, .01, -.27, 1, 1, 1, Math.PI / 2 - .4);
+}
 function makeFpArms() {
   const g = new THREE.Group(), inner = new THREE.Group(), [c1, c2] = HERO_COL[0], skin = M(0xf1c7a0), sleeve = M(c1), cuff = M(c2);
   g.add(inner); g.userData.inner = inner;
   const L = new THREE.Group(); L.position.set(-.18, -.14, -.32); L.rotation.set(.12, .32, 0); L.scale.setScalar(FP_ARM); inner.add(L); g.userData.L = L;
-  box(sleeve, .12, .12, .36, 0, 0, 0, L); box(cuff, .13, .13, .06, 0, 0, -.19, L); box(skin, .1, .1, .12, 0, 0, -.27, L);
+  fpArm(L, sleeve, cuff, skin);
   const R = new THREE.Group(); R.position.set(.18, -.14, -.32); R.rotation.set(.05, -.1, 0); R.scale.setScalar(FP_ARM); inner.add(R); g.userData.R = R;
-  box(sleeve, .12, .12, .36, 0, 0, 0, R); box(cuff, .13, .13, .06, 0, 0, -.19, R); box(skin, .1, .1, .12, 0, 0, -.27, R);
-  box(mat.iron, .08, .1, .42, 0, .09, -.34, R); box(mat.iron, .06, .12, .06, 0, .0, -.2, R);
+  fpArm(R, sleeve, cuff, skin);
+  BOXG = RBOX; box(mat.iron, .08, .1, .42, 0, .09, -.34, R); box(mat.iron, .06, .12, .06, 0, .0, -.2, R); box(mat.dark, .085, .03, .3, 0, .035, -.3, R); BOXG = BOX;
   const glowM = new THREE.MeshBasicMaterial({ color: 0x93c5fd }); g.userData.glow = glowM;
   const tip = new THREE.Mesh(BOX, glowM); tip.scale.set(.06, .06, .05); tip.position.set(0, .09, -.57); R.add(tip);
   const strip = new THREE.Mesh(BOX, glowM); strip.scale.set(.085, .02, .24); strip.position.set(0, .145, -.32); R.add(strip);
@@ -3361,6 +3667,9 @@ function viewBtnUI() { const b = $('viewBtn'); b.hidden = fpForced(); fpMenuUI()
 function fpMenuUI() { $('fpMenu').innerHTML = ico('eye') + (FP.pick ? 'Visão em 1ª pessoa · trocar para normal' : 'Visão normal · trocar para 1ª pessoa'); }
 function toggleView() { if (fpForced()) return; FP.pick = !FP.pick; try { localStorage.setItem('vd-visao', FP.pick ? '1p' : 'normal'); } catch (e) {} viewBtnUI(); }
 $('viewBtn').onclick = toggleView; $('fpMenu').onclick = toggleView; viewBtnUI();
+function horaUI() { $('horaBtn').innerHTML = ico('clock') + (HORA.sempreDia ? 'Sempre de dia · trocar para manhã, tarde e noite' : 'Manhã, tarde e noite · trocar para sempre de dia'); }
+$('horaBtn').onclick = () => { HORA.sempreDia = !HORA.sempreDia; try { localStorage.setItem('vd-hora', HORA.sempreDia ? 'dia' : 'ciclo'); } catch (e) {} horaUI(); };
+horaUI();
 function fpJump() { if (!FP.on || hero.dead || FP.y > 0) return; FP.vy = FP_JUMP; sfx('step', hero.pos.x, hero.pos.z); }
 function fpPointerDown(e) {
   if (e.pointerType === 'mouse') {
@@ -3460,14 +3769,17 @@ function updateSticks(dt) {
 // Pássaros guardiões: 3 por castelo voam em volta dele e só atacam os chefões (bicadas que tiram vida)
 const birds = [];
 {
-  const bm = M(0x6b4a2a), wm = M(0x8a6038), hm = M(0xf3f1ea), km = M(0xf5b324);
+  const bm = M(0x6b4a2a), wm = M(0x8a6038), hm = M(0xf3f1ea), km = M(0xf5b324); BOXG = RBOX;
   CASTLES.forEach(c => { for (let k = 0; k < 3; k++) {
     const g = new THREE.Group(), wl = new THREE.Group(), wr = new THREE.Group();
     box(bm, .22, .2, .55, 0, 0, 0, g); box(hm, .2, .2, .2, 0, .06, .33, g); box(km, .08, .07, .14, 0, .04, .48, g); box(bm, .2, .05, .22, 0, 0, -.36, g);
     box(wm, .7, .04, .3, -.35, 0, 0, wl); box(wm, .7, .04, .3, .35, 0, 0, wr); wl.position.x = -.1; wr.position.x = .1; g.add(wl, wr);
     const a = k / 3 * 6.28; g.position.set(wc(c.ci) + Math.cos(a) * 4.5, 5, wc(c.cj) + Math.sin(a) * 4.5); scene.add(g);
+    g.rotation.order = 'YXZ';
+    for (const sx of [-1, 1]) { const ew = new THREE.Mesh(SPH_EYE, mat.white); ew.scale.setScalar(.045); ew.position.set(sx * .09, .1, .4); g.add(ew); const pu = new THREE.Mesh(SPH_EYE, mat.black); pu.scale.setScalar(.026); pu.position.set(sx * .11, .1, .42); g.add(pu); }
     birds.push({ g, wl, wr, c, a, tg: null, cd: 0, ph: Math.random() * 6 });
   } });
+  BOXG = BOX;
 }
 function updateBirds(dt, rdt) {
   for (const b of birds) {
@@ -3479,11 +3791,13 @@ function updateBirds(dt, rdt) {
       if (L.length) { const mine = birds.filter(o => o.c === b.c), cnt = e => mine.filter(o => o.tg === e).length; L.sort((p, q) => cnt(p) - cnt(q) || Math.hypot(p.pos.x - b.g.position.x, p.pos.z - b.g.position.z) - Math.hypot(q.pos.x - b.g.position.x, q.pos.z - b.g.position.z)); b.tg = L[0]; } }
     let tx, ty, tz;
     if (b.tg) { const e = b.tg, an = b.a + time * 2.2; tx = e.pos.x + Math.cos(an) * 1.1; tz = e.pos.z + Math.sin(an) * 1.1; ty = e.T.size * 1.1 + .3 + Math.max(0, Math.sin(time * 3 + b.a)) * 1.3; }
-    else { b.a += rdt * .5; tx = cx + Math.cos(b.a) * 4.5; tz = cz + Math.sin(b.a) * 4.5; ty = 5 + Math.sin(time + b.a * 3) * .4; }
+    // sem chefão: voam em volta do castelo subindo e descendo (às vezes dão um rasante perto do chão)
+    else { b.a += rdt * .5; const R = 4.5 + Math.sin(time * .3 + b.ph) * 2; tx = cx + Math.cos(b.a) * R; tz = cz + Math.sin(b.a) * R; ty = 4.8 + Math.sin(time * .55 + b.a * 3) * 2.6 + Math.min(0, Math.sin(time * .23 + b.ph * 2) * 6 + 3.5); ty = Math.max(1.2, ty); }
     // voa de verdade: velocidade limitada, então dá para ver o pássaro indo do castelo até o chefão
     const p = b.g.position, ox = p.x, oz = p.z, dx = tx - p.x, dy = ty - p.y, dz = tz - p.z, dd = Math.hypot(dx, dy, dz), mv = Math.min(dd, rdt * (b.tg ? 7 : 4));
     if (dd > 1e-4) { p.x += dx / dd * mv; p.y += dy / dd * mv; p.z += dz / dd * mv; }
     if (Math.hypot(p.x - ox, p.z - oz) > 1e-4) b.g.rotation.y = Math.atan2(p.x - ox, p.z - oz);
+    b.g.rotation.x += (clamp(-dy / Math.max(dd, .3), -.6, .6) - b.g.rotation.x) * Math.min(1, rdt * 4);   // bico para baixo quando desce, para cima quando sobe
     if (b.tg && dt && !GUEST && (b.cd -= dt) <= 0 && Math.hypot(p.x - b.tg.pos.x, p.z - b.tg.pos.z) < 2) { b.cd = .9; hurt(b.tg, b.tg.maxHp * .012 + 8); burst(V(b.tg.pos.x, b.tg.hitY + .4, b.tg.pos.z), 0xffffff, 4, 1.5, .06); }
   }
 }
@@ -3556,15 +3870,17 @@ function loop(now) {
     if (c.t > .5) c.m.scale.setScalar(Math.max(0, 1 - (c.t - .5) / .35));
     if (c.t > .85) { scene.remove(c.m); coins.splice(k, 1); }
   }
+  waterU.value = time;
   if (VUL) { wtex.offset.x = (time * .012) % 1; wtex.offset.y = (time * .006) % 1; waterMesh.material.emissive.setHex(0xb03200).multiplyScalar(.85 + Math.sin(time * 1.7) * .15); }
   else if (BIOMA !== 'neve') { wtex.offset.x = (time * .035) % 1; wtex.offset.y = (time * .012) % 1; }
   bioTick(rdt);
   for (const pf of portalFx) { pf.ring.rotation.z += rdt * 2; }
   portalMat.opacity = .45 + Math.sin(time * 3) * .15;
   updateClouds3(rdt);
+  windTick(rdt); dayUpdate(); nightTick(rdt); updateFlies(rdt);
   if (Math.random() < rdt * 2.5 && chimneys.length) { const c = chimneys[Math.floor(Math.random() * chimneys.length)]; emit(c, 0xd4d4d8, .14, (Math.random() - .5) * .2, .5, (Math.random() - .5) * .2, 1.6, -.3); pm.instanceColor.needsUpdate = true; }
   for (const cs of CASTLES) {
-    cs.flag.rotation.y = Math.sin(time * 3) * .35;
+    cs.flag.rotation.y = Math.sin(time * (2 + WIND.s.value * 3)) * (.2 + WIND.s.value * .4);
     cs.shake = Math.max(0, cs.shake - rdt);
     cs.g.position.x = Math.sin(time * 70) * .06 * cs.shake;
   }
@@ -3854,7 +4170,7 @@ C.tx = hero.home.x; C.tz = hero.home.z; clampCam(); updateCam(); C.tz = hero.hom
 if (ONLINE) startNet();
 setTimeout(() => $('load').classList.add('hide'), QS0.has('cont') || S.fresh ? 0 : Math.max(0, 5000 - performance.now()));
 requestAnimationFrame(loop);
-if (location.search.includes('teste')) window.__vd = { ID, startIdle, idleFall, autoBuild, get IDLE() { return IDLE; }, FP, fpSet, fpWave, SND, sfx, setMusic, setSfx, S, pads, hearts, dropHeart, PORTALS, PSEED, ET, spawnEnemy, waveList, bossWave, trail, placeTower, startWave, enemies, towers, hero, heroes, NET, MODE, ROLE, ME, CASTLES, act, pget, PS, gE, roomLink, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, heroShootAt, rads, renderShop: () => renderShop(), giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE, pfx, pfxList, FXM, PIXEL, explodeAt, BIOMA, Hjs, HAMP, giants, volcs, SND, sticks, newMapWave, towers, enemies, startWave, HW, TT, birds, heroAttack, hero, animals, drops, dropItem, hurt, buildEnemy };
+if (location.search.includes('teste')) window.__vd = { ID, startIdle, idleFall, autoBuild, get IDLE() { return IDLE; }, FP, fpSet, fpWave, SND, sfx, setMusic, setSfx, S, pads, hearts, dropHeart, PORTALS, PSEED, ET, spawnEnemy, waveList, bossWave, trail, placeTower, startWave, enemies, towers, hero, heroes, NET, MODE, ROLE, ME, CASTLES, act, pget, PS, gE, roomLink, keys, TT, HW, addPower, openShop, closeShop, flow, SPAWNS, K, grid, blocked, renderer, scene, cam, C, voxStats, HD, houses, houseCells, heroShootAt, rads, renderShop: () => renderShop(), giants, GIANT, trees, collide, hitsSolid, cellOf, HOUSE, TREE, pfx, pfxList, FXM, PIXEL, explodeAt, BIOMA, Hjs, HAMP, giants, volcs, SND, sticks, newMapWave, towers, enemies, startWave, HW, TT, birds, heroAttack, hero, animals, drops, dropItem, hurt, buildEnemy, HORA, WIND, dayUpdate };
 </script>
 </body>
 </html>

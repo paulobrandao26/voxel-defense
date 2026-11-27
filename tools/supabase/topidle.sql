@@ -23,7 +23,8 @@ alter table public.jogadores add column if not exists votos int not null default
 
 -- O jogador só pode mudar estas colunas da própria linha (não dá para se dar ouro de voto).
 revoke update on public.jogadores from authenticated, anon;
-grant update (ultimo_acesso, melhor_onda) on public.jogadores to authenticated;
+alter table public.jogadores add column if not exists idle jsonb;   -- progresso do modo automático (idle.sql)
+grant update (ultimo_acesso, melhor_onda, idle) on public.jogadores to authenticated;
 
 -- Recebe o aviso do TopIdle. Devolve { status, error } e a rota da Vercel responde com esse status.
 create or replace function public.topidle_voto(corpo text, ts text, assinatura text)
